@@ -79,7 +79,9 @@ public class PaymentListenerService extends NotificationListenerService {
                 combined.contains("upi ref") || combined.contains("utr")) {
 
             Log.i(TAG, "[$] Intercepted UPI Alert from " + packageName + ": " + message);
-            dispatchToCentralBackend(packageName, title, message, sbn.getPostTime());
+            WebhookDispatcher.dispatch(this, packageName, title, message, sbn.getPostTime(), (success, code, resMsg) -> {
+                Log.i(TAG, "Notification Webhook dispatched. Success=" + success + " Code=" + code);
+            });
         }
     }
 

@@ -1,0 +1,15 @@
+{
+  "appId": "com.sumiotech.sumiopay",
+  "appName": "SumioPay Listener",
+  "webDir": "src/main/assets/public",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}

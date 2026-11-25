@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SumioPay Listener</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">S</div>
+        <div>
+          <h1 class="brand-title">SumioPay Listener</h1>
+          <span class="brand-sub">Universal SMS & UPI Interceptor v2.4</span>
+        </div>
+      </div>
+      <div id="deviceBadge" class="badge badge-disconnected">Checking...</div>
+    </header>
+
+    <!-- Main Live Status Card -->
+    <section class="card status-card">
+      <div class="status-header">
+        <span class="status-indicator" id="statusDot"></span>
+        <div class="status-info">
+          <h3 id="statusHeading">Initializing...</h3>
+          <p id="statusDesc">Verifying background listening permissions</p>
+        </div>
+      </div>
+      <div class="status-meta">
+        <div class="meta-item">
+          <span class="meta-label">BATTERY</span>
+          <span class="meta-value" id="batteryLevel">--%</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">MODE</span>
+          <span class="meta-value">24x7 Real-Time</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">AUTO-VERIFY</span>
+          <span class="meta-value">&lt; 1.2s</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Permissions Hub -->
+    <section class="card">
+      <h2 class="card-title">Required Android Permissions</h2>
+      <p class="card-subtitle">Required to intercept incoming bank payment alerts & SMS</p>
+
+      <div class="perm-list">
+        <!-- 1. Notification Permission -->
+        <div class="perm-item">
+          <div class="perm-info">
+            <div class="perm-title">
+              <span>🔔 UPI Notifications</span>
+              <span id="notifBadge" class="perm-status badge-warn">Disabled</span>
+            </div>
+            <p class="perm-desc">Reads PhonePe, GPay, Paytm & BHIM credit alerts</p>
+          </div>
+          <button id="btnNotif" class="btn btn-sm btn-primary" onclick="openNotifSettings()">Enable</button>
+        </div>
+
+        <!-- 2. SMS Permission -->
+        <div class="perm-item">
+          <div class="perm-info">
+            <div class="perm-title">
+              <span>💬 Bank SMS Messages</span>
+              <span id="smsBadge" class="perm-status badge-warn">Disabled</span>
+            </div>
+            <p class="perm-desc">Reads incoming credit SMS from HDFC, SBI, ICICI, etc.</p>
+          </div>
+          <button id="btnSms" class="btn btn-sm btn-primary" onclick="requestSmsAccess()">Enable</button>
+        </div>
+
+        <!-- 3. Battery Optimization -->
+        <div class="perm-item">
+          <div class="perm-info">
+            <div class="perm-title">
+              <span>⚡ Battery Unrestricted</span>
+              <span id="batteryBadge" class="perm-status badge-warn">Optimized</span>
+            </div>
+            <p class="perm-desc">Prevents Android from putting listener to sleep</p>
+          </div>
+          <button id="btnBattery" class="btn btn-sm btn-outline" onclick="disableBatteryOpt()">Unrestrict</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pairing Configuration -->
+    <section class="card">
+      <h2 class="card-title">Device Pairing & Server Link</h2>
+      <p class="card-subtitle">Link this phone to your merchant dashboard</p>
+
+      <div class="form-group">
+        <label>Central Backend API URL</label>
+        <input type="text" id="serverUrl" value="https://apipay.sumiotech.in" placeholder="https://apipay.sumiotech.in">
+      </div>
+
+      <div class="form-group">
+        <label>Pairing Token (From Merchant Console)</label>
+        <input type="text" id="pairingToken" placeholder="pair_xxxxxxxxxxxxxxxx">
+      </div>
+
+      <button id="btnPair" class="btn btn-success btn-full" onclick="pairDevice()">
+        🔗 Complete Device Pairing
+      </button>
+
+      <div id="pairedInfo" class="paired-details hidden">
+        <span class="text-muted">Paired Token:</span>
+        <code id="deviceTokenDisplay">--</code>
+      </div>
+    </section>
+
+    <!-- Test Payment Dispatcher -->
+    <section class="card">
+      <div class="card-header-flex">
+        <h2 class="card-title">Test Payment Simulator</h2>
+        <span class="badge badge-info">Zero Real Money</span>
+      </div>
+      <p class="card-subtitle">Send a simulated ₹500 credit to verify webhook flow instantly</p>
+      <button class="btn btn-secondary btn-full" onclick="simulateTestPayment()">
+        ⚡ Simulate Test Credit &amp; Fire Webhook
+      </button>
+    </section>
+
+    <!-- Intercepted Payments Live Feed -->
+    <section class="card">
+      <div class="card-header-flex">
+        <h2 class="card-title">Live Payment Intercept Log</h2>
+        <button class="btn btn-xs btn-outline" onclick="loadLogs()">↻ Refresh</button>
+      </div>
+      <p class="card-subtitle">Real-time alerts captured by this device</p>
+
+      <div id="logsFeed" class="logs-feed">
+        <div class="empty-feed">No transactions intercepted yet. Waiting for bank credits...</div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>SumioPay Enterprise SaaS • 100% Direct Bank Settlement</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -54,10 +54,16 @@ export function parseBankNotification(message: string, packageName?: string): Pa
   }
 
   // 3. Sender Name Extraction
-  // Matches: "from Rahul Kumar", "by Rahul Kumar", "sent by Rahul"
-  const senderMatch = text.match(/(?:from|by)\s+([A-Za-z\s]{3,30})(?:\s+via|\s+on|\s+ref|\.|$)/i);
-  if (senderMatch && senderMatch[1]) {
-    senderName = senderMatch[1].trim();
+  // Prefer "from <Name>" first, then "by <Name>" excluding transfer modes (UPI, IMPS, NEFT, RTGS)
+  const isTransferKeyword = (s: string) => /^(?:upi|imps|neft|rtgs|netbanking|bank)/i.test(s.trim());
+  const fromMatch = text.match(/from\s+([A-Za-z\s]{3,30})(?:\s+via|\s+on|\s+ref|\.|$)/i);
+  if (fromMatch && fromMatch[1] && !isTransferKeyword(fromMatch[1])) {
+    senderName = fromMatch[1].trim();
+  } else {
+    const byMatch = text.match(/by\s+([A-Za-z\s]{3,30})(?:\s+via|\s+on|\s+ref|\.|$)/i);
+    if (byMatch && byMatch[1] && !isTransferKeyword(byMatch[1])) {
+      senderName = byMatch[1].trim();
+    }
   }
 
   // 4. Identify App Origin if not provided in packageName

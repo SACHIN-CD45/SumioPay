@@ -1,0 +1,16 @@
+{
+  "name": "sumiopay-listener-capacitor",
+  "version": "2.4.0",
+  "description": "SumioPay Universal Android Companion App with Capacitor Web UI & Native Bank SMS / Notification Interception",
+  "author": "SumioTech Solutions",
+  "license": "PROPRIETARY",
+  "scripts": {
+    "build:apk": "./build-apk.sh",
+    "cap:sync": "npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0"
+  }
+}

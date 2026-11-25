@@ -49,9 +49,7 @@ echo "[3/7] Compiling Java source files with javac..."
 "${JAVAC}" \
   -cp "${PLATFORM_JAR}" \
   -d "${BUILD_DIR}/classes" \
-  "${SCRIPT_DIR}/src/main/java/com/sumiotech/sumiopay/BootReceiver.java" \
-  "${SCRIPT_DIR}/src/main/java/com/sumiotech/sumiopay/MainActivity.java" \
-  "${SCRIPT_DIR}/src/main/java/com/sumiotech/sumiopay/PaymentListenerService.java"
+  "${SCRIPT_DIR}/src/main/java/com/sumiotech/sumiopay/"*.java
 
 echo "[4/7] Generating classes.dex with d8..."
 "${BUILD_TOOLS}/d8" \
@@ -66,8 +64,11 @@ echo "[5/7] Linking package and assembling unaligned APK..."
   --manifest "${SCRIPT_DIR}/src/main/AndroidManifest.xml" \
   "${BUILD_DIR}/compiled_res/"*.flat
 
+echo "Adding classes.dex and Capacitor web assets to APK..."
 cd "${BUILD_DIR}/dex"
 zip -u "${BUILD_DIR}/unaligned.apk" classes.dex
+cd "${SCRIPT_DIR}/src/main"
+zip -r -u "${BUILD_DIR}/unaligned.apk" assets/
 cd "${SCRIPT_DIR}"
 
 echo "[6/7] Aligning APK (4-byte alignment with zipalign)..."
