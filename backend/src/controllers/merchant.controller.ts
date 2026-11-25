@@ -11,13 +11,65 @@ import Refund from '../models/refund.model';
 import Dispute from '../models/dispute.model';
 import Organization from '../models/organization.model';
 import AuditLog from '../models/auditLog.model';
+import Otp from '../models/otp.model';
+import { EmailService } from '../services/email.service';
 import { config } from '../config';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { JwtService } from '../services/jwt.service';
 
+export const sendRegistrationOtp = async (req: Request, res: Response) => {
+  try {
+    const { email, name } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email address is required.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const existing = await Merchant.findOne({ email: cleanEmail });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'A merchant account with this email already exists. Please log in.',
+      });
+    }
+
+    // Generate cryptographically secure 6-digit numeric OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Expire any existing registration OTPs for this email
+    await Otp.deleteMany({ email: cleanEmail, purpose: 'REGISTRATION' });
+
+    // Store in DB with 10 minutes expiry
+    await Otp.create({
+      email: cleanEmail,
+      otp,
+      purpose: 'REGISTRATION',
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    // Send email via Hostinger SMTP
+    await EmailService.sendRegistrationOtp(cleanEmail, otp, name);
+
+    res.json({
+      success: true,
+      message: `A 6-digit verification code has been sent to ${cleanEmail}`,
+    });
+  } catch (err: any) {
+    console.error('sendRegistrationOtp error:', err);
+    res.status(500).json({ success: false, message: 'Failed to send verification code', error: err.message });
+  }
+};
+
 export const registerMerchant = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, businessName, upiId, upiName, phone } = req.body;
+    const { name, email, password, businessName, upiId, upiName, phone, otp, termsAccepted } = req.body;
+
+    if (!termsAccepted) {
+      return res.status(400).json({
+        success: false,
+        message: 'You must accept the Terms & Conditions and Privacy Policy to register.',
+      });
+    }
 
     if (!name || !email || !password || !businessName || !upiId) {
       return res.status(400).json({
@@ -26,7 +78,8 @@ export const registerMerchant = async (req: Request, res: Response) => {
       });
     }
 
-    const existing = await Merchant.findOne({ email: email.toLowerCase().trim() });
+    const cleanEmail = email.toLowerCase().trim();
+    const existing = await Merchant.findOne({ email: cleanEmail });
     if (existing) {
       return res.status(400).json({
         success: false,
@@ -34,12 +87,29 @@ export const registerMerchant = async (req: Request, res: Response) => {
       });
     }
 
+    // Verify Email OTP if required
+    if (otp) {
+      const otpRecord = await Otp.findOne({
+        email: cleanEmail,
+        purpose: 'REGISTRATION',
+        expiresAt: { $gt: new Date() },
+      }).sort({ createdAt: -1 });
+
+      if (!otpRecord || otpRecord.otp !== otp.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or expired verification code. Please request a new code.',
+        });
+      }
+      await Otp.deleteMany({ email: cleanEmail, purpose: 'REGISTRATION' });
+    }
+
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
     const merchant = new Merchant({
       name: name.trim(),
-      email: email.toLowerCase().trim(),
+      email: cleanEmail,
       passwordHash,
       businessName: businessName.trim(),
       phone: (phone || '').trim(),
@@ -58,7 +128,7 @@ export const registerMerchant = async (req: Request, res: Response) => {
     const organization = new Organization({
       name: businessName.trim(),
       legalEntityName: businessName.trim(),
-      billingEmail: email.toLowerCase().trim(),
+      billingEmail: cleanEmail,
       phone: (phone || '').trim(),
       kycStatus: 'NOT_SUBMITTED',
       isActive: true,
@@ -84,6 +154,14 @@ export const registerMerchant = async (req: Request, res: Response) => {
       monthlyPriceInPaise: 0,
     });
     await subscription.save();
+
+    // Asynchronously dispatch Welcome Email via Hostinger SMTP
+    EmailService.sendWelcomeEmail(
+      merchant.email,
+      merchant.name,
+      merchant.businessName,
+      merchant.upiId
+    ).catch((e) => console.error('Welcome email dispatch error:', e));
 
     const tokens = await JwtService.generateTokenPair({
       id: merchant._id.toString(),
@@ -151,6 +229,15 @@ export const loginMerchant = async (req: Request, res: Response) => {
       userAgent: req.get('user-agent'),
     });
 
+    // Asynchronously send Login Alert Email
+    const clientIp = (req.headers['x-forwarded-for'] as string) || req.ip || 'Unknown';
+    EmailService.sendLoginAlert(
+      merchant.email,
+      merchant.name,
+      clientIp,
+      req.get('user-agent')
+    ).catch((e) => console.error('Login alert email error:', e));
+
     res.json({
       success: true,
       message: 'Login successful',
@@ -174,6 +261,87 @@ export const loginMerchant = async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: 'Login failed', error: err.message });
+  }
+};
+
+export const sendForgotPasswordOtp = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email address is required.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const merchant = await Merchant.findOne({ email: cleanEmail });
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active merchant account found with this email address.',
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await Otp.deleteMany({ email: cleanEmail, purpose: 'PASSWORD_RESET' });
+
+    await Otp.create({
+      email: cleanEmail,
+      otp,
+      purpose: 'PASSWORD_RESET',
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    await EmailService.sendForgotPasswordOtp(cleanEmail, otp, merchant.name);
+
+    res.json({
+      success: true,
+      message: `A 6-digit password reset code has been sent to ${cleanEmail}`,
+    });
+  } catch (err: any) {
+    console.error('sendForgotPasswordOtp error:', err);
+    res.status(500).json({ success: false, message: 'Failed to send reset code', error: err.message });
+  }
+};
+
+export const resetPasswordWithOtp = async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Email, OTP, and new password are required.' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters long.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const otpRecord = await Otp.findOne({
+      email: cleanEmail,
+      purpose: 'PASSWORD_RESET',
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (!otpRecord || otpRecord.otp !== otp.trim()) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired password reset code.' });
+    }
+
+    const merchant = await Merchant.findOne({ email: cleanEmail });
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: 'Merchant account not found.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    merchant.passwordHash = await bcrypt.hash(newPassword, salt);
+    await merchant.save();
+
+    await Otp.deleteMany({ email: cleanEmail, purpose: 'PASSWORD_RESET' });
+
+    res.json({
+      success: true,
+      message: 'Your password has been reset successfully! Please log in with your new password.',
+    });
+  } catch (err: any) {
+    console.error('resetPasswordWithOtp error:', err);
+    res.status(500).json({ success: false, message: 'Failed to reset password', error: err.message });
   }
 };
 

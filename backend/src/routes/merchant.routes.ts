@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import {
   registerMerchant,
+  sendRegistrationOtp,
+  sendForgotPasswordOtp,
+  resetPasswordWithOtp,
   loginMerchant,
   getMerchantProfile,
   updateMerchantProfile,
@@ -27,6 +30,9 @@ const router = Router();
 
 // Public auth endpoints
 router.post('/register', registerMerchant);
+router.post('/send-registration-otp', sendRegistrationOtp);
+router.post('/forgot-password/send-otp', sendForgotPasswordOtp);
+router.post('/forgot-password/reset', resetPasswordWithOtp);
 router.post('/login', loginMerchant);
 router.post('/refresh-token', refreshMerchantToken);
 router.post('/logout', logoutMerchant);
