@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ReconciliationService } from '../backend/src/services/reconciliation.service';
+import { ReconciliationService } from '../src/services/reconciliation.service';
 
 describe('Reconciliation Engine Multi-Rule Matching', () => {
   test('parses CSV bank statements into structured minor units entries', () => {

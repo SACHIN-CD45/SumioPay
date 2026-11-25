@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import jwt from '../backend/node_modules/jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
 describe('Senior-Level JWT Dual-Token & Rotation Security', () => {

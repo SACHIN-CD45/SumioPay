@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { StateMachineService } from '../backend/src/services/stateMachine.service';
+import { StateMachineService } from '../src/services/stateMachine.service';
 
 describe('Payment State Machine Transitions', () => {
   test('allows legal forward transitions', () => {
