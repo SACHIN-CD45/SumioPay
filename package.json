@@ -1,0 +1,15 @@
+{
+  "name": "sumiopay-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SUMIOPAY Enterprise FinTech SaaS Monorepo",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "cd backend && npm test",
+    "build": "npm run build --workspaces"
+  }
+}

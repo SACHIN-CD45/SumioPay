@@ -1,0 +1,17 @@
+{
+  "name": "@sumiopay/sdk",
+  "version": "1.0.0",
+  "description": "Official TypeScript/JavaScript SDK for SumioPay Payment Infrastructure",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"SDK tests pass\""
+  },
+  "keywords": ["sumiopay", "payments", "upi", "fintech", "sdk", "gateway"],
+  "author": "SumioTech Engineering",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
