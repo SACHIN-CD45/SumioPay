@@ -146,7 +146,7 @@ export const DevicesPage: React.FC = () => {
             </span>
             <div className="p-3 bg-white rounded-xl shadow-inner inline-block">
               <QRCodeSVG
-                value={`${window.location.origin}/api/public/download-apk`}
+                value={`${API_BASE}/public/download-apk`}
                 size={140}
                 level="M"
               />

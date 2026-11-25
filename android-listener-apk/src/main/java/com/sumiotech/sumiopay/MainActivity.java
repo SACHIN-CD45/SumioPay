@@ -228,7 +228,7 @@ public class MainActivity extends Activity {
         heartbeatScheduler.scheduleWithFixedDelay(() -> {
             SharedPreferences prefs = getSharedPreferences("SumioPayPrefs", Context.MODE_PRIVATE);
             String token = prefs.getString("device_token", "");
-            String server = prefs.getString("server_url", "http://YOUR_SERVER_IP:8090");
+            String server = prefs.getString("server_url", "https://apipay.sumiotech.in");
 
             if (token.isEmpty()) return;
 
@@ -261,7 +261,7 @@ public class MainActivity extends Activity {
 
     private String getServerUrl() {
         return getSharedPreferences("SumioPayPrefs", Context.MODE_PRIVATE)
-                .getString("server_url", "http://192.168.1.100:8090");
+                .getString("server_url", "https://apipay.sumiotech.in");
     }
 
     private void saveServerUrl(String url) {

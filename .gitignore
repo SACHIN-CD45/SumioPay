@@ -92,5 +92,7 @@ Thumbs.db
 # ------------------------------------------------------------------------------
 .gradle/
 android-listener-apk/.gradle/
+*.apk.idsig
+*.idsig
 android-listener-apk/build/
 local.properties

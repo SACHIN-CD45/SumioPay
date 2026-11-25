@@ -11,6 +11,23 @@ const router = Router();
 // Public APK Download (Direct link or phone camera QR scan)
 router.get('/download-apk', downloadApk);
 
+// Public Drop-In Checkout SDK JavaScript
+router.get('/checkout.js', (_req: Request, res: Response): void => {
+  const candidatePaths = [
+    path.resolve(__dirname, '../../public/checkout.js'),
+    path.resolve(process.cwd(), 'backend/public/checkout.js'),
+    path.resolve(process.cwd(), 'public/checkout.js'),
+  ];
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) {
+      res.setHeader('Content-Type', 'application/javascript');
+      res.sendFile(p);
+      return;
+    }
+  }
+  res.status(404).send('// checkout.js not found');
+});
+
 // Public WooCommerce Plugin ZIP Download
 router.get('/download-woocommerce-plugin', (_req: Request, res: Response): void => {
   const pluginZipPaths = [

@@ -186,6 +186,7 @@ export const downloadApk = async (_req: Request, res: Response): Promise<void> =
 
     for (const p of candidatePaths) {
       if (fs.existsSync(p)) {
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
         res.download(p, 'SumioPayListener-v2.4.apk');
         return;
       }
