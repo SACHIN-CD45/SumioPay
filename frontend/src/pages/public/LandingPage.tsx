@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   CheckCircle2,
@@ -43,10 +43,30 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
+import { AuthModal } from '../../components/auth/AuthModal';
 import { publicApi } from '../../lib/api';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const isLoginRoute = location.pathname === '/login';
+  const [authModalOpen, setAuthModalOpen] = useState(isLoginRoute);
+
+  useEffect(() => {
+    if (location.pathname === '/login') {
+      setAuthModalOpen(true);
+    }
+  }, [location.pathname]);
+
+  const handleCloseAuthModal = () => {
+    setAuthModalOpen(false);
+    if (location.pathname === '/login') {
+      navigate('/', { replace: true });
+    }
+  };
+
   const [demoOpen, setDemoOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [monthlyVolume, setMonthlyVolume] = useState<number>(500000); // 5 Lakhs default
@@ -1119,6 +1139,13 @@ export const LandingPage: React.FC = () => {
           alert(`Test Payment Confirmed! Order: ${data.orderId}`);
           setDemoOpen(false);
         }}
+      />
+
+      {/* Enterprise Authentication Modal Overlay */}
+      <AuthModal
+        isOpen={authModalOpen || location.pathname === '/login'}
+        onClose={handleCloseAuthModal}
+        defaultMode={searchParams.get('register') === 'true' ? 'register' : 'login'}
       />
     </div>
   );
