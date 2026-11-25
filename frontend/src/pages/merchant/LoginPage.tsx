@@ -77,12 +77,12 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-8 shadow-card relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div
+          <img
             onClick={() => navigate('/')}
-            className="cursor-pointer inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-600 text-white font-extrabold text-xl shadow-sm mb-3"
-          >
-            SP
-          </div>
+            src="/sumiopay-logo.png"
+            alt="SumioPay Smart Payment Solutions"
+            className="cursor-pointer h-12 w-auto mx-auto object-contain mb-3"
+          />
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">SumioPay Gateway</h1>
           <p className="text-xs text-slate-500 mt-1">
             Enterprise Self-Hosted UPI Verification & Settlement SaaS

@@ -34,9 +34,7 @@ export const SuperAdminLoginPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center px-4 py-12 relative">
       <div className="w-full max-w-sm bg-white border border-amber-200 rounded-3xl p-8 shadow-card relative z-10">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 font-bold text-xl mb-2">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
+          <img src="/sumiopay-icon.png" alt="SumioPay" className="w-12 h-12 rounded-2xl mx-auto shadow-md mb-2 object-contain" />
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">SuperAdmin Console</h1>
           <p className="text-xs text-slate-500 mt-1">Platform Master Controller</p>
         </div>

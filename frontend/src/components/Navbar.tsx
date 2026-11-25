@@ -50,9 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => navigate('/dashboard')}
           className="cursor-pointer flex items-center gap-2.5"
         >
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-extrabold text-white text-base shadow-sm">
-            SP
-          </div>
+          <img src="/sumiopay-icon.png" alt="SumioPay" className="w-9 h-9 rounded-xl shadow-sm object-contain" />
           <div>
             <div className="font-extrabold text-base tracking-tight text-slate-900 flex items-center gap-1.5">
               SumioPay
