@@ -145,6 +145,15 @@
     }
   };
 
+  window.openAppSettings = function() {
+    const bridge = getBridge();
+    if (bridge && bridge.openAppSettings) {
+      bridge.openAppSettings();
+    } else {
+      alert('Open phone Settings -> Apps -> SumioPay Listener -> 3 dots -> Allow restricted settings.');
+    }
+  };
+
   window.pairDevice = function() {
     const serverUrl = document.getElementById('serverUrl').value.trim();
     const pairingToken = document.getElementById('pairingToken').value.trim();

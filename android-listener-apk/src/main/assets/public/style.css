@@ -399,3 +399,24 @@ body {
   font-size: 11px;
   color: #64748B;
 }
+
+.android16-tip {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px dashed rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  font-size: 11px;
+  color: #94A3B8;
+  line-height: 1.4;
+}
+
+.android16-tip strong {
+  color: #38BDF8;
+}
+
+.tip-link {
+  color: #60A5FA;
+  font-weight: 700;
+  text-decoration: underline;
+}

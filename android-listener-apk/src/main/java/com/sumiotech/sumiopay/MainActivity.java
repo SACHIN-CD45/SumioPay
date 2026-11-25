@@ -184,11 +184,27 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void requestSmsPermission() {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Build.VERSION.SDK_INT >= 33) {
+                activity.requestPermissions(
+                        new String[]{Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS, "android.permission.POST_NOTIFICATIONS"},
+                        SMS_PERMISSION_REQ_CODE
+                );
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 activity.requestPermissions(
                         new String[]{Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS},
                         SMS_PERMISSION_REQ_CODE
                 );
+            }
+        }
+
+        @JavascriptInterface
+        public void openAppSettings() {
+            try {
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + activity.getPackageName()));
+                activity.startActivity(intent);
+            } catch (Exception e) {
+                Log.e(TAG, "Error opening app settings: " + e.getMessage());
             }
         }
 
