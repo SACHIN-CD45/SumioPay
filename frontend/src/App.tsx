@@ -22,8 +22,19 @@ import { ReportsPage } from './pages/merchant/ReportsPage';
 import { WebhooksPage } from './pages/merchant/WebhooksPage';
 import { SimulatorPage } from './pages/merchant/SimulatorPage';
 import { DocsPage } from './pages/merchant/DocsPage';
+import { SuperAdminLayout } from './pages/superadmin/SuperAdminLayout';
 import { SuperAdminLoginPage } from './pages/superadmin/SuperAdminLoginPage';
-import { SuperAdminDashboardPage } from './pages/superadmin/SuperAdminDashboardPage';
+import { SuperAdminOverviewPage } from './pages/superadmin/SuperAdminOverviewPage';
+import { SuperAdminMerchantsPage } from './pages/superadmin/SuperAdminMerchantsPage';
+import { SuperAdminKycPage } from './pages/superadmin/SuperAdminKycPage';
+import { SuperAdminTransactionsPage } from './pages/superadmin/SuperAdminTransactionsPage';
+import { SuperAdminReconciliationPage } from './pages/superadmin/SuperAdminReconciliationPage';
+import { SuperAdminDevicesPage } from './pages/superadmin/SuperAdminDevicesPage';
+import { SuperAdminWebhooksPage } from './pages/superadmin/SuperAdminWebhooksPage';
+import { SuperAdminRiskSecurityPage } from './pages/superadmin/SuperAdminRiskSecurityPage';
+import { SuperAdminSubscriptionsPage } from './pages/superadmin/SuperAdminSubscriptionsPage';
+import { SuperAdminAuditLogsPage } from './pages/superadmin/SuperAdminAuditLogsPage';
+import { SuperAdminSettingsPage } from './pages/superadmin/SuperAdminSettingsPage';
 import { api } from './lib/api';
 
 // Merchant Layout with Light Theme Navbar & Sidebar
@@ -121,16 +132,28 @@ export const App: React.FC = () => {
         </Route>
 
         {/* SuperAdmin Routes */}
-        <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" replace />} />
+        <Route path="/superadmin" element={<Navigate to="/superadmin/overview" replace />} />
         <Route path="/superadmin/login" element={<SuperAdminLoginPage />} />
         <Route
-          path="/superadmin/dashboard"
           element={
             <SuperAdminGuard>
-              <SuperAdminDashboardPage />
+              <SuperAdminLayout />
             </SuperAdminGuard>
           }
-        />
+        >
+          <Route path="/superadmin/dashboard" element={<Navigate to="/superadmin/overview" replace />} />
+          <Route path="/superadmin/overview" element={<SuperAdminOverviewPage />} />
+          <Route path="/superadmin/merchants" element={<SuperAdminMerchantsPage />} />
+          <Route path="/superadmin/kyc" element={<SuperAdminKycPage />} />
+          <Route path="/superadmin/transactions" element={<SuperAdminTransactionsPage />} />
+          <Route path="/superadmin/reconciliation" element={<SuperAdminReconciliationPage />} />
+          <Route path="/superadmin/devices" element={<SuperAdminDevicesPage />} />
+          <Route path="/superadmin/webhooks" element={<SuperAdminWebhooksPage />} />
+          <Route path="/superadmin/risk" element={<SuperAdminRiskSecurityPage />} />
+          <Route path="/superadmin/subscriptions" element={<SuperAdminSubscriptionsPage />} />
+          <Route path="/superadmin/audit" element={<SuperAdminAuditLogsPage />} />
+          <Route path="/superadmin/settings" element={<SuperAdminSettingsPage />} />
+        </Route>
 
         {/* Catch-all to Landing */}
         <Route path="*" element={<Navigate to="/" replace />} />

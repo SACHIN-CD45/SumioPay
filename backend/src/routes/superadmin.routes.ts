@@ -17,6 +17,8 @@ import {
   getSubscriptionMetrics,
   getPlatformSettings,
   updatePlatformSettings,
+  listUnmappedPayments,
+  listWebhookLogs,
 } from '../controllers/superadmin.controller';
 import { requireSuperAdminAuth } from '../middleware/auth.middleware';
 
@@ -35,6 +37,12 @@ router.patch('/merchants/:merchantId/toggle-status', requireSuperAdminAuth, togg
 // Global Orders & Devices
 router.get('/orders', requireSuperAdminAuth, listAllOrders);
 router.get('/devices', requireSuperAdminAuth, listAllDevices);
+
+// Reconciliation Engine & Unmapped Payments
+router.get('/unmapped-payments', requireSuperAdminAuth, listUnmappedPayments);
+
+// Global Webhook Delivery Logs
+router.get('/webhook-logs', requireSuperAdminAuth, listWebhookLogs);
 
 // KYC Workflows
 router.get('/kyc', requireSuperAdminAuth, listKycWorkflows);

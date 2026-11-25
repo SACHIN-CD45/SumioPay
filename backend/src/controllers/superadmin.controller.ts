@@ -9,6 +9,8 @@ import { SecurityEvent } from '../models/securityEvent.model';
 import { AuditLog } from '../models/auditLog.model';
 import { Subscription } from '../models/subscription.model';
 import { SystemSetting } from '../models/systemSetting.model';
+import { UnmappedPayment } from '../models/unmappedPayment.model';
+import { WebhookLog } from '../models/webhookLog.model';
 import { config } from '../config';
 
 // SuperAdmin Login
@@ -624,6 +626,40 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
       success: true,
       message: 'Global platform settings updated successfully',
       data: settings,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Global Unmapped / Delayed Payments Monitor
+export const listUnmappedPayments = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const unmapped = await UnmappedPayment.find()
+      .populate('merchantId', 'businessName email upiId')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    res.status(200).json({
+      success: true,
+      data: unmapped,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Global Webhook Delivery Logs Monitor
+export const listWebhookLogs = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const logs = await WebhookLog.find()
+      .populate('merchantId', 'businessName email')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    res.status(200).json({
+      success: true,
+      data: logs,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
