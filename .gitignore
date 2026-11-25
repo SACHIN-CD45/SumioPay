@@ -95,4 +95,6 @@ android-listener-apk/.gradle/
 *.apk.idsig
 *.idsig
 android-listener-apk/build/
+android-listener-apk/bin/
+android-listener-apk/libs/
 local.properties

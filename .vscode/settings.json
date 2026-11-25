@@ -1,0 +1,17 @@
+{
+  "java.project.sourcePaths": [
+    "android-listener-apk/src/main/java"
+  ],
+  "java.project.referencedLibraries": [
+    "android-listener-apk/libs/**/*.jar",
+    "/Users/sachinkumar/Library/Android/sdk/platforms/android-34/android.jar",
+    "${env:HOME}/Library/Android/sdk/platforms/android-34/android.jar"
+  ],
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "android-listener-apk/build": true,
+    "android-listener-apk/bin": true
+  }
+}
