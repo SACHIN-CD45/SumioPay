@@ -29,7 +29,7 @@ const bootstrap = async () => {
     }
 
     // Seed default SumioTech corporate merchant for internal apps (SumioLab, SumioBilling, etc.)
-    const defaultMerchant = await Merchant.findOne({ email: 'contact@sumiotech.com' });
+    const defaultMerchant = await Merchant.findOne({ email: 'contact@sumiotech.in' });
     if (!defaultMerchant) {
       console.log('[SumioPay] Seeding default SumioTech Corporate Merchant...');
       const salt = await bcrypt.genSalt(10);
@@ -37,7 +37,7 @@ const bootstrap = async () => {
       const sumioMerchant = new Merchant({
         name: 'SumioTech Admin',
         businessName: 'SumioTech Private Limited',
-        email: 'contact@sumiotech.com',
+        email: 'contact@sumiotech.in',
         passwordHash,
         upiId: 'sumiotech@okhdfcbank',
         upiName: 'SumioTech Tech Solutions',

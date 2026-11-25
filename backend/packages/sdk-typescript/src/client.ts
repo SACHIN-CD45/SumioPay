@@ -30,7 +30,7 @@ export class SumioPay {
     }
     this.apiKey = config.apiKey;
     this.apiSecret = config.apiSecret;
-    this.baseUrl = (config.baseUrl || 'https://pay.sumiotech.com').replace(/\/+$/, '');
+    this.baseUrl = (config.baseUrl || 'https://apipay.sumiotech.in').replace(/\/+$/, '');
     this.timeoutMs = config.timeoutMs || 15000;
     this.maxRetries = config.maxRetries !== undefined ? config.maxRetries : 2;
   }

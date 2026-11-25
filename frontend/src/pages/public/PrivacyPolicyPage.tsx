@@ -71,7 +71,7 @@ export const PrivacyPolicyPage: React.FC = () => {
         <section className="space-y-3">
           <h2 className="text-base font-bold text-slate-900">6. Contact Our Data Protection Officer</h2>
           <p>
-            For privacy inquiries, audit reports, or data deletion requests, contact our legal desk at <span className="font-semibold text-blue-600">privacy@sumiotech.com</span> or SumioTech Private Limited, Corporate Office, India.
+            For privacy inquiries, audit reports, or data deletion requests, contact our legal desk at <span className="font-semibold text-blue-600">privacy@sumiotech.in</span> or SumioTech Private Limited, Corporate Office, India.
           </p>
         </section>
       </main>

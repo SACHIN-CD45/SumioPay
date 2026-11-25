@@ -18,7 +18,7 @@ import { SumioPay } from '@sumiopay/sdk';
 const sumio = new SumioPay({
   apiKey: process.env.SUMIOPAY_API_KEY!,
   apiSecret: process.env.SUMIOPAY_API_SECRET,
-  baseUrl: 'https://pay.sumiotech.com', // or 'http://localhost:5000' in development
+  baseUrl: 'https://apipay.sumiotech.in', // or 'http://localhost:8090' in development
 });
 
 // 1. Create a payment order with integer paise

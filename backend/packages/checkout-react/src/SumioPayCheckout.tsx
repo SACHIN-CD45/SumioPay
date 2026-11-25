@@ -14,7 +14,7 @@ export interface SumioPayCheckoutProps {
   amount: number; // in Rupees, e.g. 499.00
   currency?: string;
   customer?: CustomerInfo;
-  apiBaseUrl?: string; // Default: 'https://pay.sumiotech.com' or custom
+  apiBaseUrl?: string; // Default: 'https://apipay.sumiotech.in' or custom
   onSuccess?: (data: { orderId: string; utr?: string; amount: number }) => void;
   onPending?: (data: { orderId: string; status: string }) => void;
   onFailure?: (error: { code: string; message: string }) => void;

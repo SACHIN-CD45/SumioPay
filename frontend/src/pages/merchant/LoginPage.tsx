@@ -54,7 +54,7 @@ export const LoginPage: React.FC = () => {
     setError(null);
     try {
       const res = await api.post('/merchant/login', {
-        email: 'contact@sumiotech.com',
+        email: 'contact@sumiotech.in',
         password: 'Password@123',
       });
       if (res.data.success) {

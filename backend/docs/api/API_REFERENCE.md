@@ -1,6 +1,6 @@
 # SUMIOPAY — Developer API & Integration Reference (v1)
 
-Base URL: `https://pay.sumiotech.com/api/v1` (or `http://localhost:8090/api/v1` in local dev)
+Base URL: `https://apipay.sumiotech.in/api/v1` (or `http://localhost:8090/api/v1` in local dev)
 
 ---
 
@@ -148,7 +148,7 @@ import { SumioPay } from '@sumiopay/sdk';
 const sumio = new SumioPay({
   apiKey: process.env.SUMIOPAY_API_KEY!,
   apiSecret: process.env.SUMIOPAY_API_SECRET,
-  baseUrl: 'https://pay.sumiotech.com',
+  baseUrl: 'https://apipay.sumiotech.in',
 });
 
 // 1. Create Order

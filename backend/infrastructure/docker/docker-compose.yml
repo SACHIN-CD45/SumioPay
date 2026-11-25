@@ -40,7 +40,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-sumiopay_prod_jwt_super_secret_key_98124}
       CENTRAL_BACKEND_URL: http://backend:5000
-      BASE_URL: ${BASE_URL:-https://pay.sumiotech.com}
+      BASE_URL: ${BASE_URL:-https://apipay.sumiotech.in}
     depends_on:
       - mongodb
       - redis
