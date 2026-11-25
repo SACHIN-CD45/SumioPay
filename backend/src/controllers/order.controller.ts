@@ -18,6 +18,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       customerPhone = '',
       customerEmail = '',
       callbackWebhookUrl,
+      isTest = false,
     } = req.body;
 
     const numBase = parseFloat(baseAmount);
@@ -57,6 +58,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       baseAmount: numBase,
       paiseOffset,
       exactAmount,
+      isTest: Boolean(isTest || req.headers['x-test-mode'] === 'true'),
       status: 'PENDING',
       upiIntentUrl,
       expiresAt,
@@ -92,7 +94,7 @@ export const getOrderStatus = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
 
-    const order = await Order.findOne({ orderId });
+    const order = await Order.findOne({ orderId }).populate('merchantId', 'businessName name upiId upiName');
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
@@ -103,6 +105,8 @@ export const getOrderStatus = async (req: Request, res: Response) => {
       await order.save();
     }
 
+    const merchantObj: any = order.merchantId || {};
+
     res.json({
       success: true,
       data: {
@@ -111,6 +115,11 @@ export const getOrderStatus = async (req: Request, res: Response) => {
         status: order.status,
         baseAmount: order.baseAmount,
         exactAmount: order.exactAmount,
+        paiseOffset: order.paiseOffset,
+        upiIntentUrl: order.upiIntentUrl,
+        isTest: order.isTest || false,
+        merchantName: merchantObj.businessName || merchantObj.name || 'Merchant',
+        upiId: merchantObj.upiId || '',
         utrNumber: order.utrNumber,
         paidAt: order.paidAt,
         expiresAt: order.expiresAt,
@@ -124,7 +133,7 @@ export const getOrderStatus = async (req: Request, res: Response) => {
 export const getMerchantOrders = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const merchantId = req.merchant!._id;
-    const { status, appName, search, page = '1', limit = '20' } = req.query;
+    const { status, appName, search, isTest, page = '1', limit = '20' } = req.query;
 
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
@@ -133,6 +142,9 @@ export const getMerchantOrders = async (req: AuthenticatedRequest, res: Response
     const query: any = { merchantId };
     if (status && status !== 'ALL') query.status = status;
     if (appName && appName !== 'ALL') query.appName = appName;
+    if (isTest !== undefined && isTest !== '' && isTest !== 'ALL') {
+      query.isTest = isTest === 'true';
+    }
     if (search) {
       query.$or = [
         { orderId: { $regex: search, $options: 'i' } },
@@ -186,10 +198,12 @@ export const simulatePayment = async (req: AuthenticatedRequest, res: Response) 
     order.rawNotificationMessage = `[Sandbox Test] Received Rs.${order.exactAmount} on UPI ref ${fakeUtr}`;
     await order.save();
 
-    // Increment merchant totals
-    await Merchant.findByIdAndUpdate(merchant._id, {
-      $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
-    });
+    // Increment merchant totals only for live transactions
+    if (!order.isTest) {
+      await Merchant.findByIdAndUpdate(merchant._id, {
+        $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
+      });
+    }
 
     // Dispatch webhook to merchant's callback URL
     if (order.callbackWebhookUrl) {

@@ -14,11 +14,15 @@ export const api = axios.create({
   },
 });
 
-// Attach Merchant JWT Access Token
+// Attach Merchant JWT Access Token & Test Mode Header
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('sumiopay_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const mode = localStorage.getItem('sumiopay_mode');
+  if (mode === 'TEST' && config.headers) {
+    config.headers['x-test-mode'] = 'true';
   }
   return config;
 });

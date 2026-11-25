@@ -20,6 +20,7 @@ import {
   Play,
   ShieldCheck,
   ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
@@ -475,6 +476,16 @@ export const DashboardPage: React.FC = () => {
                         >
                           <Smartphone className="w-3.5 h-3.5" />
                           <span>Open in UPI App</span>
+                        </a>
+
+                        <a
+                          href={`/pay/${liveOrder.orderId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold inline-flex items-center gap-1.5 transition"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>View Hosted Link</span>
                         </a>
 
                         {liveOrder.status !== 'PAID' && (

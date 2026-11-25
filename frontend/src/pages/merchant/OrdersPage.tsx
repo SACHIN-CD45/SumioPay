@@ -25,6 +25,23 @@ export const OrdersPage: React.FC = () => {
   const [reconcileModal, setReconcileModal] = useState<any>(null);
   const [reconcileOrderId, setReconcileOrderId] = useState('');
   const [reconcileNotes, setReconcileNotes] = useState('');
+  const [simulatingOrderId, setSimulatingOrderId] = useState<string | null>(null);
+
+  const handleSimulateOrderPayment = async (orderId: string) => {
+    setSimulatingOrderId(orderId);
+    try {
+      const res = await api.post(`/order/sandbox-simulate-payment/${orderId}`);
+      if (res.data.success) {
+        fetchOrders();
+      } else {
+        alert(res.data.message || 'Simulation failed');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Simulation failed');
+    } finally {
+      setSimulatingOrderId(null);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -178,7 +195,14 @@ export const OrdersPage: React.FC = () => {
                   {orders.map((ord) => (
                     <tr key={ord._id} className="hover:bg-slate-50/60 transition">
                       <td className="px-5 py-3.5 font-mono font-bold text-slate-900">
-                        {ord.orderId}
+                        <div className="flex items-center gap-1.5">
+                          <span>{ord.orderId}</span>
+                          {ord.isTest && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                              TEST
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5">
                         <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
@@ -227,12 +251,33 @@ export const OrdersPage: React.FC = () => {
                         {new Date(ord.createdAt).toLocaleString()}
                       </td>
                       <td className="px-5 py-3.5">
-                        <button
-                          onClick={() => setSelectedOrder(ord)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
-                        >
-                          Details
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setSelectedOrder(ord)}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+                          >
+                            Details
+                          </button>
+                          <a
+                            href={`/pay/${ord.orderId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-semibold transition"
+                            title="Open Hosted Payment Link"
+                          >
+                            Pay Link
+                          </a>
+                          {ord.status === 'PENDING' && (
+                            <button
+                              onClick={() => handleSimulateOrderPayment(ord.orderId)}
+                              disabled={simulatingOrderId === ord.orderId}
+                              className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-[11px] font-bold transition flex items-center gap-1"
+                              title="Simulate instant payment for testing"
+                            >
+                              {simulatingOrderId === ord.orderId ? 'Simulating...' : 'Simulate'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

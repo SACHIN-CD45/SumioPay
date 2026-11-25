@@ -1,5 +1,5 @@
-import React from 'react';
-import { LogOut, Smartphone, CheckCircle, AlertCircle, ArrowRight, Menu, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LogOut, Smartphone, CheckCircle, AlertCircle, ArrowRight, Menu, X, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface NavbarProps {
@@ -23,6 +23,23 @@ export const Navbar: React.FC<NavbarProps> = ({
   isMobileMenuOpen = false,
 }) => {
   const navigate = useNavigate();
+  const [portalMode, setPortalMode] = useState<'LIVE' | 'TEST'>(
+    (localStorage.getItem('sumiopay_mode') as 'LIVE' | 'TEST') || 'LIVE'
+  );
+
+  useEffect(() => {
+    const handleModeChange = () => {
+      setPortalMode((localStorage.getItem('sumiopay_mode') as 'LIVE' | 'TEST') || 'LIVE');
+    };
+    window.addEventListener('sumiopay_mode_changed', handleModeChange);
+    return () => window.removeEventListener('sumiopay_mode_changed', handleModeChange);
+  }, []);
+
+  const handleToggleMode = (newMode: 'LIVE' | 'TEST') => {
+    setPortalMode(newMode);
+    localStorage.setItem('sumiopay_mode', newMode);
+    window.dispatchEvent(new Event('sumiopay_mode_changed'));
+  };
 
   const handleLogout = () => {
     if (onLogout) {
@@ -63,7 +80,33 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* Mode Switcher Toggle (Live vs Test Mode) */}
+        <div className="flex items-center p-0.5 bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold">
+          <button
+            type="button"
+            onClick={() => handleToggleMode('LIVE')}
+            className={`px-2.5 py-1 rounded-lg transition ${
+              portalMode === 'LIVE'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            Live
+          </button>
+          <button
+            type="button"
+            onClick={() => handleToggleMode('TEST')}
+            className={`px-2.5 py-1 rounded-lg transition ${
+              portalMode === 'TEST'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            Test Mode
+          </button>
+        </div>
+
         {/* Device Status Pill */}
         <div
           onClick={() => navigate('/devices')}

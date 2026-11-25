@@ -1,42 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowRight, Sparkles, ShieldCheck, Zap, HelpCircle } from 'lucide-react';
+import { Check, ArrowRight, Sparkles, ShieldCheck, Zap, HelpCircle, RefreshCw } from 'lucide-react';
 import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
+import { publicApi } from '../../lib/api';
 
 export const PricingPage: React.FC = () => {
   const navigate = useNavigate();
   const [demoOpen, setDemoOpen] = useState(false);
+  const [pricingConfig, setPricingConfig] = useState<any>(null);
+  const [loadingConfig, setLoadingConfig] = useState<boolean>(true);
+
+  useEffect(() => {
+    publicApi
+      .get('/platform-config')
+      .then((res) => {
+        if (res.data.success && res.data.data?.pricingTiers) {
+          setPricingConfig(res.data.data.pricingTiers);
+        }
+      })
+      .catch((e) => console.error('Failed to load live pricing config:', e))
+      .finally(() => setLoadingConfig(false));
+  }, []);
+
+  const starterPrice = pricingConfig?.STARTER?.monthlyPrice ?? 0;
+  const growthPrice = pricingConfig?.GROWTH?.monthlyPrice ?? 1499;
+  const businessPrice = pricingConfig?.BUSINESS?.monthlyPrice ?? 4999;
+  const enterprisePrice = pricingConfig?.ENTERPRISE?.monthlyPrice ?? 11999;
+
+  const starterDevices = pricingConfig?.STARTER?.deviceLimit ?? 1;
+  const growthDevices = pricingConfig?.GROWTH?.deviceLimit ?? 5;
+  const businessDevices = pricingConfig?.BUSINESS?.deviceLimit ?? 15;
+  const enterpriseDevices = pricingConfig?.ENTERPRISE?.deviceLimit ?? 999;
 
   const tiers = [
     {
-      name: 'Starter',
-      price: '₹0',
-      period: 'forever free',
+      name: 'Starter Tier',
+      price: starterPrice === 0 ? '₹0' : `₹${starterPrice.toLocaleString('en-IN')}`,
+      period: starterPrice === 0 ? 'forever free' : 'per month',
       desc: 'Ideal for bootstrapped developers, solo SaaS founders, and early-stage tools.',
-      badge: null,
+      badge: starterPrice === 0 ? 'Free Starter' : null,
       highlight: false,
       features: [
-        '0% Payment Gateway Fee (Always)',
-        '1 Paired Android Listener Phone',
+        '0% Payment Gateway Commission (Always)',
+        `${starterDevices} Paired Android Listener Phone`,
         'Direct Bank Settlement in < 1.2s',
         'Unlimited UPI Transactions',
         'Standard Webhook Dispatch (HMAC-SHA256)',
         'React SDK & REST API Access',
-        'Community & Email Support',
+        'Developer Sandbox / Test Mode Included',
       ],
-      cta: 'Start Free Today',
+      cta: starterPrice === 0 ? 'Start Free Today' : 'Choose Starter',
       action: () => navigate('/login?register=true'),
     },
     {
-      name: 'Growth & Business',
-      price: '₹1,499',
+      name: 'Growth & Scale',
+      price: `₹${growthPrice.toLocaleString('en-IN')}`,
       period: 'per month',
       desc: 'Designed for scaling SaaS products, high-volume pathology labs, and POS retail.',
       badge: 'Most Popular',
       highlight: true,
       features: [
         '0% Payment Gateway Fee (Always)',
-        'Up to 5 Paired Android Listener Phones',
+        `Up to ${growthDevices} Paired Android Listener Phones`,
         'Automatic Multi-Phone Load Balancing',
         'High-Priority Webhook Dispatch & Auto-Retries',
         'Unmapped Payments Dispute Ledger & 1-Click Reconcile',
@@ -48,21 +73,38 @@ export const PricingPage: React.FC = () => {
       action: () => navigate('/login?register=true'),
     },
     {
-      name: 'Enterprise Custom',
-      price: 'Custom',
-      period: 'tailored setup',
-      desc: 'For multi-location clinic chains, fintech ERPs, and organizations processing ₹25L+ / mo.',
-      badge: 'High Volume',
+      name: 'Business Pro',
+      price: `₹${businessPrice.toLocaleString('en-IN')}`,
+      period: 'per month',
+      desc: 'For multi-branch clinics, retail chains, and ecommerce stores processing ₹10L+ monthly.',
+      badge: 'High Performance',
       highlight: false,
       features: [
         '0% Transaction Fee (Direct Bank Settlement)',
-        'Unlimited Android Listeners & Multi-VPA Routing',
+        `Up to ${businessDevices} Paired Android Listeners & Multi-VPA Routing`,
         'Self-Hosted On-Premise / VPS White-Label Deployment',
         'Dedicated IP & 99.99% Uptime Guarantee',
         'Custom Bank Notification Regex Engine Tuning',
+        'Automated Hourly Bank CSV Reconciliation',
         'Dedicated Technical Account Manager',
-        'Custom Android Listener APK with Private Branding',
+      ],
+      cta: 'Choose Business Pro',
+      action: () => navigate('/login?register=true'),
+    },
+    {
+      name: 'Enterprise Custom',
+      price: enterprisePrice > 0 ? `₹${enterprisePrice.toLocaleString('en-IN')}` : 'Custom',
+      period: enterprisePrice > 0 ? 'per month' : 'tailored setup',
+      desc: 'For fintech ERPs, hospitals, and national organizations requiring dedicated infrastructure.',
+      badge: 'Unlimited Scale',
+      highlight: false,
+      features: [
+        '0% Transaction Fee (Direct Bank Settlement)',
+        'Unlimited Android Listeners & Custom Multi-VPA Rotator',
+        'Private Cloud / On-Prem Kubernetes Helm Deployment',
+        'Custom Android Listener APK with Private Company Branding',
         'Custom SLA & Legal Data Protection Agreement',
+        'Direct Phone/Slack Access to Lead FinTech Engineers',
       ],
       cta: 'Contact Enterprise Team',
       action: () => navigate('/enterprise'),
@@ -124,7 +166,7 @@ export const PricingPage: React.FC = () => {
         </div>
 
         {/* Pricing Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
           {tiers.map((tier, idx) => (
             <div
               key={idx}

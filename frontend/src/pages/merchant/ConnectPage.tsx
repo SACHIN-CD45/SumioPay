@@ -17,9 +17,37 @@ import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
 
 export const ConnectPage: React.FC = () => {
   const [merchant, setMerchant] = useState<any>(null);
-  const [platform, setPlatform] = useState<'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'>('woocommerce');
+  const [platform, setPlatform] = useState<'link' | 'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'>('link');
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
+
+  // Instant Payment Link Generator State
+  const [linkAmount, setLinkAmount] = useState<number>(499);
+  const [linkAppName, setLinkAppName] = useState<string>('MyStore');
+  const [generatingLink, setGeneratingLink] = useState<boolean>(false);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [generatedOrderId, setGeneratedOrderId] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleGenerateLink = async () => {
+    setGeneratingLink(true);
+    try {
+      const res = await api.post('/order/create', {
+        baseAmount: Number(linkAmount) || 100,
+        appName: linkAppName || 'STORE',
+      });
+      if (res.data.success) {
+        const orderId = res.data.data.orderId;
+        const url = `${window.location.origin}/pay/${orderId}`;
+        setGeneratedOrderId(orderId);
+        setGeneratedLink(url);
+      }
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Failed to create payment order');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
 
   useEffect(() => {
     api.get('/merchant/profile').then((res) => {
@@ -36,6 +64,27 @@ export const ConnectPage: React.FC = () => {
   };
 
   const codeExamples = {
+    link: `// =======================================================
+// Hosted Direct Payment Link / URL Integration
+// =======================================================
+// No coding required! You can generate a direct checkout link
+// and paste it anywhere:
+//
+// 1. Direct Website Button:
+//    <a href="https://sumiopay.sumiotech.in/pay/ORD-XXXX" target="_blank">
+//      Pay via Direct UPI (0% Fee)
+//    </a>
+//
+// 2. WhatsApp or Instagram DM:
+//    "Hi! Please complete your payment here: https://sumiopay.sumiotech.in/pay/ORD-XXXX"
+//
+// 3. Or create links dynamically from your backend:
+//    POST /api/v1/payments/orders
+//    Headers: { "x-api-key": "${merchant?.apiKey || 'sp_live_YOUR_KEY'}" }
+//    Body:    { "baseAmount": 999, "appName": "STORE" }
+//
+//    Customer opens the link, scans the dynamic QR with any UPI app,
+//    and payment auto-verifies in <1.2s!`,
     woocommerce: `// ==========================================
 // WooCommerce & Shopify eCommerce Integration
 // ==========================================
@@ -281,6 +330,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
 
           <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
             {[
+              { id: 'link', label: 'Direct Payment Link (URL)' },
               { id: 'woocommerce', label: 'WooCommerce / Shopify' },
               { id: 'html', label: 'Universal HTML/JS' },
               { id: 'react', label: 'React / Next.js' },
@@ -301,6 +351,98 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
             ))}
           </div>
         </div>
+
+        {platform === 'link' && (
+          <div className="p-5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-4">
+            <div className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-blue-600" />
+              <h3 className="font-extrabold text-slate-900 text-sm">Instant Hosted Payment Link Generator</h3>
+            </div>
+            <p className="text-slate-600 text-xs">
+              Generate a shareable payment link that customers can open on any browser, mobile phone, or desktop to pay via UPI QR or UPI apps (GPay, PhonePe, Paytm).
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Amount (₹)</label>
+                <input
+                  type="number"
+                  value={linkAmount}
+                  onChange={(e) => setLinkAmount(Number(e.target.value))}
+                  placeholder="e.g. 499"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">App / Product Name</label>
+                <input
+                  type="text"
+                  value={linkAppName}
+                  onChange={(e) => setLinkAppName(e.target.value)}
+                  placeholder="e.g. Pro Plan or Order #101"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={handleGenerateLink}
+                  disabled={generatingLink}
+                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                >
+                  {generatingLink ? (
+                    'Generating Link...'
+                  ) : (
+                    <>
+                      <span>Generate Payment Link</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {generatedLink && (
+              <div className="p-4 rounded-xl bg-white border border-blue-200 space-y-3 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700">Generated Payment URL:</span>
+                  <span className="text-[10px] font-mono text-emerald-600 font-bold">Ready to Share</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={generatedLink}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-blue-700 select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedLink);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLink ? 'Copied!' : 'Copy'}</span>
+                  </button>
+                  <a
+                    href={generatedLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open</span>
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {platform === 'woocommerce' && (
           <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900/10 via-indigo-900/10 to-purple-900/10 border border-blue-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

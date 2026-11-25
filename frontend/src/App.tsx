@@ -6,6 +6,7 @@ import { PrivacyPolicyPage } from './pages/public/PrivacyPolicyPage';
 import { TermsPage } from './pages/public/TermsPage';
 import { RefundPolicyPage } from './pages/public/RefundPolicyPage';
 import { EnterprisePage } from './pages/public/EnterprisePage';
+import { HostedPaymentPage } from './pages/public/HostedPaymentPage';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { LoginPage } from './pages/merchant/LoginPage';
@@ -43,6 +44,17 @@ const MerchantLayout: React.FC = () => {
   const [merchant, setMerchant] = useState<any>(null);
   const [onlineCount, setOnlineCount] = useState<number>(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [portalMode, setPortalMode] = useState<'LIVE' | 'TEST'>(
+    (localStorage.getItem('sumiopay_mode') as 'LIVE' | 'TEST') || 'LIVE'
+  );
+
+  useEffect(() => {
+    const handleMode = () => {
+      setPortalMode((localStorage.getItem('sumiopay_mode') as 'LIVE' | 'TEST') || 'LIVE');
+    };
+    window.addEventListener('sumiopay_mode_changed', handleMode);
+    return () => window.removeEventListener('sumiopay_mode_changed', handleMode);
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -80,6 +92,27 @@ const MerchantLayout: React.FC = () => {
         isMobileMenuOpen={isMobileMenuOpen}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
+
+      {portalMode === 'TEST' && (
+        <div className="bg-amber-500 text-slate-950 text-xs font-bold px-4 py-2 flex items-center justify-between shadow-sm z-20">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse"></span>
+            <span>
+              DEVELOPER TEST MODE ACTIVE — Real bank accounts are not debited. Test UPI intents, simulated payments, and webhooks freely.
+            </span>
+            <button
+              onClick={() => {
+                localStorage.setItem('sumiopay_mode', 'LIVE');
+                setPortalMode('LIVE');
+                window.dispatchEvent(new Event('sumiopay_mode_changed'));
+              }}
+              className="ml-auto underline text-slate-950 hover:text-slate-800 font-extrabold text-[11px] shrink-0"
+            >
+              Switch to Live Mode &rarr;
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
         <main className="flex-1 overflow-y-auto bg-slate-50/60">
@@ -113,6 +146,9 @@ export const App: React.FC = () => {
 
         {/* Merchant Public Auth */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Public Hosted Direct Payment Link & QR Checkout */}
+        <Route path="/pay/:orderId" element={<HostedPaymentPage />} />
 
         {/* Merchant Portal Protected Routes */}
         <Route element={<MerchantLayout />}>

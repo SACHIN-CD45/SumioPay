@@ -24,6 +24,7 @@ export interface IOrder extends Document {
   paiseOffset: number; // e.g. 0.47
   exactAmount: number; // e.g. 999.47
   status: OrderStatus;
+  isTest?: boolean;
   upiIntentUrl: string; // upi://pay?...
   utrNumber?: string; // 12-digit UPI reference ID
   rawNotificationMessage?: string;
@@ -49,6 +50,7 @@ const OrderSchema = new Schema<IOrder>(
     baseAmount: { type: Number, required: true, min: 1 },
     paiseOffset: { type: Number, required: true, min: 0.01, max: 0.99 },
     exactAmount: { type: Number, required: true },
+    isTest: { type: Boolean, default: false, index: true },
     status: {
       type: String,
       enum: [
