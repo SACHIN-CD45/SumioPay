@@ -27,50 +27,37 @@
       // Update Notifications Badge & Button
       const notifBadge = document.getElementById('notifBadge');
       const btnNotif = document.getElementById('btnNotif');
-      if (status.isNotificationGranted) {
-        notifBadge.className = 'perm-status badge-success';
-        notifBadge.innerText = 'Active';
-        btnNotif.className = 'btn btn-sm btn-outline';
-        btnNotif.innerText = 'Granted';
-        btnNotif.disabled = true;
-      } else {
-        notifBadge.className = 'perm-status badge-warn';
-        notifBadge.innerText = 'Disabled';
-        btnNotif.className = 'btn btn-sm btn-primary';
-        btnNotif.innerText = 'Enable';
-        btnNotif.disabled = false;
-      }
-
-      // Update SMS Badge & Button
-      const smsBadge = document.getElementById('smsBadge');
-      const btnSms = document.getElementById('btnSms');
-      if (status.isSmsGranted) {
-        smsBadge.className = 'perm-status badge-success';
-        smsBadge.innerText = 'Active';
-        btnSms.className = 'btn btn-sm btn-outline';
-        btnSms.innerText = 'Granted';
-        btnSms.disabled = true;
-      } else {
-        smsBadge.className = 'perm-status badge-warn';
-        smsBadge.innerText = 'Disabled';
-        btnSms.className = 'btn btn-sm btn-primary';
-        btnSms.innerText = 'Enable';
-        btnSms.disabled = false;
+      if (notifBadge && btnNotif) {
+        if (status.isNotificationGranted) {
+          notifBadge.className = 'perm-status badge-success';
+          notifBadge.innerText = 'Active';
+          btnNotif.className = 'btn btn-sm btn-outline';
+          btnNotif.innerText = 'Granted';
+          btnNotif.disabled = true;
+        } else {
+          notifBadge.className = 'perm-status badge-warn';
+          notifBadge.innerText = 'Disabled';
+          btnNotif.className = 'btn btn-sm btn-primary';
+          btnNotif.innerText = 'Enable Access';
+          btnNotif.disabled = false;
+        }
       }
 
       // Update Battery Opt Badge
       const batteryBadge = document.getElementById('batteryBadge');
       const btnBattery = document.getElementById('btnBattery');
-      if (status.isBatteryIgnoring) {
-        batteryBadge.className = 'perm-status badge-success';
-        batteryBadge.innerText = 'Unrestricted';
-        btnBattery.className = 'btn btn-sm btn-outline';
-        btnBattery.innerText = 'Disabled';
-        btnBattery.disabled = true;
-      } else {
-        batteryBadge.className = 'perm-status badge-warn';
-        batteryBadge.innerText = 'Optimized';
-        btnBattery.disabled = false;
+      if (batteryBadge && btnBattery) {
+        if (status.isBatteryIgnoring) {
+          batteryBadge.className = 'perm-status badge-success';
+          batteryBadge.innerText = 'Unrestricted';
+          btnBattery.className = 'btn btn-sm btn-outline';
+          btnBattery.innerText = 'Disabled';
+          btnBattery.disabled = true;
+        } else {
+          batteryBadge.className = 'perm-status badge-warn';
+          batteryBadge.innerText = 'Optimized';
+          btnBattery.disabled = false;
+        }
       }
 
       // Update Pairing and Overall Status
@@ -85,13 +72,12 @@
         document.getElementById('serverUrl').value = status.serverUrl;
       }
 
-      const allPerms = status.isNotificationGranted && status.isSmsGranted;
       const isPaired = status.isPaired && status.deviceToken;
 
-      if (!status.isNotificationGranted && !status.isSmsGranted) {
+      if (!status.isNotificationGranted) {
         statusDot.className = 'status-indicator';
-        statusHeading.innerText = 'Permissions Required';
-        statusDesc.innerText = 'Grant Notification and SMS access to intercept payments.';
+        statusHeading.innerText = 'Notification Access Required';
+        statusDesc.innerText = 'Enable Notification Access above to capture UPI & Bank SMS alerts.';
         deviceBadge.className = 'badge badge-disconnected';
         deviceBadge.innerText = 'NO ACCESS';
       } else if (!isPaired) {

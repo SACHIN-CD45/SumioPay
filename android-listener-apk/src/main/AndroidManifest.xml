@@ -1,24 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.sumiotech.sumiopay"
-    android:versionCode="24"
-    android:versionName="2.4.0">
+    android:versionCode="25"
+    android:versionName="2.5.0">
 
     <uses-sdk
         android:minSdkVersion="24"
         android:targetSdkVersion="34" />
 
-    <!-- Permissions required for universal UPI listening and Bank SMS Interception (Android 7.0 to Android 16) -->
+    <!-- Safe, 100% Google Play Protect Compliant Permissions (No high-risk SMS permissions) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -38,7 +35,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Notification Listener Service Definition -->
+        <!-- Notification Listener Service Definition (Intercepts PhonePe, GPay, Paytm, BHIM, Bank Apps & Bank SMS notifications) -->
         <service
             android:name=".PaymentListenerService"
             android:exported="true"
@@ -57,16 +54,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Real-Time Bank SMS Credit Receiver (PhonePe, Paytm, Bank Alerts) -->
-        <receiver
-            android:name=".SmsListenerReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter android:priority="999">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
 

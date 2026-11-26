@@ -188,6 +188,14 @@ export const deleteDevice = async (req: Request, res: Response): Promise<void> =
 export const downloadApk = async (_req: Request, res: Response): Promise<void> => {
   try {
     const candidatePaths = [
+      path.resolve(process.cwd(), 'backend/public/downloads/SumioPayListener-v2.5.apk'),
+      path.resolve(process.cwd(), 'public/downloads/SumioPayListener-v2.5.apk'),
+      path.resolve(process.cwd(), 'frontend/public/downloads/SumioPayListener-v2.5.apk'),
+      path.resolve(process.cwd(), 'frontend/dist/downloads/SumioPayListener-v2.5.apk'),
+      path.resolve(__dirname, '../../../android-listener-apk/SumioPayListener-v2.5.apk'),
+      path.resolve(__dirname, '../../public/downloads/SumioPayListener-v2.5.apk'),
+      path.resolve(process.cwd(), 'android-listener-apk/SumioPayListener-v2.5.apk'),
+      path.resolve(process.cwd(), '../android-listener-apk/SumioPayListener-v2.5.apk'),
       path.resolve(process.cwd(), 'backend/public/downloads/SumioPayListener-v2.4.apk'),
       path.resolve(process.cwd(), 'public/downloads/SumioPayListener-v2.4.apk'),
       path.resolve(process.cwd(), 'frontend/public/downloads/SumioPayListener-v2.4.apk'),
@@ -200,8 +208,9 @@ export const downloadApk = async (_req: Request, res: Response): Promise<void> =
 
     for (const p of candidatePaths) {
       if (fs.existsSync(p)) {
+        const filename = path.basename(p);
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        res.setHeader('Content-Disposition', 'attachment; filename="SumioPayListener-v2.4.apk"');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Cache-Control', 'public, max-age=3600');
         res.sendFile(p);
         return;

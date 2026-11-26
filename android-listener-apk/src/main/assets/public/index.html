@@ -55,34 +55,22 @@
         <div class="perm-item">
           <div class="perm-info">
             <div class="perm-title">
-              <span>🔔 UPI Notifications</span>
+              <span>🔔 UPI &amp; Bank Notification Access</span>
               <span id="notifBadge" class="perm-status badge-warn">Disabled</span>
             </div>
-            <p class="perm-desc">Reads PhonePe, GPay, Paytm & BHIM credit alerts</p>
+            <p class="perm-desc">Listens to PhonePe, GPay, Paytm, BHIM &amp; Bank SMS credit alerts in &lt;1.2s</p>
           </div>
-          <button id="btnNotif" class="btn btn-sm btn-primary" onclick="openNotifSettings()">Enable</button>
+          <button id="btnNotif" class="btn btn-sm btn-primary" onclick="openNotifSettings()">Enable Access</button>
         </div>
 
-        <!-- 2. SMS Permission -->
-        <div class="perm-item">
-          <div class="perm-info">
-            <div class="perm-title">
-              <span>💬 Bank SMS Messages</span>
-              <span id="smsBadge" class="perm-status badge-warn">Disabled</span>
-            </div>
-            <p class="perm-desc">Reads incoming credit SMS from HDFC, SBI, ICICI, etc.</p>
-          </div>
-          <button id="btnSms" class="btn btn-sm btn-primary" onclick="requestSmsAccess()">Enable</button>
-        </div>
-
-        <!-- 3. Battery Optimization -->
+        <!-- 2. Battery Optimization -->
         <div class="perm-item">
           <div class="perm-info">
             <div class="perm-title">
               <span>⚡ Battery Unrestricted</span>
               <span id="batteryBadge" class="perm-status badge-warn">Optimized</span>
             </div>
-            <p class="perm-desc">Prevents Android from putting listener to sleep</p>
+            <p class="perm-desc">Prevents Android power saving from killing background listener</p>
           </div>
           <button id="btnBattery" class="btn btn-sm btn-outline" onclick="disableBatteryOpt()">Unrestrict</button>
         </div>

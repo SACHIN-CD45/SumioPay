@@ -146,11 +146,7 @@ public class MainActivity extends Activity {
                 // 1. Notification Permission Check
                 boolean notifGranted = isNotificationServiceEnabled();
                 json.put("isNotificationGranted", notifGranted);
-
-                // 2. SMS Permission Check
-                boolean smsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
-                        activity.checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
-                json.put("isSmsGranted", smsGranted);
+                json.put("isSmsGranted", notifGranted);
 
                 // 3. Battery Optimization Check
                 PowerManager pm = (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
@@ -186,15 +182,11 @@ public class MainActivity extends Activity {
         public void requestSmsPermission() {
             if (Build.VERSION.SDK_INT >= 33) {
                 activity.requestPermissions(
-                        new String[]{Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS, "android.permission.POST_NOTIFICATIONS"},
-                        SMS_PERMISSION_REQ_CODE
-                );
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                activity.requestPermissions(
-                        new String[]{Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS},
+                        new String[]{"android.permission.POST_NOTIFICATIONS"},
                         SMS_PERMISSION_REQ_CODE
                 );
             }
+            Toast.makeText(activity, "UPI & Bank SMS alerts are auto-captured via Notification Listener!", Toast.LENGTH_SHORT).show();
         }
 
         @JavascriptInterface

@@ -222,7 +222,7 @@ export const DashboardPage: React.FC = () => {
             </button>
             <a
               href={`${API_BASE}/public/download-apk`}
-              download="SumioPayListener-v2.4.apk"
+              download="SumioPayListener-v2.5.apk"
               className="px-4 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-subtle transition"
             >
               <Download className="w-3.5 h-3.5" />
@@ -811,15 +811,15 @@ Body:
               {/* Right: Direct Download Button & Details */}
               <div className="space-y-3 text-center sm:text-left">
                 <div>
-                  <h4 className="text-sm font-bold text-white">SumioPayListener-v2.4.apk</h4>
+                  <h4 className="text-sm font-bold text-white">SumioPayListener-v2.5.apk</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Lightweight (624 KB) • 24x7 Battery Friendly • Dual Interceptor (SMS + Push)
+                    Lightweight (624 KB) • 24x7 Battery Friendly • Notification Interceptor (UPI + Bank Alerts)
                   </p>
                 </div>
 
                 <a
                   href={`${API_BASE}/public/download-apk`}
-                  download="SumioPayListener-v2.4.apk"
+                  download="SumioPayListener-v2.5.apk"
                   className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition"
                 >
                   <Download className="w-4 h-4" />

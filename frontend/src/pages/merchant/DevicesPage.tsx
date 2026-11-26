@@ -37,7 +37,7 @@ export const DevicesPage: React.FC = () => {
       ? 'http://localhost:8090/api/public/download-apk'
       : 'https://apipay.sumiotech.in/api/public/download-apk';
 
-  const apkDirectMirrorUrl = '/downloads/SumioPayListener-v2.4.apk';
+  const apkDirectMirrorUrl = '/downloads/SumioPayListener-v2.5.apk';
 
   const fetchDevices = async () => {
     try {
@@ -137,15 +137,15 @@ export const DevicesPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <a
                 href={apkDownloadUrl}
-                download="SumioPayListener-v2.4.apk"
+                download="SumioPayListener-v2.5.apk"
                 className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg transition"
               >
                 <Download className="w-4 h-4" />
-                <span>Download SumioPayListener.apk (v2.4)</span>
+                <span>Download SumioPayListener.apk (v2.5)</span>
               </a>
               <a
                 href={apkDirectMirrorUrl}
-                download="SumioPayListener-v2.4.apk"
+                download="SumioPayListener-v2.5.apk"
                 className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 font-bold text-xs flex items-center gap-2 border border-white/20 transition"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -207,6 +207,19 @@ export const DevicesPage: React.FC = () => {
               <span>4. Scan Pairing QR</span>
             </div>
             <p className="text-[10px] text-slate-400">Click &quot;Pair New Android Device&quot; and point app camera at the QR code.</p>
+          </div>
+        </div>
+
+        {/* Play Protect Sideload Notice */}
+        <div className="mt-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs">
+          <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold text-amber-200">
+              Android 13 / 14 / 15 / 16 Google Play Protect Installation Note:
+            </span>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              If Google Play Protect prompts with &quot;App blocked to protect your device&quot;, tap <strong className="text-white underline">More details &gt; Install anyway</strong>. Or open Google Play Store &rarr; Profile icon &rarr; <strong>Play Protect</strong> &rarr; Settings gear &rarr; Temporarily toggle OFF <em>&quot;Scan apps with Play Protect&quot;</em> during installation.
+            </p>
           </div>
         </div>
       </div>

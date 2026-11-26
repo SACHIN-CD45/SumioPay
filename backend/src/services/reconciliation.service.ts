@@ -1,9 +1,5 @@
-import { ReconciliationBatch, IReconciliationRecord } from '../models/reconciliation.model';
-import { Order } from '../models/order.model';
-import { UnmappedPayment } from '../models/unmappedPayment.model';
-import { AuditLog } from '../models/auditLog.model';
+import type { IReconciliationRecord } from '../models/reconciliation.model';
 import { StateMachineService } from './stateMachine.service';
-import mongoose from 'mongoose';
 import crypto from 'crypto';
 
 export interface StatementEntry {
@@ -63,9 +59,13 @@ export class ReconciliationService {
    * Processes bank statement entries with multi-rule auto matching
    */
   public static async processStatement(params: {
-    merchantId: mongoose.Types.ObjectId;
+    merchantId: any;
     entries: StatementEntry[];
   }) {
+    const { Order } = require('../models/order.model');
+    const { ReconciliationBatch } = require('../models/reconciliation.model');
+    const { UnmappedPayment } = require('../models/unmappedPayment.model');
+
     const batchId = `REC_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
     const records: IReconciliationRecord[] = [];
     let matchedCount = 0;
@@ -216,11 +216,14 @@ export class ReconciliationService {
    * Manual Reconciliation Workflow: Associate unmapped transaction to a specific order
    */
   public static async resolveManualMatch(params: {
-    merchantId: mongoose.Types.ObjectId;
+    merchantId: any;
     unmappedId: string;
     orderId: string;
     actorEmail: string;
   }) {
+    const { Order } = require('../models/order.model');
+    const { UnmappedPayment } = require('../models/unmappedPayment.model');
+    const { AuditLog } = require('../models/auditLog.model');
     const { merchantId, unmappedId, orderId, actorEmail } = params;
 
     const unmapped = await UnmappedPayment.findOne({ _id: unmappedId, merchantId });
