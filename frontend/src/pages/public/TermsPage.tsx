@@ -58,14 +58,14 @@ export const TermsPage: React.FC = () => {
         <section className="space-y-3">
           <h2 className="text-base font-bold text-slate-900">4. Intellectual Property & License</h2>
           <p>
-            SumioTech Private Limited grants you a non-exclusive, non-transferable, revocable license to use the SumioPay API, SDK, and Merchant Dashboard in accordance with your chosen plan tier.
+            SumioTech grants you a non-exclusive, non-transferable, revocable license to use the SumioPay API, SDK, and Merchant Dashboard in accordance with your chosen plan tier.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-base font-bold text-slate-900">5. Limitation of Liability</h2>
           <p>
-            To the maximum extent permitted by Indian law, SumioPay and SumioTech Private Limited shall not be liable for any indirect, incidental, or consequential damages resulting from bank downtime, NPCI network latency, OEM phone power management terminating services, or customer payment disputes.
+            To the maximum extent permitted by Indian law, SumioPay and SumioTech shall not be liable for any indirect, incidental, or consequential damages resulting from bank downtime, NPCI network latency, OEM phone power management terminating services, or customer payment disputes.
           </p>
         </section>
       </main>

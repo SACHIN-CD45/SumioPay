@@ -1192,7 +1192,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
           {/* Bottom Legal Notice Bar */}
           <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
             <div>
-              <p>&copy; {new Date().getFullYear()} SumioTech Private Limited. All rights reserved. Built for Indian merchants & SaaS founders.</p>
+              <p>&copy; {new Date().getFullYear()} SumioTech. All rights reserved. Built for Indian merchants &amp; SaaS founders.</p>
               <p className="text-[11px] text-slate-500 mt-1">
                 Zero Fund Holding Architecture &bull; Non-Custodial Direct Settlement to Merchant UPI VPAs &bull; DPDP Act 2023 & RBI Guidelines Compliant.
               </p>

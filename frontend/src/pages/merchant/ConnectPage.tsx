@@ -467,11 +467,29 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
         <button
           onClick={handleRegenerateKeys}
           disabled={regeneratingKeys}
-          className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs flex items-center gap-2 transition disabled:opacity-50 shadow-sm"
+          className="px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center gap-2 transition disabled:opacity-50 shadow-sm"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${regeneratingKeys ? 'animate-spin' : ''}`} />
-          <span>{regeneratingKeys ? 'Rotating Keys...' : 'Rotate Live Credentials'}</span>
+          <span>{regeneratingKeys ? 'Generating Fresh Keys...' : 'Generate / Rotate New Keys'}</span>
         </button>
+      </div>
+
+      {/* Multi-Tenant Security & Provisioning Notice */}
+      <div className="p-4 rounded-2xl bg-slate-900 text-slate-200 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div>
+            <div className="font-bold text-white flex items-center gap-2">
+              <span>Enterprise Multi-Tenant Isolation Active</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px]">
+                Isolated: {merchant?.businessName || 'Your Account'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              API credentials are automatically pre-provisioned on signup so you can integrate immediately. To regenerate or roll your keys at any time, click &quot;Generate / Rotate New Keys&quot;.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* API & Webhook Credentials Management Card */}

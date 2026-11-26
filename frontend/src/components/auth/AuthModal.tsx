@@ -819,7 +819,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="p-6 overflow-y-auto text-xs text-slate-600 space-y-4 leading-relaxed">
               <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-blue-900">
                 <strong>SumioPay</strong> is an enterprise UPI verification automation technology suite provided by{' '}
-                <strong>SumioTech Solutions Private Limited</strong>.
+                <strong>SumioTech</strong>.
               </div>
 
               <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">1. Direct Bank Settlement Model</h4>

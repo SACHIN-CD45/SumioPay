@@ -309,7 +309,7 @@ export const HostedPaymentPage: React.FC = () => {
       </div>
 
       <div className="text-center text-xs text-slate-400 mt-6">
-        &copy; {new Date().getFullYear()} SumioTech Solutions Private Limited &bull; 0% Fee UPI Gateway
+        &copy; {new Date().getFullYear()} SumioTech &bull; 0% Fee UPI Gateway
       </div>
     </div>
   );

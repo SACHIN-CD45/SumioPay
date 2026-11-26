@@ -34,7 +34,7 @@ export const PrivacyPolicyPage: React.FC = () => {
         <section className="space-y-3">
           <h2 className="text-base font-bold text-slate-900">1. Overview & Commitment</h2>
           <p>
-            SumioTech Private Limited ("SumioPay", "we", "our", or "us") is dedicated to protecting the privacy and security of merchants, developers, and their end users. This Privacy Policy outlines our data processing practices in full compliance with the <strong>Digital Personal Data Protection Act, 2023 (India)</strong> and international security standards.
+            SumioTech ("SumioPay", "we", "our", or "us") is dedicated to protecting the privacy and security of merchants, developers, and their end users. This Privacy Policy outlines our data processing practices in full compliance with the <strong>Digital Personal Data Protection Act, 2023 (India)</strong> and international security standards.
           </p>
         </section>
 
@@ -71,7 +71,7 @@ export const PrivacyPolicyPage: React.FC = () => {
         <section className="space-y-3">
           <h2 className="text-base font-bold text-slate-900">6. Contact Our Data Protection Officer</h2>
           <p>
-            For privacy inquiries, audit reports, or data deletion requests, contact our legal desk at <span className="font-semibold text-blue-600">privacy@sumiotech.in</span> or SumioTech Private Limited, Corporate Office, India.
+            For privacy inquiries, audit reports, or data deletion requests, contact our legal desk at <span className="font-semibold text-blue-600">privacy@sumiotech.in</span> or SumioTech, Corporate Office, India.
           </p>
         </section>
       </main>

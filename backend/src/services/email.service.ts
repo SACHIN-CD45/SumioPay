@@ -77,7 +77,7 @@ const renderEmailLayout = (title: string, bodyContent: string): string => {
       </div>
       <div class="footer-area">
         <p style="margin: 0 0 8px 0; font-weight: 700; color: #1E293B;">
-          ${COMPANY.name} Solutions Private Limited
+          ${COMPANY.name}
         </p>
         <p style="margin: 0 0 12px 0;">
           Email: <a href="mailto:${COMPANY.supportEmail}" style="color: #2563EB;">${COMPANY.supportEmail}</a> • Phone: <a href="tel:${COMPANY.supportPhone}" style="color: #2563EB;">${COMPANY.supportPhone}</a>

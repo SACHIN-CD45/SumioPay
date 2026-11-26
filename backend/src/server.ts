@@ -36,7 +36,7 @@ const bootstrap = async () => {
       const passwordHash = await bcrypt.hash('Password@123', salt);
       const sumioMerchant = new Merchant({
         name: 'SumioTech Admin',
-        businessName: 'SumioTech Private Limited',
+        businessName: 'SumioTech',
         email: 'contact@sumiotech.in',
         passwordHash,
         upiId: 'sumiotech@okhdfcbank',
