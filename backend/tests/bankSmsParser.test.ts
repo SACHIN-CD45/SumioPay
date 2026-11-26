@@ -64,4 +64,19 @@ describe('Bank SMS & UPI Push Notification Parser Engine', () => {
     const parsedOtp = parseBankNotification(otpSms, 'bank.sms');
     assert.strictEqual(parsedOtp.isPaymentAlert, false);
   });
+
+  it('extracts readable UPI package names and SBI slash sender names', () => {
+    const gpayNoBrandText = 'Ramesh Kumar paid you ₹499.42. UPI transaction ID 432109876543.';
+    const parsedGpay = parseBankNotification(gpayNoBrandText, 'com.google.android.apps.nbu.paisa.user');
+    assert.strictEqual(parsedGpay.isPaymentAlert, true);
+    assert.strictEqual(parsedGpay.appName, 'GOOGLE_PAY');
+    assert.strictEqual(parsedGpay.senderName, 'Ramesh Kumar');
+
+    const sbiP2aSms = 'Your a/c no. XX4321 is credited by Rs.299.18 on 26-11-26 by UPI/P2A/432109876543/Vikram Singh (SBI)';
+    const parsedSbi = parseBankNotification(sbiP2aSms, 'com.google.android.apps.messaging');
+    assert.strictEqual(parsedSbi.isPaymentAlert, true);
+    assert.strictEqual(parsedSbi.appName, 'SBI_BANK');
+    assert.strictEqual(parsedSbi.utr, '432109876543');
+    assert.strictEqual(parsedSbi.senderName, 'Vikram Singh');
+  });
 });

@@ -60,7 +60,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       baseAmount: numBase,
       paiseOffset,
       exactAmount,
-      isTest: Boolean(isTest || req.headers['x-test-mode'] === 'true'),
+      isTest: Boolean(isTest || req.headers['x-test-mode'] === 'true' || req.isTestKey),
       status: 'PENDING',
       upiIntentUrl,
       expiresAt,
@@ -175,6 +175,12 @@ export const getMerchantOrders = async (req: AuthenticatedRequest, res: Response
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
       },
     });
   } catch (err: any) {
@@ -183,8 +189,8 @@ export const getMerchantOrders = async (req: AuthenticatedRequest, res: Response
 };
 
 /**
- * Developer Sandbox Simulator: Simulates a real UPI bank transfer
- * so developers can test auto-verification without transferring real money!
+ * Developer Sandbox Simulator: Simulates a real UPI bank transfer ONLY for Test Mode orders
+ * so live production orders can NEVER be spoofed or marked PAID without real money.
  */
 export const simulatePayment = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -194,6 +200,13 @@ export const simulatePayment = async (req: AuthenticatedRequest, res: Response) 
     const order = await Order.findOne({ orderId, merchantId: merchant._id });
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (!order.isTest) {
+      return res.status(403).json({
+        success: false,
+        message: 'Live production orders cannot be simulated. Switch to Test Mode or use an sp_test_ API key.',
+      });
     }
 
     if (order.status === 'PAID') {

@@ -177,7 +177,7 @@ export const DashboardPage: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition"
           >
             <Smartphone className="w-4 h-4 text-emerald-400" />
-            <span>Install Companion App (v2.4)</span>
+            <span>Install Companion App (v2.5)</span>
           </button>
           <button
             onClick={() => setIsTestModalOpen(true)}
@@ -488,15 +488,20 @@ export const DashboardPage: React.FC = () => {
                           <span>View Hosted Link</span>
                         </a>
 
-                        {liveOrder.status !== 'PAID' && (
+                        {liveOrder.status !== 'PAID' && liveOrder.isTest && (
                           <button
                             onClick={handleSimulatePayment}
                             disabled={isSimulating}
                             className="px-4 py-2 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-xs font-bold inline-flex items-center gap-1.5 transition"
                           >
                             <Play className="w-3.5 h-3.5" />
-                            <span>{isSimulating ? 'Verifying...' : 'Simulate Instant Credit (Free)'}</span>
+                            <span>{isSimulating ? 'Verifying...' : 'Simulate Instant Credit (Test Mode)'}</span>
                           </button>
+                        )}
+                        {liveOrder.status !== 'PAID' && !liveOrder.isTest && (
+                          <span className="px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] text-amber-300 font-semibold">
+                            Live QR: Pay via UPI App (Switch top bar to Test Mode to simulate free)
+                          </span>
                         )}
                       </div>
                     </div>
@@ -702,10 +707,10 @@ Body:
             <thead>
               <tr className="border-b border-slate-100 text-slate-500 bg-slate-50/60">
                 <th className="py-3 px-3 font-semibold">Order ID</th>
-                <th className="py-3 px-3 font-semibold">App / Product</th>
-                <th className="py-3 px-3 font-semibold">Customer ID</th>
+                <th className="py-3 px-3 font-semibold">Website / App</th>
+                <th className="py-3 px-3 font-semibold">Payer / Customer</th>
                 <th className="py-3 px-3 font-semibold">Amount (Exact)</th>
-                <th className="py-3 px-3 font-semibold">Bank UTR</th>
+                <th className="py-3 px-3 font-semibold">Bank / UPI &amp; UTR</th>
                 <th className="py-3 px-3 font-semibold">Status</th>
                 <th className="py-3 px-3 font-semibold">Created</th>
               </tr>
@@ -714,20 +719,37 @@ Body:
               {stats?.recentOrders && stats.recentOrders.length > 0 ? (
                 stats.recentOrders.map((ord: any) => (
                   <tr key={ord._id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-3 px-3 font-mono font-bold text-slate-900">{ord.orderId}</td>
+                    <td className="py-3 px-3 font-mono font-bold text-slate-900">
+                      <div className="flex items-center gap-1.5">
+                        <span>{ord.orderId}</span>
+                        {ord.isTest && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">
+                            TEST
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-3">
                       <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
                         {ord.appName}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">
-                      {ord.customerUserId || 'guest'}
+                    <td className="py-3 px-3 text-slate-700 text-[11px]">
+                      <div className="font-semibold text-slate-900">
+                        {ord.senderName || ord.customerEmail || ord.customerUserId || 'guest'}
+                      </div>
+                      {ord.customerUserId && ord.senderName && (
+                        <div className="text-[10px] font-mono text-slate-400">ID: {ord.customerUserId}</div>
+                      )}
                     </td>
                     <td className="py-3 px-3 font-bold text-slate-900">
                       ₹{ord.exactAmount.toFixed(2)}
                     </td>
-                    <td className="py-3 px-3 text-emerald-700 font-mono text-[11px] font-bold">
-                      {ord.utrNumber || '—'}
+                    <td className="py-3 px-3 font-mono text-[11px]">
+                      <div className="text-emerald-700 font-bold">{ord.utrNumber || '—'}</div>
+                      {ord.bankAppName && (
+                        <div className="text-[10px] text-slate-500 font-sans font-semibold">{ord.bankAppName}</div>
+                      )}
                     </td>
                     <td className="py-3 px-3">
                       <span
@@ -848,7 +870,7 @@ Body:
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
                   <div className="text-emerald-400 font-bold text-[11px]">2. Grant Permissions</div>
                   <p className="text-[11px] text-slate-400">
-                    Tap &quot;Enable Notifications&quot; &amp; &quot;Enable SMS&quot; &amp; &quot;Unrestrict Battery&quot;.
+                    Tap &quot;Enable Notification Access&quot; &amp; &quot;Unrestrict Battery&quot;.
                   </p>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
@@ -911,6 +933,8 @@ Body:
         userId="usr_test_demo"
         planName="SumioLab Annual Pro Tier"
         baseAmount={499}
+        apiUrl={API_BASE}
+        apiKey={merchant?.apiKey}
         onSuccess={(data) => {
           console.log('Payment Successful in Dashboard Test:', data);
           fetchStats();

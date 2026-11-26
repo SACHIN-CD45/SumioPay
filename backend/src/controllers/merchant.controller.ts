@@ -16,6 +16,8 @@ import { EmailService } from '../services/email.service';
 import { config } from '../config';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { JwtService } from '../services/jwt.service';
+import { StateMachineService } from '../services/stateMachine.service';
+import { dispatchMerchantWebhook } from '../utils/hmacSigner';
 
 export const sendRegistrationOtp = async (req: Request, res: Response) => {
   try {
@@ -87,22 +89,27 @@ export const registerMerchant = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify Email OTP if required
-    if (otp) {
-      const otpRecord = await Otp.findOne({
-        email: cleanEmail,
-        purpose: 'REGISTRATION',
-        expiresAt: { $gt: new Date() },
-      }).sort({ createdAt: -1 });
-
-      if (!otpRecord || otpRecord.otp !== otp.trim()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid or expired verification code. Please request a new code.',
-        });
-      }
-      await Otp.deleteMany({ email: cleanEmail, purpose: 'REGISTRATION' });
+    // Strictly verify Email OTP before activating merchant registration
+    if (!otp || typeof otp !== 'string' || !otp.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email verification code (OTP) is required. Please request and enter your 6-digit OTP.',
+      });
     }
+
+    const otpRecord = await Otp.findOne({
+      email: cleanEmail,
+      purpose: 'REGISTRATION',
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (!otpRecord || otpRecord.otp !== otp.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification code. Please request a new code.',
+      });
+    }
+    await Otp.deleteMany({ email: cleanEmail, purpose: 'REGISTRATION' });
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
@@ -414,18 +421,27 @@ export const getDashboardStats = async (req: AuthenticatedRequest, res: Response
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const [todayOrders, totalOrdersCount, activeDevice] = await Promise.all([
-      Order.find({
-        merchantId,
-        status: 'PAID',
-        paidAt: { $gte: startOfToday },
-      }),
-      Order.countDocuments({ merchantId }),
-      Device.findOne({ merchantId, isPaired: true, isActive: true }).sort({ lastPingAt: -1 }),
-    ]);
+    const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000);
+
+    const [todayOrders, totalOrdersCount, paidOrdersCount, onlineDevicesCount, totalDevices, activeDevice] =
+      await Promise.all([
+        Order.find({
+          merchantId,
+          status: 'PAID',
+          isTest: { $ne: true },
+          paidAt: { $gte: startOfToday },
+        }),
+        Order.countDocuments({ merchantId, isTest: { $ne: true } }),
+        Order.countDocuments({ merchantId, status: 'PAID', isTest: { $ne: true } }),
+        Device.countDocuments({ merchantId, isPaired: true, isActive: true, lastPingAt: { $gt: fourMinutesAgo } }),
+        Device.countDocuments({ merchantId, isPaired: true }),
+        Device.findOne({ merchantId, isPaired: true, isActive: true }).sort({ lastPingAt: -1 }),
+      ]);
 
     const todayVolume = todayOrders.reduce((acc, curr) => acc + curr.exactAmount, 0);
     const todayTransactions = todayOrders.length;
+    const conversionRate =
+      totalOrdersCount > 0 ? `${((paidOrdersCount / totalOrdersCount) * 100).toFixed(1)}%` : '0.0%';
 
     const isDeviceOnline =
       activeDevice && activeDevice.lastPingAt
@@ -442,9 +458,16 @@ export const getDashboardStats = async (req: AuthenticatedRequest, res: Response
       data: {
         todayVolume,
         todayTransactions,
+        todayPaidCount: todayTransactions,
+        lifetimeVolume: req.merchant!.totalVolume,
         allTimeVolume: req.merchant!.totalVolume,
         allTimeTransactions: req.merchant!.totalTransactions,
+        totalPaidOrders: paidOrdersCount,
+        totalOrders: totalOrdersCount,
         totalOrdersCount,
+        conversionRate,
+        onlineDevicesCount,
+        totalDevices,
         deviceHealth: {
           isOnline: isDeviceOnline,
           batteryPercent: activeDevice?.batteryPercent || 0,
@@ -567,33 +590,83 @@ export const listRefunds = async (req: AuthenticatedRequest, res: Response) => {
 
 export const createRefund = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const merchantId = req.merchant!._id;
-    const { orderId, amountInPaise, reason } = req.body;
+    const merchant = req.merchant!;
+    const merchantId = merchant._id;
+    const { orderId, amountInPaise, reason, refundUtr, providerReference } = req.body;
 
     const order = await Order.findOne({ orderId, merchantId });
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (order.status !== 'PAID') {
-      return res.status(400).json({ success: false, message: 'Only PAID orders can be refunded' });
+    if (order.status !== 'PAID' && order.status !== 'PARTIALLY_REFUNDED') {
+      return res.status(400).json({ success: false, message: 'Only PAID or PARTIALLY_REFUNDED orders can be refunded' });
+    }
+
+    const totalOrderPaise = Math.round(order.exactAmount * 100);
+    const refundAmount = amountInPaise !== undefined ? parseInt(amountInPaise, 10) : totalOrderPaise;
+
+    if (isNaN(refundAmount) || refundAmount <= 0 || refundAmount > totalOrderPaise) {
+      return res.status(400).json({
+        success: false,
+        message: `Refund amount must be between 1 and ${totalOrderPaise} paise`,
+      });
+    }
+
+    const existingRefunds = await Refund.find({ orderId: order.orderId, merchantId });
+    const previouslyRefundedPaise = existingRefunds.reduce((acc, r) => acc + r.amountInPaise, 0);
+    if (previouslyRefundedPaise + refundAmount > totalOrderPaise) {
+      return res.status(400).json({
+        success: false,
+        message: `Remaining refundable balance is ${totalOrderPaise - previouslyRefundedPaise} paise`,
+      });
     }
 
     const refund = await Refund.create({
       refundId: `ref_${crypto.randomBytes(12).toString('hex')}`,
       orderId,
       merchantId,
-      amountInPaise: amountInPaise || Math.round(order.exactAmount * 100),
+      amountInPaise: refundAmount,
       reason: reason || 'Customer requested refund',
+      providerReference: (refundUtr || providerReference || '').trim(),
       status: 'PROCESSED',
-      initiatedBy: req.merchant!.email,
+      initiatedBy: merchant.email,
       processedAt: new Date(),
     });
 
-    order.status = 'REFUNDED';
-    await order.save();
+    const newTotalRefunded = previouslyRefundedPaise + refundAmount;
+    const targetState = newTotalRefunded >= totalOrderPaise ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
 
-    res.status(201).json({ success: true, message: 'Refund initiated and processed', data: refund });
+    await StateMachineService.transitionOrder({
+      order,
+      targetState,
+      trigger: 'ADMIN_MANUAL',
+      actorId: merchant.email,
+      metadata: { refundId: refund.refundId, refundAmount, refundUtr: refund.providerReference },
+    });
+
+    const targetUrl = order.callbackWebhookUrl || merchant.webhookUrl;
+    if (targetUrl) {
+      dispatchMerchantWebhook(
+        merchantId,
+        order.orderId,
+        targetUrl,
+        merchant.webhookSecret,
+        {
+          orderId: order.orderId,
+          refundId: refund.refundId,
+          refundAmountInPaise: refundAmount,
+          refundAmount: refundAmount / 100,
+          refundUtr: refund.providerReference || undefined,
+          reason: refund.reason,
+          status: targetState,
+          metadata: order.metadata || {},
+        },
+        'payment.refunded'
+      ).catch(() => {});
+    }
+
+    res.status(201).json({ success: true, message: 'Refund recorded and webhook notified', data: refund });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }

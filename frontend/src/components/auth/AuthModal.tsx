@@ -175,7 +175,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           return;
         }
 
-        if (regOtpSent && !formData.otp.trim()) {
+        if (!regOtpSent) {
+          setError('Please click "Send Verification Code" above and verify your email OTP first.');
+          setLoading(false);
+          return;
+        }
+
+        if (!formData.otp.trim() || formData.otp.trim().length < 6) {
           setError('Please enter the 6-digit verification code sent to your email.');
           setLoading(false);
           return;

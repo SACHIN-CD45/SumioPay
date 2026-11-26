@@ -19,7 +19,7 @@ router.get('/status/:orderId', getOrderStatus);
 // Merchant ledger
 router.get('/my-orders', requireMerchantAuth, getMerchantOrders);
 
-// Sandbox simulator for instant developer testing
-router.post('/sandbox-simulate-payment/:orderId', requireApiKeyOrMerchantAuth, simulatePayment);
+// Sandbox simulator for instant developer testing (strictly merchant portal JWT, Test orders only)
+router.post('/sandbox-simulate-payment/:orderId', requireMerchantAuth, simulatePayment);
 
 export default router;

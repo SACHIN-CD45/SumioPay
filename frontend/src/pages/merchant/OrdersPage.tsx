@@ -54,8 +54,8 @@ export const OrdersPage: React.FC = () => {
         },
       });
       if (res.data.success) {
-        setOrders(res.data.data.orders);
-        setTotal(res.data.data.pagination.total);
+        setOrders(res.data.data.orders || []);
+        setTotal(res.data.data.pagination?.total ?? res.data.data.total ?? 0);
       }
       const unmappedRes = await api.get('/webhook/unmapped');
       if (unmappedRes.data.success) {
@@ -181,10 +181,10 @@ export const OrdersPage: React.FC = () => {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500">
                     <th className="px-5 py-3.5 font-semibold">Order ID</th>
-                    <th className="px-5 py-3.5 font-semibold">App Name</th>
-                    <th className="px-5 py-3.5 font-semibold">Customer</th>
+                    <th className="px-5 py-3.5 font-semibold">Website / App</th>
+                    <th className="px-5 py-3.5 font-semibold">Payer / Customer</th>
                     <th className="px-5 py-3.5 font-semibold">Exact Amount</th>
-                    <th className="px-5 py-3.5 font-semibold">Bank UTR</th>
+                    <th className="px-5 py-3.5 font-semibold">Bank / UPI &amp; UTR</th>
                     <th className="px-5 py-3.5 font-semibold">Status</th>
                     <th className="px-5 py-3.5 font-semibold">Webhook</th>
                     <th className="px-5 py-3.5 font-semibold">Date</th>
@@ -209,14 +209,24 @@ export const OrdersPage: React.FC = () => {
                           {ord.appName}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-[11px] text-slate-600">
-                        {ord.customerUserId || '—'}
+                      <td className="px-5 py-3.5 text-[11px] text-slate-700">
+                        <div className="font-semibold text-slate-900">
+                          {ord.senderName || ord.customerEmail || ord.customerUserId || '—'}
+                        </div>
+                        {(ord.customerUserId || ord.customerPhone) && (
+                          <div className="text-[10px] font-mono text-slate-400">
+                            {ord.customerUserId ? `ID: ${ord.customerUserId}` : ''} {ord.customerPhone ? `• ${ord.customerPhone}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 font-bold text-slate-900">
                         ₹{ord.exactAmount.toFixed(2)}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-[11px] text-emerald-700 font-bold">
-                        {ord.utrNumber || '—'}
+                      <td className="px-5 py-3.5 font-mono text-[11px]">
+                        <div className="text-emerald-700 font-bold">{ord.utrNumber || '—'}</div>
+                        {ord.bankAppName && (
+                          <div className="text-[10px] text-slate-500 font-sans font-semibold">{ord.bankAppName}</div>
+                        )}
                       </td>
                       <td className="px-5 py-3.5">
                         <span
@@ -225,6 +235,8 @@ export const OrdersPage: React.FC = () => {
                               ? 'bg-emerald-100 text-emerald-800'
                               : ord.status === 'PENDING'
                               ? 'bg-amber-100 text-amber-800'
+                              : ord.status === 'REFUNDED' || ord.status === 'PARTIALLY_REFUNDED'
+                              ? 'bg-purple-100 text-purple-800'
                               : 'bg-rose-100 text-rose-800'
                           }`}
                         >
@@ -267,12 +279,12 @@ export const OrdersPage: React.FC = () => {
                           >
                             Pay Link
                           </a>
-                          {ord.status === 'PENDING' && (
+                          {ord.status === 'PENDING' && ord.isTest && (
                             <button
                               onClick={() => handleSimulateOrderPayment(ord.orderId)}
                               disabled={simulatingOrderId === ord.orderId}
                               className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-[11px] font-bold transition flex items-center gap-1"
-                              title="Simulate instant payment for testing"
+                              title="Simulate instant payment for Test Mode order"
                             >
                               {simulatingOrderId === ord.orderId ? 'Simulating...' : 'Simulate'}
                             </button>
@@ -485,9 +497,21 @@ export const OrdersPage: React.FC = () => {
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10px] font-semibold">Customer Phone/Email</span>
+                <span className="text-slate-400 block text-[10px] font-semibold">Bank / UPI App Origin</span>
+                <span className="font-bold text-blue-700">
+                  {selectedOrder.bankAppName || 'Pending Credit'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] font-semibold">Bank Payer Name (SMS)</span>
+                <span className="font-bold text-slate-900">
+                  {selectedOrder.senderName || '—'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] font-semibold">Customer ID / Phone / Email</span>
                 <span className="text-slate-700">
-                  {selectedOrder.customerPhone || selectedOrder.customerEmail || '—'}
+                  {[selectedOrder.customerUserId, selectedOrder.customerPhone, selectedOrder.customerEmail].filter(Boolean).join(' • ') || '—'}
                 </span>
               </div>
               <div>

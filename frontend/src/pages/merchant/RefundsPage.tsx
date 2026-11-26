@@ -9,6 +9,7 @@ export const RefundsPage: React.FC = () => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const [orderId, setOrderId] = useState<string>('');
   const [amountInPaise, setAmountInPaise] = useState<string>('');
+  const [refundUtr, setRefundUtr] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -39,15 +40,17 @@ export const RefundsPage: React.FC = () => {
       const res = await api.post('/merchant/refunds', {
         orderId: orderId.trim(),
         amountInPaise: amountInPaise ? parseInt(amountInPaise, 10) : undefined,
+        refundUtr: refundUtr.trim() || undefined,
         reason,
       });
       if (res.data.success) {
         setShowModal(false);
         setOrderId('');
         setAmountInPaise('');
+        setRefundUtr('');
         setReason('');
         fetchData();
-        alert('Refund initiated successfully!');
+        alert('Refund recorded and SaaS webhook notified!');
       }
     } catch (err: any) {
       alert(err.response?.data?.message || err.message);
@@ -78,6 +81,17 @@ export const RefundsPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Direct Bank Settlement Refund Architecture Notice */}
+      <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 flex items-start gap-3 text-xs text-blue-950">
+        <Clock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+        <div className="space-y-1 leading-relaxed">
+          <div className="font-bold text-slate-900">How Direct UPI Refunds Work (0% Gateway Holding):</div>
+          <p className="text-[11px] text-slate-700">
+            Because customer payments settle 100% directly into your own bank account (zero intermediate holding), transfer the refund via your Bank / UPI app, then click <strong>&quot;Initiate Refund&quot;</strong> here with your Refund UTR. SumioPay updates the ledger to <code className="bg-white px-1 rounded font-mono">REFUNDED</code> / <code className="bg-white px-1 rounded font-mono">PARTIALLY_REFUNDED</code> and fires an HMAC-signed <code className="bg-white px-1 rounded font-mono">payment.refunded</code> webhook to your website/SaaS automatically.
+          </p>
+        </div>
+      </div>
+
       {/* Refunds Ledger */}
       <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -97,6 +111,7 @@ export const RefundsPage: React.FC = () => {
                   <th className="py-3 px-4 font-semibold">Refund ID</th>
                   <th className="py-3 px-4 font-semibold">Order ID</th>
                   <th className="py-3 px-4 font-semibold">Amount</th>
+                  <th className="py-3 px-4 font-semibold">Bank Refund UTR</th>
                   <th className="py-3 px-4 font-semibold">Reason</th>
                   <th className="py-3 px-4 font-semibold">Status</th>
                   <th className="py-3 px-4 font-semibold">Date</th>
@@ -108,6 +123,7 @@ export const RefundsPage: React.FC = () => {
                     <td className="py-3 px-4 font-mono font-bold text-blue-700">{r.refundId}</td>
                     <td className="py-3 px-4 font-mono">{r.orderId}</td>
                     <td className="py-3 px-4 font-bold text-slate-900">₹{(r.amountInPaise / 100).toFixed(2)}</td>
+                    <td className="py-3 px-4 font-mono text-emerald-700 font-semibold">{r.providerReference || '—'}</td>
                     <td className="py-3 px-4 text-slate-500">{r.reason}</td>
                     <td className="py-3 px-4">
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
@@ -188,6 +204,17 @@ export const RefundsPage: React.FC = () => {
                   value={amountInPaise}
                   onChange={(e) => setAmountInPaise(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">Bank / UPI Refund UTR (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 12-digit UTR from reverse UPI transfer"
+                  value={refundUtr}
+                  onChange={(e) => setRefundUtr(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-mono text-xs focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
 

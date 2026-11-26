@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import axios from 'axios';
 import WebhookLog from '../models/webhookLog.model';
+import Order from '../models/order.model';
 import mongoose from 'mongoose';
 
 export type WebhookEventType =
@@ -77,6 +78,11 @@ export async function dispatchMerchantWebhook(
       attempt: 1,
     });
 
+    Order.updateOne(
+      { orderId, merchantId },
+      { $set: { webhookDeliveryStatus: 'DELIVERED', webhookResponseCode: res.status } }
+    ).catch(() => {});
+
     return true;
   } catch (err: any) {
     await WebhookLog.create({
@@ -90,6 +96,11 @@ export async function dispatchMerchantWebhook(
       delivered: false,
       attempt: 1,
     });
+
+    Order.updateOne(
+      { orderId, merchantId },
+      { $set: { webhookDeliveryStatus: 'FAILED', webhookResponseCode: err.response?.status || 500 }, $inc: { webhookRetries: 1 } }
+    ).catch(() => {});
 
     return false;
   }

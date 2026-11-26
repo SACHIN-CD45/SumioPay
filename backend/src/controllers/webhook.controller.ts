@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { parseBankNotification } from '../utils/bankNotificationParser';
 import { Order } from '../models/order.model';
 import { Merchant } from '../models/merchant.model';
+import { Device } from '../models/device.model';
 import { WebhookLog } from '../models/webhookLog.model';
 import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
@@ -113,18 +114,24 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    // 4. Mark Order as PAID atomically
+    // Refresh device heartbeat timestamp when real signal arrives
+    Device.updateOne({ _id: device._id }, { $set: { lastPingAt: new Date() } }).catch(() => {});
+
+    // 4. Mark Order as PAID atomically and persist payer/bank attribution
     matchingOrder.status = 'PAID';
     matchingOrder.paidAt = new Date();
     matchingOrder.utrNumber = parsed.utr || matchingOrder.utrNumber || '';
     matchingOrder.rawNotificationMessage = message;
+    matchingOrder.senderName = parsed.senderName || '';
     matchingOrder.bankAppName = parsed.appName || package_name;
     await matchingOrder.save();
 
-    // 5. Update merchant lifetime volume and transactions counter
-    await Merchant.findByIdAndUpdate(merchantId, {
-      $inc: { totalVolume: matchingOrder.exactAmount, totalTransactions: 1 },
-    });
+    // 5. Update merchant lifetime volume and transactions counter (live orders only)
+    if (!matchingOrder.isTest) {
+      await Merchant.findByIdAndUpdate(merchantId, {
+        $inc: { totalVolume: matchingOrder.exactAmount, totalTransactions: 1 },
+      });
+    }
 
     // 6. Send Instant Payment Confirmation / Invoice Email
     const customerOrMerchantEmail = matchingOrder.customerEmail || merchant.email;
@@ -169,6 +176,8 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
           status: 'PAID',
           utr: matchingOrder.utrNumber,
           utrNumber: matchingOrder.utrNumber,
+          senderName: matchingOrder.senderName || '',
+          bankAppName: matchingOrder.bankAppName || '',
           metadata: matchingOrder.metadata || {},
           paidAt: matchingOrder.paidAt,
         }
@@ -344,7 +353,7 @@ export const reconcileUnmappedPayment = async (req: Request, res: Response): Pro
     payment.resolvedOrderId = orderId || payment.resolvedOrderId;
     await payment.save();
 
-    // If linked to an order, mark that order as PAID
+    // If linked to an order, mark that order as PAID and notify merchant SaaS webhook
     if (orderId) {
       const order = await Order.findOne({ orderId, merchantId });
       if (order && order.status === 'PENDING') {
@@ -352,7 +361,43 @@ export const reconcileUnmappedPayment = async (req: Request, res: Response): Pro
         order.paidAt = new Date();
         order.utrNumber = payment.utrNumber || order.utrNumber || '';
         order.rawNotificationMessage = payment.rawMessage;
+        order.senderName = payment.senderName || '';
+        order.bankAppName = payment.bankAppName || '';
         await order.save();
+
+        if (!order.isTest) {
+          await Merchant.findByIdAndUpdate(merchantId, {
+            $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
+          });
+        }
+
+        const merchant = await Merchant.findById(merchantId);
+        const targetUrl = order.callbackWebhookUrl || merchant?.webhookUrl;
+        if (merchant && targetUrl) {
+          dispatchMerchantWebhook(
+            merchant._id,
+            order.orderId,
+            targetUrl,
+            merchant.webhookSecret,
+            {
+              orderId: order.orderId,
+              appName: order.appName,
+              userId: order.customerUserId,
+              customerUserId: order.customerUserId,
+              baseAmount: order.baseAmount,
+              exactAmount: order.exactAmount,
+              amount: order.exactAmount,
+              amountInPaise: Math.round(order.exactAmount * 100),
+              status: 'PAID',
+              utr: order.utrNumber,
+              utrNumber: order.utrNumber,
+              senderName: order.senderName || '',
+              bankAppName: order.bankAppName || '',
+              metadata: order.metadata || {},
+              paidAt: order.paidAt,
+            }
+          ).catch(() => {});
+        }
       }
     }
 
@@ -360,6 +405,103 @@ export const reconcileUnmappedPayment = async (req: Request, res: Response): Pro
       success: true,
       message: 'Unmapped payment reconciled successfully',
       data: payment,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Authenticated Merchant Simulator: strictly tests Test Mode (`isTest: true`) orders within same merchant
+export const simulatePushAlert = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const merchant = (req as any).merchant;
+    const merchantId = merchant._id;
+    const { package_name = '', message = '' } = req.body;
+
+    if (!message) {
+      res.status(400).json({ success: false, message: 'Notification message is required' });
+      return;
+    }
+
+    const parsed = parseBankNotification(message, package_name);
+    if (!parsed.isPaymentAlert || !parsed.amount || parsed.amount <= 0) {
+      res.status(200).json({
+        success: true,
+        matched: false,
+        message: 'Message is not a credit payment alert',
+        extracted: parsed,
+      });
+      return;
+    }
+
+    const matchingOrder = await Order.findOne({
+      merchantId,
+      exactAmount: parsed.amount,
+      status: 'PENDING',
+      isTest: true,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (!matchingOrder) {
+      const liveOrderSameAmount = await Order.findOne({
+        merchantId,
+        exactAmount: parsed.amount,
+        status: 'PENDING',
+        isTest: { $ne: true },
+      });
+
+      res.status(200).json({
+        success: true,
+        matched: false,
+        message: liveOrderSameAmount
+          ? `Order ${liveOrderSameAmount.orderId} (₹${parsed.amount.toFixed(2)}) is a LIVE order and cannot be credited via browser simulator. Switch top toggle to Test Mode when creating test orders.`
+          : `No active Test Mode pending order matched exact ₹${parsed.amount.toFixed(2)}.`,
+      });
+      return;
+    }
+
+    matchingOrder.status = 'PAID';
+    matchingOrder.paidAt = new Date();
+    matchingOrder.utrNumber = parsed.utr || `SIM${Date.now().toString().slice(-9)}`;
+    matchingOrder.rawNotificationMessage = message;
+    matchingOrder.senderName = parsed.senderName || '';
+    matchingOrder.bankAppName = parsed.appName || package_name;
+    await matchingOrder.save();
+
+    const targetUrl = matchingOrder.callbackWebhookUrl || merchant.webhookUrl;
+    if (targetUrl) {
+      dispatchMerchantWebhook(
+        merchant._id,
+        matchingOrder.orderId,
+        targetUrl,
+        merchant.webhookSecret,
+        {
+          orderId: matchingOrder.orderId,
+          appName: matchingOrder.appName,
+          userId: matchingOrder.customerUserId,
+          customerUserId: matchingOrder.customerUserId,
+          baseAmount: matchingOrder.baseAmount,
+          exactAmount: matchingOrder.exactAmount,
+          amount: matchingOrder.exactAmount,
+          amountInPaise: Math.round(matchingOrder.exactAmount * 100),
+          status: 'PAID',
+          utr: matchingOrder.utrNumber,
+          utrNumber: matchingOrder.utrNumber,
+          senderName: matchingOrder.senderName || '',
+          bankAppName: matchingOrder.bankAppName || '',
+          metadata: matchingOrder.metadata || {},
+          paidAt: matchingOrder.paidAt,
+        }
+      ).catch(() => {});
+    }
+
+    res.status(200).json({
+      success: true,
+      matched: true,
+      orderId: matchingOrder.orderId,
+      amount: matchingOrder.exactAmount,
+      utr: matchingOrder.utrNumber,
+      message: `Test Mode order ${matchingOrder.orderId} matched & marked PAID via simulated ${parsed.appName} alert!`,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

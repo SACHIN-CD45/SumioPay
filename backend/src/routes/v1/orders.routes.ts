@@ -3,6 +3,7 @@ import { requireApiKeyOrMerchantAuth } from '../../middleware/apiKey.middleware'
 import { requireIdempotency } from '../../middleware/idempotency.middleware';
 import { paymentOrchestrator } from '../../services/providers/paymentOrchestrator.service';
 import { StateMachineService } from '../../services/stateMachine.service';
+import { dispatchMerchantWebhook } from '../../utils/hmacSigner';
 import { Order } from '../../models/order.model';
 import { Refund } from '../../models/refund.model';
 import crypto from 'crypto';
@@ -97,6 +98,8 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       metadata,
     });
 
+    const isTest = Boolean(req.body.isTest || req.headers['x-test-mode'] === 'true' || (req as any).isTestKey);
+
     const order = new Order({
       orderId,
       merchantId: merchant._id,
@@ -107,6 +110,7 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       baseAmount: finalPaise / 100,
       paiseOffset: (initiation.exactAmountInPaise - finalPaise) / 100,
       exactAmount: initiation.exactAmountInPaise / 100,
+      isTest,
       status: 'PENDING',
       upiIntentUrl: initiation.upiIntentUrl || '',
       expiresAt: initiation.expiresAt,
@@ -129,6 +133,7 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
         amountInPaise: finalPaise,
         exactAmountInPaise: initiation.exactAmountInPaise,
         currency: 'INR',
+        isTest: order.isTest || false,
         upiId: merchant.upiId,
         merchantName: merchant.upiName || merchant.businessName,
         upiIntentUrl: order.upiIntentUrl,
@@ -243,11 +248,11 @@ router.post('/orders/:id/cancel', requireApiKeyOrMerchantAuth, async (req: Reque
   }
 });
 
-// POST /api/v1/payments/orders/:id/refund — Initiate refund on settled order
+// POST /api/v1/payments/orders/:id/refund — Initiate/record refund on settled order
 router.post('/orders/:id/refund', requireApiKeyOrMerchantAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const merchant = (req as any).merchant;
-    const { amountInPaise, reason } = req.body;
+    const { amountInPaise, reason, providerReference, refundUtr } = req.body;
 
     const order = await Order.findOne({ orderId: req.params.id, merchantId: merchant._id });
     if (!order) {
@@ -255,12 +260,31 @@ router.post('/orders/:id/refund', requireApiKeyOrMerchantAuth, async (req: Reque
       return;
     }
 
-    if (order.status !== 'PAID') {
-      res.status(400).json({ success: false, message: 'Only PAID orders can be refunded' });
+    if (order.status !== 'PAID' && order.status !== 'PARTIALLY_REFUNDED') {
+      res.status(400).json({ success: false, message: 'Only PAID or PARTIALLY_REFUNDED orders can be refunded' });
       return;
     }
 
-    const refundAmount = amountInPaise ? parseInt(amountInPaise, 10) : Math.round(order.exactAmount * 100);
+    const totalOrderPaise = Math.round(order.exactAmount * 100);
+    const refundAmount = amountInPaise !== undefined ? parseInt(amountInPaise, 10) : totalOrderPaise;
+
+    if (isNaN(refundAmount) || refundAmount <= 0 || refundAmount > totalOrderPaise) {
+      res.status(400).json({
+        success: false,
+        message: `Refund amount must be between 1 and ${totalOrderPaise} paise`,
+      });
+      return;
+    }
+
+    const existingRefunds = await Refund.find({ orderId: order.orderId, merchantId: merchant._id });
+    const previouslyRefundedPaise = existingRefunds.reduce((acc, r) => acc + r.amountInPaise, 0);
+    if (previouslyRefundedPaise + refundAmount > totalOrderPaise) {
+      res.status(400).json({
+        success: false,
+        message: `Remaining refundable balance is ${totalOrderPaise - previouslyRefundedPaise} paise`,
+      });
+      return;
+    }
 
     const refund = await Refund.create({
       refundId: `ref_${crypto.randomBytes(12).toString('hex')}`,
@@ -268,21 +292,47 @@ router.post('/orders/:id/refund', requireApiKeyOrMerchantAuth, async (req: Reque
       merchantId: merchant._id,
       amountInPaise: refundAmount,
       reason: reason || 'Merchant initiated API refund',
+      providerReference: (refundUtr || providerReference || '').trim(),
       status: 'PROCESSED',
       initiatedBy: 'API_KEY',
       processedAt: new Date(),
     });
 
+    const newTotalRefunded = previouslyRefundedPaise + refundAmount;
+    const targetState = newTotalRefunded >= totalOrderPaise ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+
     await StateMachineService.transitionOrder({
       order,
-      targetState: 'REFUNDED',
-      trigger: 'API_CLIENT' as any,
+      targetState,
+      trigger: 'WEBHOOK',
       actorId: merchant._id.toString(),
+      metadata: { refundId: refund.refundId, refundAmount, providerReference: refund.providerReference },
     });
+
+    const targetUrl = order.callbackWebhookUrl || merchant.webhookUrl;
+    if (targetUrl) {
+      dispatchMerchantWebhook(
+        merchant._id,
+        order.orderId,
+        targetUrl,
+        merchant.webhookSecret,
+        {
+          orderId: order.orderId,
+          refundId: refund.refundId,
+          refundAmountInPaise: refundAmount,
+          refundAmount: refundAmount / 100,
+          refundUtr: refund.providerReference || undefined,
+          reason: refund.reason,
+          status: targetState,
+          metadata: order.metadata || {},
+        },
+        'payment.refunded'
+      ).catch(() => {});
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Refund processed successfully',
+      message: 'Refund recorded and webhook notified successfully',
       data: refund,
     });
   } catch (err: any) {

@@ -46,7 +46,7 @@ export const SimulatorPage: React.FC = () => {
       setLoading(true);
       setResult(null);
 
-      const res = await api.post('/central-payment/verify-webhook', {
+      const res = await api.post('/webhook/simulate-push', {
         message: generatedMessage,
         package_name: currentTemplate.pkg,
         title: currentTemplate.title,

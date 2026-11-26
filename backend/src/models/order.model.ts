@@ -28,6 +28,7 @@ export interface IOrder extends Document {
   upiIntentUrl: string; // upi://pay?...
   utrNumber?: string; // 12-digit UPI reference ID
   rawNotificationMessage?: string;
+  senderName?: string;
   bankAppName?: string;
   expiresAt: Date; // 15 mins TTL
   paidAt?: Date;
@@ -72,6 +73,7 @@ const OrderSchema = new Schema<IOrder>(
     upiIntentUrl: { type: String, required: true },
     utrNumber: { type: String, default: '' },
     rawNotificationMessage: { type: String, default: '' },
+    senderName: { type: String, default: '' },
     bankAppName: { type: String, default: '' },
     expiresAt: { type: Date, required: true },
     paidAt: { type: Date },

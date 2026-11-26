@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { createOrder, getOrderStatus } from '../controllers/order.controller';
 import { handleListenerPush } from '../controllers/webhook.controller';
 import { Device } from '../models/device.model';
+import { requireApiKeyOrMerchantAuth } from '../middleware/apiKey.middleware';
 
 const router = Router();
 
@@ -11,24 +12,27 @@ const router = Router();
  */
 
 // POST /api/central-payment/create-order
-router.post('/create-order', createOrder);
+router.post('/create-order', requireApiKeyOrMerchantAuth, createOrder);
 
 // GET /api/central-payment/status/:orderId
 router.get('/status/:orderId', getOrderStatus);
 
 // POST /api/central-payment/verify-webhook
-// Accepts { secret_key, message, package_name, title }
+// Strictly requires a paired, active device token matching the merchant's Android listener
 router.post('/verify-webhook', async (req: Request, res: Response): Promise<void> => {
-  const { secret_key, message } = req.body;
+  const token =
+    (req.headers['x-device-token'] as string) ||
+    (req.body?.deviceToken as string) ||
+    (req.body?.secret_key as string);
 
-  // Find device matching secret_key or fallback to first active device
-  let device = await Device.findOne({ deviceToken: secret_key });
-  if (!device && secret_key) {
-    device = await Device.findOne();
+  if (!token || typeof token !== 'string' || !token.trim()) {
+    res.status(401).json({ success: false, message: 'Device token (x-device-token / secret_key) is required' });
+    return;
   }
 
+  const device = await Device.findOne({ deviceToken: token.trim(), isActive: true, isPaired: true });
   if (!device) {
-    res.status(401).json({ success: false, message: 'Invalid secret_key or no device paired yet' });
+    res.status(401).json({ success: false, message: 'Invalid or inactive deviceToken' });
     return;
   }
 
