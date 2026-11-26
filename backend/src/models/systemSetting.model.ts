@@ -27,12 +27,35 @@ export interface ISystemSetting extends Document {
     enableDynamicPaiseEngine: boolean;
   };
 
-  // Pricing Tiers Configuration (Rupees & Limits)
+  // Pricing Tiers Configuration (Legacy + Rupees & Limits)
   pricingTiers: {
     STARTER: { monthlyPrice: number; feePercent: number; deviceLimit: number; maxGmv: number };
     GROWTH: { monthlyPrice: number; feePercent: number; deviceLimit: number; maxGmv: number };
     BUSINESS: { monthlyPrice: number; feePercent: number; deviceLimit: number; maxGmv: number };
     ENTERPRISE: { monthlyPrice: number; feePercent: number; deviceLimit: number; maxGmv: number };
+  };
+
+  // Canonical SumioPay SaaS Subscription Plans (SuperAdmin controlled)
+  subscriptionPlans: {
+    trialDays: number;
+    monthlyPrice: number;
+    monthlyDurationDays: number;
+    monthlyDeviceLimit: number;
+    monthlyDescription: string;
+    halfYearlyPrice: number;
+    halfYearlyDurationDays: number;
+    halfYearlyDeviceLimit: number;
+    halfYearlyDescription: string;
+    customPrice: number;
+    customLabel: string;
+    customDescription: string;
+  };
+
+  // Dogfood Self-Billing Collector Merchant (Collects SumioPay subscription payments via SumioPay)
+  platformBilling: {
+    collectorMerchantEmail: string;
+    collectorApiKey: string;
+    isEnabled: boolean;
   };
 
   updatedBy?: string;
@@ -95,19 +118,19 @@ const SystemSettingSchema: Schema = new Schema(
     },
     pricingTiers: {
       STARTER: {
-        monthlyPrice: { type: Number, default: 1999 },
+        monthlyPrice: { type: Number, default: 399 },
         feePercent: { type: Number, default: 0 },
-        deviceLimit: { type: Number, default: 1 },
+        deviceLimit: { type: Number, default: 2 },
         maxGmv: { type: Number, default: 500000 },
       },
       GROWTH: {
-        monthlyPrice: { type: Number, default: 4999 },
+        monthlyPrice: { type: Number, default: 1999 },
         feePercent: { type: Number, default: 0 },
-        deviceLimit: { type: Number, default: 3 },
+        deviceLimit: { type: Number, default: 5 },
         maxGmv: { type: Number, default: 2500000 },
       },
       BUSINESS: {
-        monthlyPrice: { type: Number, default: 11999 },
+        monthlyPrice: { type: Number, default: 4999 },
         feePercent: { type: Number, default: 0 },
         deviceLimit: { type: Number, default: 10 },
         maxGmv: { type: Number, default: 10000000 },
@@ -118,6 +141,34 @@ const SystemSettingSchema: Schema = new Schema(
         deviceLimit: { type: Number, default: 999 },
         maxGmv: { type: Number, default: 100000000 },
       },
+    },
+    subscriptionPlans: {
+      trialDays: { type: Number, default: 3 },
+      monthlyPrice: { type: Number, default: 399 },
+      monthlyDurationDays: { type: Number, default: 30 },
+      monthlyDeviceLimit: { type: Number, default: 2 },
+      monthlyDescription: {
+        type: String,
+        default: 'All core UPI auto-verification features, instant webhooks & dynamic QR checkout for 1 month.',
+      },
+      halfYearlyPrice: { type: Number, default: 1999 },
+      halfYearlyDurationDays: { type: Number, default: 180 },
+      halfYearlyDeviceLimit: { type: Number, default: 5 },
+      halfYearlyDescription: {
+        type: String,
+        default: 'Best value 6-month plan — multi-device pairing, priority webhooks & full API suite.',
+      },
+      customPrice: { type: Number, default: 0 },
+      customLabel: { type: String, default: 'Custom — All Features Unlocked' },
+      customDescription: {
+        type: String,
+        default: 'All features included: unlimited devices, custom white-label branding, SLA & dedicated support.',
+      },
+    },
+    platformBilling: {
+      collectorMerchantEmail: { type: String, default: '', lowercase: true, trim: true },
+      collectorApiKey: { type: String, default: '', trim: true },
+      isEnabled: { type: Boolean, default: true },
     },
     updatedBy: {
       type: String,

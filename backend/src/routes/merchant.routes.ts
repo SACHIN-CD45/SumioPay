@@ -14,6 +14,8 @@ import {
   deleteTeamMember,
   getSubscription,
   changePlan,
+  initiateSubscriptionCheckout,
+  checkSubscriptionCheckoutStatus,
   listRefunds,
   createRefund,
   listDisputes,
@@ -52,6 +54,8 @@ router.delete('/team/:memberId', requireMerchantAuth, deleteTeamMember);
 // Subscription & billing
 router.get('/subscription', requireMerchantAuth, getSubscription);
 router.post('/subscription/plan', requireMerchantAuth, changePlan);
+router.post('/subscription/checkout', requireMerchantAuth, initiateSubscriptionCheckout);
+router.get('/subscription/checkout-status/:orderId', requireMerchantAuth, checkSubscriptionCheckoutStatus);
 
 // Refunds & Disputes
 router.get('/refunds', requireMerchantAuth, listRefunds);

@@ -83,8 +83,18 @@ export const LandingPage: React.FC = () => {
     totalPlatformGMVFormatted: '₹50+ Cr',
     totalBusinessesCount: 1250,
     slaGuaranteePercent: 99.98,
-    enterpriseContactEmail: 'enterprise@sumiopay.internal',
-    supportPhone: '+91 800-SUMIOPAY',
+    enterpriseContactEmail: 'contact@sumiotech.in',
+    supportPhone: '+91 9875182659',
+    subscriptionPlans: {
+      trialDays: 3,
+      monthlyPrice: 399,
+      monthlyDurationDays: 30,
+      monthlyDeviceLimit: 2,
+      halfYearlyPrice: 1999,
+      halfYearlyDurationDays: 180,
+      halfYearlyDeviceLimit: 5,
+      customPrice: 0,
+    },
   });
 
   // Interactive Live Simulator & Code Inspector State in Hero
@@ -124,6 +134,25 @@ export const LandingPage: React.FC = () => {
   const traditionalGatewayFee = Math.round(monthlyVolume * 0.0236);
   const yearlySavings = traditionalGatewayFee * 12;
   const threeYearSavings = yearlySavings * 3;
+
+  // Dynamic Pricing Plans (controlled live from SuperAdmin)
+  const sp = platformConfig?.subscriptionPlans || {};
+  const trialDays = sp.trialDays ?? 3;
+  const monthlyPrice = sp.monthlyPrice ?? 399;
+  const halfYearlyPrice = sp.halfYearlyPrice ?? 1999;
+  const monthlyDevices = sp.monthlyDeviceLimit ?? 2;
+  const halfYearlyDevices = sp.halfYearlyDeviceLimit ?? 5;
+  const customPrice = sp.customPrice ?? 0;
+  const halfYearlySavings = Math.max(0, monthlyPrice * 6 - halfYearlyPrice);
+
+  const handleActivateFromLanding = (plan?: string) => {
+    const loggedIn = Boolean(localStorage.getItem('token') || localStorage.getItem('accessToken'));
+    if (loggedIn) {
+      navigate(plan ? `/billing?plan=${plan}` : '/billing');
+    } else {
+      navigate('/login?register=true');
+    }
+  };
 
   const faqs = [
     {
@@ -194,7 +223,7 @@ export const LandingPage: React.FC = () => {
               <a href="#enterprise" className="hover:text-blue-600 transition">Enterprise Scale</a>
               <a href="#simulator" className="hover:text-blue-600 transition">Live Simulator</a>
               <a href="#calculator" className="hover:text-blue-600 transition">Fee Calculator</a>
-              <button onClick={() => navigate('/pricing')} className="hover:text-blue-600 transition">Pricing Plans</button>
+              <a href="#pricing" className="hover:text-blue-600 transition">Pricing Plans</a>
               <a href="#faq" className="hover:text-blue-600 transition">FAQ</a>
             </nav>
           </div>
@@ -258,15 +287,13 @@ export const LandingPage: React.FC = () => {
               >
                 Savings & ROI Calculator
               </a>
-              <button
-                onClick={() => {
-                  setMobileNavOpen(false);
-                  navigate('/pricing');
-                }}
-                className="py-1 text-left hover:text-blue-600 transition"
+              <a
+                href="#pricing"
+                onClick={() => setMobileNavOpen(false)}
+                className="py-1 hover:text-blue-600 transition"
               >
                 Pricing Plans
-              </button>
+              </a>
               <button
                 onClick={() => {
                   setMobileNavOpen(false);
@@ -913,6 +940,202 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Transparent Flat SaaS Pricing Section */}
+      <section id="pricing" className="py-24 px-4 sm:px-6 bg-slate-50 border-y border-slate-200/70">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3.5 py-1 rounded-full border border-blue-100">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{trialDays}-Day Free Trial • 0% Gateway Commission</span>
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-950 tracking-tight mt-3">
+              Simple Flat Pricing. Zero Transaction Cut.
+            </h2>
+            <p className="mt-3 text-slate-600 text-sm sm:text-base">
+              Start free for {trialDays} days. Then activate directly via SumioPay UPI for ₹{monthlyPrice}/month or ₹{halfYearlyPrice}/6 months.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+            {/* Free Trial */}
+            <div className="rounded-3xl p-7 bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-slate-900">Free Trial</h3>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                    {trialDays} Days Free
+                  </span>
+                </div>
+                <div className="my-5 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-slate-950">₹0</span>
+                  <span className="text-xs font-semibold text-slate-500">/ {trialDays} days</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                  Try live UPI auto-verification, Android Listener &amp; webhooks free on signup.
+                </p>
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs text-slate-700">
+                  {[
+                    `${trialDays}-Day Instant Trial on Signup`,
+                    'Android Listener App + QR Pairing',
+                    'Sandbox + Live Payment Testing',
+                    'HMAC-SHA256 Signed Webhooks',
+                  ].map((f) => (
+                    <div key={f} className="flex items-start gap-2">
+                      <Check className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/login?register=true')}
+                className="mt-7 w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <span>Start {trialDays}-Day Free Trial</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Monthly ₹399 */}
+            <div className="rounded-3xl p-7 bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-slate-900">Monthly Pro</h3>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    30 Days
+                  </span>
+                </div>
+                <div className="my-5 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-slate-950">₹{monthlyPrice.toLocaleString('en-IN')}</span>
+                  <span className="text-xs font-semibold text-slate-500">/ month</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                  All core UPI gateway features for websites, SaaS &amp; stores.
+                </p>
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs text-slate-700">
+                  {[
+                    '0% Transaction Commission',
+                    `Up to ${monthlyDevices} Android Listener Phones`,
+                    'Unlimited Live UPI Transactions',
+                    'Hosted Checkout + SDK + REST API',
+                    'Unmapped Payment 1-Click Reconcile',
+                  ].map((f) => (
+                    <div key={f} className="flex items-start gap-2">
+                      <Check className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => handleActivateFromLanding('MONTHLY')}
+                className="mt-7 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <span>Activate ₹{monthlyPrice}/mo</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 6 Months ₹1,999 */}
+            <div className="rounded-3xl p-7 bg-slate-950 text-white border-2 border-blue-500 shadow-xl flex flex-col justify-between relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shadow-sm">
+                Most Popular {halfYearlySavings > 0 ? `• Save ₹${halfYearlySavings}` : ''}
+              </span>
+              <div>
+                <div className="flex items-center justify-between pt-1">
+                  <h3 className="text-base font-bold text-white">6 Months Growth</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-blue-300">
+                    180 Days
+                  </span>
+                </div>
+                <div className="my-5 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-white">₹{halfYearlyPrice.toLocaleString('en-IN')}</span>
+                  <span className="text-xs font-semibold text-slate-400">/ 6 months</span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed mb-5">
+                  Save more on semi-annual billing (≈ ₹{Math.round(halfYearlyPrice / 6)}/mo effective).
+                </p>
+                <div className="space-y-2.5 pt-4 border-t border-white/10 text-xs text-slate-200">
+                  {[
+                    'Everything in Monthly Pro',
+                    `Up to ${halfYearlyDevices} Android Listener Phones`,
+                    'Multi-Phone Load Balancing',
+                    'Priority Webhook Retries & CSV Sync',
+                    'Priority Support (+91 9875182659)',
+                  ].map((f) => (
+                    <div key={f} className="flex items-start gap-2">
+                      <Check className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => handleActivateFromLanding('HALF_YEARLY')}
+                className="mt-7 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <span>Activate ₹{halfYearlyPrice} / 6 Mo</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Custom All Features */}
+            <div className="rounded-3xl p-7 bg-white border border-amber-300 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-slate-900">Custom Plan</h3>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    All Features
+                  </span>
+                </div>
+                <div className="my-5 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-slate-950">
+                    {customPrice > 0 ? `₹${customPrice.toLocaleString('en-IN')}` : 'Custom'}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {customPrice > 0 ? '/ yr' : '• All Features'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                  Every enterprise capability unlocked with white-label checkout &amp; unlimited devices.
+                </p>
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs text-slate-700">
+                  {[
+                    'ALL SumioPay Features Included',
+                    'Unlimited Listener Phones & UPI VPAs',
+                    'White-Label Checkout & Custom Domain',
+                    'RBAC Team, Refunds & Audit Logs',
+                    'Dedicated SLA (contact@sumiotech.in)',
+                  ].map((f) => (
+                    <div key={f} className="flex items-start gap-2">
+                      <Check className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/enterprise')}
+                className="mt-7 w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold transition flex items-center justify-center gap-1.5"
+              >
+                <span>Get Custom Plan</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="text-center mt-8">
+            <button
+              onClick={() => navigate('/pricing')}
+              className="text-xs font-bold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1.5"
+            >
+              <span>Compare All Features vs Traditional Aggregators</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </section>

@@ -12,12 +12,22 @@ import Dispute from '../models/dispute.model';
 import Organization from '../models/organization.model';
 import AuditLog from '../models/auditLog.model';
 import Otp from '../models/otp.model';
+import { SystemSetting } from '../models/systemSetting.model';
 import { EmailService } from '../services/email.service';
 import { config } from '../config';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { JwtService } from '../services/jwt.service';
 import { StateMachineService } from '../services/stateMachine.service';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
+import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator';
+import {
+  PLATFORM_SUBSCRIPTION_METADATA_TYPE,
+  activatePlatformSubscriptionFromOrder,
+  computeTrialPeriodEnd,
+  getSubscriptionPlanCatalog,
+  resolvePlanDetails,
+  resolvePlatformCollectorMerchant,
+} from '../services/subscriptionActivation.service';
 
 export const sendRegistrationOtp = async (req: Request, res: Response) => {
   try {
@@ -114,6 +124,11 @@ export const registerMerchant = async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const settings = await SystemSetting.findOne();
+    const catalog = getSubscriptionPlanCatalog(settings);
+    const trialStart = new Date();
+    const trialEnd = computeTrialPeriodEnd(catalog.trialDays, trialStart);
+
     const merchant = new Merchant({
       name: name.trim(),
       email: cleanEmail,
@@ -125,7 +140,7 @@ export const registerMerchant = async (req: Request, res: Response) => {
       apiKey: `sp_live_${crypto.randomBytes(16).toString('hex')}`,
       apiSecret: `sp_sec_${crypto.randomBytes(24).toString('hex')}`,
       webhookSecret: crypto.randomBytes(20).toString('hex'),
-      planTier: 'PRO',
+      planTier: 'TRIAL',
       isActive: true,
     });
 
@@ -142,11 +157,13 @@ export const registerMerchant = async (req: Request, res: Response) => {
     });
     await organization.save();
 
-    // Initialize Subscription
+    // Initialize Free Trial Subscription (default 3 days controlled by SuperAdmin)
     const subscription = new Subscription({
       merchantId: merchant._id,
-      planTier: 'STARTER',
+      planTier: 'TRIAL',
       status: 'TRIAL',
+      currentPeriodStart: trialStart,
+      currentPeriodEnd: trialEnd,
       monthlyPriceInPaise: 0,
     });
     await subscription.save();
@@ -534,19 +551,68 @@ export const deleteTeamMember = async (req: AuthenticatedRequest, res: Response)
   }
 };
 
-// Subscription Management
+// Subscription Management & Dogfood Self-Billing via SumioPay
 export const getSubscription = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const merchantId = req.merchant!._id;
+    const settings = await SystemSetting.findOne();
+    const catalog = getSubscriptionPlanCatalog(settings);
+    const collector = await resolvePlatformCollectorMerchant(settings);
+
     let subscription = await Subscription.findOne({ merchantId });
     if (!subscription) {
+      const now = new Date();
       subscription = await Subscription.create({
         merchantId,
-        planTier: 'STARTER',
-        status: 'ACTIVE',
+        planTier: 'TRIAL',
+        status: 'TRIAL',
+        currentPeriodStart: now,
+        currentPeriodEnd: computeTrialPeriodEnd(catalog.trialDays, now),
+        monthlyPriceInPaise: 0,
       });
     }
-    res.json({ success: true, data: subscription });
+
+    const pendingOrder = await Order.findOne({
+      'metadata.type': PLATFORM_SUBSCRIPTION_METADATA_TYPE,
+      'metadata.subscriberMerchantId': merchantId.toString(),
+      status: 'PENDING',
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    const nowMs = Date.now();
+    const endMs = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).getTime() : nowMs;
+    const daysRemaining = Math.max(0, Math.ceil((endMs - nowMs) / (24 * 60 * 60 * 1000)));
+    const isExpired = endMs <= nowMs;
+
+    res.json({
+      success: true,
+      data: {
+        ...subscription.toObject(),
+        daysRemaining,
+        isExpired,
+        plans: catalog,
+        selfBillingReady: Boolean(collector.configured && collector.upiId),
+        selfBillingReason: collector.reason || null,
+        collectorBusinessName: collector.upiName || collector.businessName || 'SumioTech',
+        collectorOnlineDevices: collector.onlineDevicesCount,
+        enterpriseContactEmail: settings?.enterpriseContactEmail || 'contact@sumiotech.in',
+        supportPhone: settings?.supportPhone || '+91 9875182659',
+        pendingCheckoutOrder: pendingOrder
+          ? {
+              orderId: pendingOrder.orderId,
+              baseAmount: pendingOrder.baseAmount,
+              paiseOffset: pendingOrder.paiseOffset,
+              exactAmount: pendingOrder.exactAmount,
+              upiIntentUrl: pendingOrder.upiIntentUrl,
+              upiId: collector.upiId || '',
+              merchantName: collector.upiName || collector.businessName || 'SumioTech',
+              expiresAt: pendingOrder.expiresAt,
+              planTier: pendingOrder.metadata?.planTier || 'MONTHLY',
+              planLabel: pendingOrder.metadata?.planLabel || 'Subscription Plan',
+            }
+          : null,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -555,23 +621,187 @@ export const getSubscription = async (req: AuthenticatedRequest, res: Response) 
 export const changePlan = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const merchantId = req.merchant!._id;
-    const { planTier } = req.body;
+    const { action, cancelAtPeriodEnd } = req.body;
 
-    let subscription = await Subscription.findOne({ merchantId });
-    if (!subscription) {
-      subscription = new Subscription({ merchantId });
+    if (action === 'CANCEL' || cancelAtPeriodEnd === true) {
+      const subscription = await Subscription.findOne({ merchantId });
+      if (!subscription) {
+        return res.status(404).json({ success: false, message: 'Subscription not found' });
+      }
+      subscription.cancelAtPeriodEnd = true;
+      await subscription.save();
+      return res.json({
+        success: true,
+        message: 'Auto-renewal cancelled. Access remains active until current period ends.',
+        data: subscription,
+      });
     }
 
-    subscription.planTier = planTier;
-    subscription.status = 'ACTIVE';
-    subscription.currentPeriodStart = new Date();
-    subscription.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await subscription.save();
+    // Paid plan activations MUST go through real SumioPay UPI payment verification
+    return res.status(402).json({
+      success: false,
+      code: 'PAYMENT_REQUIRED',
+      message:
+        'Paid subscription plans require real UPI payment verification via /merchant/subscription/checkout. Plans activate automatically once payment is received.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
-    req.merchant!.planTier = planTier;
-    await req.merchant!.save();
+export const initiateSubscriptionCheckout = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const subscriber = req.merchant!;
+    const { planKey } = req.body;
 
-    res.json({ success: true, message: `Subscribed to ${planTier} plan`, data: subscription });
+    const settings = await SystemSetting.findOne();
+    const catalog = getSubscriptionPlanCatalog(settings);
+    const resolved = resolvePlanDetails(planKey, catalog);
+
+    if (!resolved) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid subscription planKey. Expected MONTHLY, HALF_YEARLY, or CUSTOM.',
+      });
+    }
+
+    if (resolved.priceInr <= 0) {
+      return res.status(400).json({
+        success: false,
+        code: 'REQUIRES_CUSTOM_QUOTE',
+        message:
+          'Custom plan pricing is tailored to your scale. Contact contact@sumiotech.in or ask SuperAdmin to set a custom plan price.',
+      });
+    }
+
+    const collector = await resolvePlatformCollectorMerchant(settings);
+    if (!collector.configured || !collector.merchant || !collector.upiId) {
+      return res.status(503).json({
+        success: false,
+        code: 'SELF_BILLING_NOT_CONFIGURED',
+        message:
+          collector.reason ||
+          'SumioPay platform payment collector account is not configured yet in SuperAdmin Settings.',
+      });
+    }
+
+    // Expire any stale older subscription checkout order for this merchant
+    await Order.updateMany(
+      {
+        'metadata.type': PLATFORM_SUBSCRIPTION_METADATA_TYPE,
+        'metadata.subscriberMerchantId': subscriber._id.toString(),
+        status: 'PENDING',
+        expiresAt: { $lte: new Date() },
+      },
+      { $set: { status: 'EXPIRED' } }
+    );
+
+    const { exactAmount, paiseOffset } = await allocateUniquePaise(
+      collector.merchant._id,
+      resolved.priceInr
+    );
+
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const orderId = `SUB-${dateStr}-${randomSuffix}`;
+
+    const displayName = collector.upiName || collector.businessName || 'SumioTech';
+    const upiIntentUrl = buildUpiIntentUrl(
+      collector.upiId,
+      displayName,
+      exactAmount,
+      orderId
+    );
+    const expiresAt = new Date(Date.now() + config.orderTtlMinutes * 60 * 1000);
+
+    const order = new Order({
+      orderId,
+      merchantId: collector.merchant._id,
+      appName: 'SUMIOPAY_SAAS',
+      customerUserId: subscriber._id.toString(),
+      customerPhone: subscriber.phone || '',
+      customerEmail: subscriber.email,
+      baseAmount: resolved.priceInr,
+      paiseOffset,
+      exactAmount,
+      isTest: false,
+      status: 'PENDING',
+      upiIntentUrl,
+      expiresAt,
+      callbackWebhookUrl: '',
+      metadata: {
+        type: PLATFORM_SUBSCRIPTION_METADATA_TYPE,
+        subscriberMerchantId: subscriber._id.toString(),
+        subscriberEmail: subscriber.email,
+        subscriberBusinessName: subscriber.businessName,
+        planTier: resolved.planTier,
+        planLabel: resolved.label,
+        durationDays: resolved.durationDays,
+        basePriceInr: resolved.priceInr,
+      },
+    });
+
+    await order.save();
+
+    res.status(201).json({
+      success: true,
+      data: {
+        orderId: order.orderId,
+        baseAmount: order.baseAmount,
+        paiseOffset: order.paiseOffset,
+        exactAmount: order.exactAmount,
+        currency: 'INR',
+        upiId: collector.upiId,
+        merchantName: displayName,
+        upiIntentUrl: order.upiIntentUrl,
+        expiresAt: order.expiresAt,
+        collectorOnlineDevices: collector.onlineDevicesCount,
+        plan: resolved,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const checkSubscriptionCheckoutStatus = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const subscriberId = req.merchant!._id.toString();
+    const { orderId } = req.params;
+
+    const order = await Order.findOne({
+      orderId,
+      'metadata.type': PLATFORM_SUBSCRIPTION_METADATA_TYPE,
+      'metadata.subscriberMerchantId': subscriberId,
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Subscription checkout order not found' });
+    }
+
+    if (order.status === 'PENDING' && new Date(order.expiresAt).getTime() <= Date.now()) {
+      order.status = 'EXPIRED';
+      await order.save();
+    }
+
+    if (order.status === 'PAID') {
+      await activatePlatformSubscriptionFromOrder(order).catch(() => {});
+    }
+
+    const subscription = await Subscription.findOne({ merchantId: req.merchant!._id });
+
+    res.json({
+      success: true,
+      data: {
+        orderId: order.orderId,
+        status: order.status,
+        exactAmount: order.exactAmount,
+        utrNumber: order.utrNumber || '',
+        paidAt: order.paidAt || null,
+        expiresAt: order.expiresAt,
+        subscription,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }

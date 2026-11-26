@@ -7,6 +7,7 @@ import { WebhookLog } from '../models/webhookLog.model';
 import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
 import { EmailService } from '../services/email.service';
+import { activatePlatformSubscriptionFromOrder } from '../services/subscriptionActivation.service';
 
 // Android APK Listener calls this when any bank/UPI notification is intercepted
 export const handleListenerPush = async (req: Request, res: Response): Promise<void> => {
@@ -125,6 +126,11 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
     matchingOrder.senderName = parsed.senderName || '';
     matchingOrder.bankAppName = parsed.appName || package_name;
     await matchingOrder.save();
+
+    // Auto-activate SumioPay platform subscription if this order belongs to Self-Billing
+    await activatePlatformSubscriptionFromOrder(matchingOrder).catch((err) => {
+      console.error(`[SubscriptionActivation] Failed for ${matchingOrder.orderId}:`, err.message);
+    });
 
     // 5. Update merchant lifetime volume and transactions counter (live orders only)
     if (!matchingOrder.isTest) {
@@ -364,6 +370,10 @@ export const reconcileUnmappedPayment = async (req: Request, res: Response): Pro
         order.senderName = payment.senderName || '';
         order.bankAppName = payment.bankAppName || '';
         await order.save();
+
+        await activatePlatformSubscriptionFromOrder(order).catch((err) => {
+          console.error(`[SubscriptionActivation] Unmapped reconcile failed for ${order.orderId}:`, err.message);
+        });
 
         if (!order.isTest) {
           await Merchant.findByIdAndUpdate(merchantId, {

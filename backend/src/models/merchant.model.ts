@@ -1,7 +1,17 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import crypto from 'crypto';
 
-export type PlanTier = 'FREE' | 'STARTER' | 'GROWTH' | 'PRO' | 'BUSINESS' | 'ENTERPRISE';
+export type PlanTier =
+  | 'FREE'
+  | 'TRIAL'
+  | 'MONTHLY'
+  | 'HALF_YEARLY'
+  | 'CUSTOM'
+  | 'STARTER'
+  | 'GROWTH'
+  | 'PRO'
+  | 'BUSINESS'
+  | 'ENTERPRISE';
 
 export interface IMerchant extends Document {
   name: string;
@@ -48,8 +58,19 @@ const MerchantSchema = new Schema<IMerchant>(
     },
     planTier: {
       type: String,
-      enum: ['FREE', 'STARTER', 'GROWTH', 'PRO', 'BUSINESS', 'ENTERPRISE'],
-      default: 'STARTER',
+      enum: [
+        'FREE',
+        'TRIAL',
+        'MONTHLY',
+        'HALF_YEARLY',
+        'CUSTOM',
+        'STARTER',
+        'GROWTH',
+        'PRO',
+        'BUSINESS',
+        'ENTERPRISE',
+      ],
+      default: 'TRIAL',
     },
     isActive: { type: Boolean, default: true },
     totalVolume: { type: Number, default: 0 },

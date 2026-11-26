@@ -1,113 +1,117 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowRight, Sparkles, ShieldCheck, Zap, HelpCircle, RefreshCw } from 'lucide-react';
+import { Check, ArrowRight, Sparkles } from 'lucide-react';
 import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
 import { publicApi } from '../../lib/api';
 
 export const PricingPage: React.FC = () => {
   const navigate = useNavigate();
   const [demoOpen, setDemoOpen] = useState(false);
-  const [pricingConfig, setPricingConfig] = useState<any>(null);
-  const [loadingConfig, setLoadingConfig] = useState<boolean>(true);
+  const [subPlans, setSubPlans] = useState<any>(null);
 
   useEffect(() => {
     publicApi
       .get('/platform-config')
       .then((res) => {
-        if (res.data.success && res.data.data?.pricingTiers) {
-          setPricingConfig(res.data.data.pricingTiers);
+        if (res.data.success && res.data.data?.subscriptionPlans) {
+          setSubPlans(res.data.data.subscriptionPlans);
         }
       })
-      .catch((e) => console.error('Failed to load live pricing config:', e))
-      .finally(() => setLoadingConfig(false));
+      .catch((e) => console.error('Failed to load live pricing config:', e));
   }, []);
 
-  const starterPrice = pricingConfig?.STARTER?.monthlyPrice ?? 0;
-  const growthPrice = pricingConfig?.GROWTH?.monthlyPrice ?? 1499;
-  const businessPrice = pricingConfig?.BUSINESS?.monthlyPrice ?? 4999;
-  const enterprisePrice = pricingConfig?.ENTERPRISE?.monthlyPrice ?? 11999;
+  const trialDays = subPlans?.trialDays ?? 3;
+  const monthlyPrice = subPlans?.monthlyPrice ?? 399;
+  const monthlyDurationDays = subPlans?.monthlyDurationDays ?? 30;
+  const monthlyDevices = subPlans?.monthlyDeviceLimit ?? 2;
+  const halfYearlyPrice = subPlans?.halfYearlyPrice ?? 1999;
+  const halfYearlyDurationDays = subPlans?.halfYearlyDurationDays ?? 180;
+  const halfYearlyDevices = subPlans?.halfYearlyDeviceLimit ?? 5;
+  const customPrice = subPlans?.customPrice ?? 0;
+  const savings = Math.max(0, monthlyPrice * 6 - halfYearlyPrice);
 
-  const starterDevices = pricingConfig?.STARTER?.deviceLimit ?? 1;
-  const growthDevices = pricingConfig?.GROWTH?.deviceLimit ?? 5;
-  const businessDevices = pricingConfig?.BUSINESS?.deviceLimit ?? 15;
-  const enterpriseDevices = pricingConfig?.ENTERPRISE?.deviceLimit ?? 999;
+  const isLoggedIn = Boolean(localStorage.getItem('token') || localStorage.getItem('accessToken'));
+
+  const goActivate = (plan?: string) => {
+    if (isLoggedIn) {
+      navigate(plan ? `/billing?plan=${plan}` : '/billing');
+    } else {
+      navigate('/login?register=true');
+    }
+  };
 
   const tiers = [
     {
-      name: 'Starter Tier',
-      price: starterPrice === 0 ? '₹0' : `₹${starterPrice.toLocaleString('en-IN')}`,
-      period: starterPrice === 0 ? 'forever free' : 'per month',
-      desc: 'Ideal for bootstrapped developers, solo SaaS founders, and early-stage tools.',
-      badge: starterPrice === 0 ? 'Free Starter' : null,
+      name: 'Free Trial',
+      price: '₹0',
+      period: `${trialDays} days free`,
+      desc: 'Start testing live UPI verification, paise matching & webhooks on signup with zero commitment.',
+      badge: `${trialDays}-Day Free Trial`,
       highlight: false,
       features: [
-        '0% Payment Gateway Commission (Always)',
-        `${starterDevices} Paired Android Listener Phone`,
+        '0% Payment Gateway Commission',
+        `${trialDays}-Day Full Sandbox & Live Verification`,
+        'Android Listener App Pairing',
         'Direct Bank Settlement in < 1.2s',
-        'Unlimited UPI Transactions',
-        'Standard Webhook Dispatch (HMAC-SHA256)',
-        'React SDK & REST API Access',
-        'Developer Sandbox / Test Mode Included',
+        'HMAC-SHA256 Signed Webhooks',
+        'Drop-In React SDK & REST API',
       ],
-      cta: starterPrice === 0 ? 'Start Free Today' : 'Choose Starter',
-      action: () => navigate('/login?register=true'),
+      cta: `Start ${trialDays}-Day Free Trial`,
+      action: () => navigate(isLoggedIn ? '/billing' : '/login?register=true'),
     },
     {
-      name: 'Growth & Scale',
-      price: `₹${growthPrice.toLocaleString('en-IN')}`,
-      period: 'per month',
-      desc: 'Designed for scaling SaaS products, high-volume pathology labs, and POS retail.',
-      badge: 'Most Popular',
+      name: '1 Month Plan',
+      price: `₹${monthlyPrice.toLocaleString('en-IN')}`,
+      period: `${monthlyDurationDays} days`,
+      desc: 'Perfect for SaaS websites, e-commerce checkouts & solo founders accepting unlimited UPI orders.',
+      badge: null,
+      highlight: false,
+      features: [
+        '0% Payment Gateway Fee Forever',
+        `Up to ${monthlyDevices} Paired Android Listener Phones`,
+        'Unlimited Live UPI Transactions',
+        'Hosted QR Payment Links (/pay/:orderId)',
+        'Unmapped Payments Queue & 1-Click Match',
+        'Automated Customer Email Receipts',
+      ],
+      cta: `Activate 1 Month (₹${monthlyPrice})`,
+      action: () => goActivate('MONTHLY'),
+    },
+    {
+      name: '6 Months Plan',
+      price: `₹${halfYearlyPrice.toLocaleString('en-IN')}`,
+      period: `${halfYearlyDurationDays} days`,
+      desc: `Best value scaling plan (≈ ₹${Math.round(halfYearlyPrice / 6)}/mo effective${savings > 0 ? `, save ₹${savings}` : ''}).`,
+      badge: savings > 0 ? `Most Popular • Save ₹${savings}` : 'Most Popular',
       highlight: true,
       features: [
-        '0% Payment Gateway Fee (Always)',
-        `Up to ${growthDevices} Paired Android Listener Phones`,
-        'Automatic Multi-Phone Load Balancing',
-        'High-Priority Webhook Dispatch & Auto-Retries',
-        'Unmapped Payments Dispute Ledger & 1-Click Reconcile',
-        'Real-Time Battery & Phone Health Telemetry',
-        'WhatsApp Payment Confirmation Bridge Integration',
-        'Priority 24/7 WhatsApp & Ticket Support',
+        '0% Payment Gateway Fee Forever',
+        `Up to ${halfYearlyDevices} Paired Android Listener Phones`,
+        'Multi-Phone Load Balancing & Heartbeat Monitor',
+        'Priority Webhook Dispatch & Auto-Retries',
+        'Bank CSV Passbook Batch Reconciler',
+        'Priority Support (+91 9875182659)',
       ],
-      cta: 'Get Started with Growth',
-      action: () => navigate('/login?register=true'),
+      cta: `Activate 6 Months (₹${halfYearlyPrice})`,
+      action: () => goActivate('HALF_YEARLY'),
     },
     {
-      name: 'Business Pro',
-      price: `₹${businessPrice.toLocaleString('en-IN')}`,
-      period: 'per month',
-      desc: 'For multi-branch clinics, retail chains, and ecommerce stores processing ₹10L+ monthly.',
-      badge: 'High Performance',
+      name: 'Custom All-Features',
+      price: customPrice > 0 ? `₹${customPrice.toLocaleString('en-IN')}` : 'Custom',
+      period: customPrice > 0 ? 'per year' : 'all features included',
+      desc: 'All SumioPay features unlocked: unlimited listeners, white-label checkout, custom SLAs & onboarding.',
+      badge: 'All Features Unlocked',
       highlight: false,
       features: [
-        '0% Transaction Fee (Direct Bank Settlement)',
-        `Up to ${businessDevices} Paired Android Listeners & Multi-VPA Routing`,
-        'Self-Hosted On-Premise / VPS White-Label Deployment',
-        'Dedicated IP & 99.99% Uptime Guarantee',
-        'Custom Bank Notification Regex Engine Tuning',
-        'Automated Hourly Bank CSV Reconciliation',
-        'Dedicated Technical Account Manager',
+        'ALL Platform Features Unlocked',
+        'Unlimited Android Phones & Multi-UPI Routing',
+        'White-Label Checkout & Branded Listener APK',
+        'Role-Based Team Access & Audit Logs',
+        'Refunds, Disputes & Custom Bank Regex',
+        'Dedicated Engineer SLA (contact@sumiotech.in)',
       ],
-      cta: 'Choose Business Pro',
-      action: () => navigate('/login?register=true'),
-    },
-    {
-      name: 'Enterprise Custom',
-      price: enterprisePrice > 0 ? `₹${enterprisePrice.toLocaleString('en-IN')}` : 'Custom',
-      period: enterprisePrice > 0 ? 'per month' : 'tailored setup',
-      desc: 'For fintech ERPs, hospitals, and national organizations requiring dedicated infrastructure.',
-      badge: 'Unlimited Scale',
-      highlight: false,
-      features: [
-        '0% Transaction Fee (Direct Bank Settlement)',
-        'Unlimited Android Listeners & Custom Multi-VPA Rotator',
-        'Private Cloud / On-Prem Kubernetes Helm Deployment',
-        'Custom Android Listener APK with Private Company Branding',
-        'Custom SLA & Legal Data Protection Agreement',
-        'Direct Phone/Slack Access to Lead FinTech Engineers',
-      ],
-      cta: 'Contact Enterprise Team',
-      action: () => navigate('/enterprise'),
+      cta: 'Get Custom Plan',
+      action: () => (isLoggedIn ? navigate('/billing') : navigate('/enterprise')),
     },
   ];
 
@@ -116,10 +120,7 @@ export const PricingPage: React.FC = () => {
       {/* Header */}
       <header className="border-b border-slate-100 sticky top-0 z-40 bg-white/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div
-            onClick={() => navigate('/')}
-            className="cursor-pointer flex items-center gap-2.5"
-          >
+          <div onClick={() => navigate('/')} className="cursor-pointer flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-base shadow-sm">
               SP
             </div>
@@ -142,10 +143,10 @@ export const PricingPage: React.FC = () => {
               Sign In
             </button>
             <button
-              onClick={() => navigate('/login?register=true')}
+              onClick={() => navigate(isLoggedIn ? '/billing' : '/login?register=true')}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition"
             >
-              Launch Console
+              {isLoggedIn ? 'Open Billing' : `Start ${trialDays}-Day Trial`}
             </button>
           </div>
         </div>
@@ -154,14 +155,15 @@ export const PricingPage: React.FC = () => {
       {/* Main Content */}
       <main className="py-16 px-6 max-w-7xl mx-auto">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
-            Transparent Pricing
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{trialDays}-Day Free Trial • Pay Flat via UPI</span>
           </span>
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-950 tracking-tight mt-3">
             0% Transaction Fees. Forever.
           </h1>
           <p className="mt-4 text-slate-600 text-base">
-            No percentages, no cut from your hard-earned revenue. Direct peer-to-merchant UPI verification into your own bank account.
+            Simple flat pricing controlled by SumioTech — try free for {trialDays} days, then pick ₹{monthlyPrice}/month, ₹{halfYearlyPrice}/6 months, or Custom All-Features.
           </p>
         </div>
 
@@ -177,7 +179,7 @@ export const PricingPage: React.FC = () => {
               }`}
             >
               {tier.badge && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 text-white text-[11px] font-bold uppercase tracking-wider rounded-full shadow-sm">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm whitespace-nowrap">
                   {tier.badge}
                 </span>
               )}
@@ -197,7 +199,7 @@ export const PricingPage: React.FC = () => {
 
                 <div className="space-y-3 pt-4 border-t border-slate-100/20 text-xs">
                   <div className={`font-bold uppercase tracking-wider text-[10px] ${tier.highlight ? 'text-slate-400' : 'text-slate-500'}`}>
-                    What's Included:
+                    What&apos;s Included:
                   </div>
                   {tier.features.map((feat, fIdx) => (
                     <div key={fIdx} className="flex items-start gap-2.5">
@@ -249,8 +251,8 @@ export const PricingPage: React.FC = () => {
                   <td className="py-3 px-4 text-emerald-600 font-bold">Instant (0 Seconds in Your Bank)</td>
                 </tr>
                 <tr>
-                  <td className="py-3 px-4 font-bold text-slate-800">Chargeback Risk & Holds</td>
-                  <td className="py-3 px-4 text-slate-600">Account freezes & rolling reserves</td>
+                  <td className="py-3 px-4 font-bold text-slate-800">Chargeback Risk &amp; Holds</td>
+                  <td className="py-3 px-4 text-slate-600">Account freezes &amp; rolling reserves</td>
                   <td className="py-3 px-4 text-emerald-600 font-bold">Zero Chargeback Frauds</td>
                 </tr>
                 <tr>
@@ -270,7 +272,7 @@ export const PricingPage: React.FC = () => {
         appName="SUMIOLAB"
         userId="usr_pricing_demo"
         planName="SumioLab Pro Plan"
-        baseAmount={499}
+        baseAmount={monthlyPrice}
       />
     </div>
   );

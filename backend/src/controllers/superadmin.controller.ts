@@ -12,6 +12,11 @@ import { SystemSetting } from '../models/systemSetting.model';
 import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { WebhookLog } from '../models/webhookLog.model';
 import { config } from '../config';
+import {
+  getSubscriptionPlanCatalog,
+  resolvePlatformCollectorMerchant,
+  computeTrialPeriodEnd,
+} from '../services/subscriptionActivation.service';
 
 // SuperAdmin Login
 export const superadminLogin = async (req: Request, res: Response): Promise<void> => {
@@ -425,7 +430,11 @@ export const getSystemHealth = async (_req: Request, res: Response): Promise<voi
 // Platform Subscription & Pricing Tier Management (SuperAdmin Control)
 export const listAllSubscriptions = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const merchants = await Merchant.find().select('businessName name email upiId planTier createdAt');
+    const [merchants, settings] = await Promise.all([
+      Merchant.find().select('businessName name email upiId planTier createdAt').sort({ createdAt: -1 }),
+      SystemSetting.findOne(),
+    ]);
+    const catalog = getSubscriptionPlanCatalog(settings);
     const merchantIds = merchants.map((m) => m._id);
 
     const subscriptions = await Subscription.find({ merchantId: { $in: merchantIds } });
@@ -433,15 +442,36 @@ export const listAllSubscriptions = async (_req: Request, res: Response): Promis
 
     const result = merchants.map((m) => {
       const sub = subMap.get(m._id.toString());
+      const planTier = sub?.planTier || m.planTier || 'TRIAL';
+      const status = sub?.status || 'TRIAL';
+      const periodEnd =
+        sub?.currentPeriodEnd ||
+        computeTrialPeriodEnd(catalog.trialDays, m.createdAt ? new Date(m.createdAt) : new Date());
+      const daysRemaining = Math.max(
+        0,
+        Math.ceil((new Date(periodEnd).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+      );
+      const totalCollectedPaise = (sub?.invoiceHistory || []).reduce(
+        (sum, inv) => sum + (inv.amountInPaise || 0),
+        0
+      );
+
       return {
         merchantId: m._id,
         businessName: m.businessName,
         email: m.email,
         upiId: m.upiId,
-        planTier: sub?.planTier || m.planTier || 'STARTER',
-        status: sub?.status || 'ACTIVE',
-        currentPeriodEnd: sub?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 3600 * 1000),
-        monthlyPriceInPaise: sub?.monthlyPriceInPaise || (m.planTier === 'ENTERPRISE' ? 2999900 : m.planTier === 'BUSINESS' ? 1199900 : m.planTier === 'GROWTH' ? 499900 : 199900),
+        planTier,
+        status,
+        currentPeriodEnd: periodEnd,
+        daysRemaining,
+        monthlyPriceInPaise: sub?.monthlyPriceInPaise ?? 0,
+        totalCollectedPaise,
+        invoicesCount: sub?.invoiceHistory?.length || 0,
+        lastInvoiceUtr:
+          sub?.invoiceHistory && sub.invoiceHistory.length > 0
+            ? sub.invoiceHistory[sub.invoiceHistory.length - 1].utrNumber || ''
+            : '',
         createdAt: m.createdAt,
       };
     });
@@ -458,13 +488,16 @@ export const listAllSubscriptions = async (_req: Request, res: Response): Promis
 export const updateMerchantSubscriptionTier = async (req: Request, res: Response): Promise<void> => {
   try {
     const { merchantId } = req.params;
-    const { planTier, status, customPriceInPaise } = req.body;
+    const { planTier, status, customPriceInPaise, durationDays } = req.body;
 
     const merchant = await Merchant.findById(merchantId);
     if (!merchant) {
       res.status(404).json({ success: false, message: 'Merchant not found' });
       return;
     }
+
+    const settings = await SystemSetting.findOne();
+    const catalog = getSubscriptionPlanCatalog(settings);
 
     const previousTier = merchant.planTier;
     merchant.planTier = planTier;
@@ -476,33 +509,62 @@ export const updateMerchantSubscriptionTier = async (req: Request, res: Response
     }
 
     const tierPriceMap: Record<string, number> = {
-      STARTER: 199900,
-      GROWTH: 499900,
-      BUSINESS: 1199900,
+      TRIAL: 0,
+      MONTHLY: catalog.monthlyPrice * 100,
+      HALF_YEARLY: Math.round((catalog.halfYearlyPrice * 100) / 6),
+      CUSTOM: catalog.customPrice * 100,
+      STARTER: catalog.monthlyPrice * 100,
+      GROWTH: catalog.halfYearlyPrice * 100,
+      BUSINESS: 499900,
       ENTERPRISE: 2999900,
     };
 
+    const tierDurationMap: Record<string, number> = {
+      TRIAL: catalog.trialDays || 3,
+      MONTHLY: catalog.monthlyDurationDays || 30,
+      HALF_YEARLY: catalog.halfYearlyDurationDays || 180,
+      CUSTOM: 365,
+      STARTER: 30,
+      GROWTH: 180,
+      BUSINESS: 30,
+      ENTERPRISE: 365,
+    };
+
+    const parsedDuration =
+      durationDays !== undefined && Number(durationDays) > 0
+        ? Number(durationDays)
+        : tierDurationMap[planTier] || 30;
+
     sub.planTier = planTier;
     if (status) sub.status = status;
-    sub.monthlyPriceInPaise = customPriceInPaise || tierPriceMap[planTier] || 199900;
-    sub.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+    sub.monthlyPriceInPaise =
+      customPriceInPaise !== undefined && customPriceInPaise !== null && !isNaN(Number(customPriceInPaise))
+        ? Math.max(0, Number(customPriceInPaise))
+        : (tierPriceMap[planTier] ?? 0);
+    sub.currentPeriodStart = new Date();
+    sub.currentPeriodEnd = new Date(Date.now() + parsedDuration * 24 * 60 * 60 * 1000);
     await sub.save();
 
     await AuditLog.create({
       actorType: 'SUPERADMIN',
-      actorEmail: (req as any).superAdmin?.email || 'admin@sumiopay.internal',
+      actorEmail: (req as any).superAdmin?.email || 'admin@sumiotech.in',
       action: 'MERCHANT_SUBSCRIPTION_OVERRIDDEN',
       resourceType: 'MERCHANT',
       resourceId: merchantId,
       previousState: { planTier: previousTier },
-      newState: { planTier, monthlyPriceInPaise: sub.monthlyPriceInPaise, status: sub.status },
+      newState: {
+        planTier,
+        monthlyPriceInPaise: sub.monthlyPriceInPaise,
+        status: sub.status,
+        durationDays: parsedDuration,
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });
 
     res.status(200).json({
       success: true,
-      message: `Merchant ${merchant.businessName} updated to ${planTier} plan`,
+      message: `Merchant ${merchant.businessName} updated to ${planTier} (${parsedDuration} days)`,
       data: {
         merchant,
         subscription: sub,
@@ -515,33 +577,75 @@ export const updateMerchantSubscriptionTier = async (req: Request, res: Response
 
 export const getSubscriptionMetrics = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const merchants = await Merchant.find().select('planTier');
-    const counts = {
+    const [merchants, subscriptions, settings] = await Promise.all([
+      Merchant.find().select('planTier'),
+      Subscription.find(),
+      SystemSetting.findOne(),
+    ]);
+
+    const subMap = new Map(subscriptions.map((s) => [s.merchantId.toString(), s]));
+    const collector = await resolvePlatformCollectorMerchant(settings);
+
+    const counts: Record<string, number> = {
+      TRIAL: 0,
+      MONTHLY: 0,
+      HALF_YEARLY: 0,
+      CUSTOM: 0,
       STARTER: 0,
       GROWTH: 0,
       BUSINESS: 0,
       ENTERPRISE: 0,
     };
 
+    let activeSubscriptions = 0;
+    let trialSubscriptions = 0;
+    let mrrPaise = 0;
+    let totalCollectedPaise = 0;
+
     merchants.forEach((m) => {
-      const tier = (m.planTier || 'STARTER') as keyof typeof counts;
-      if (counts[tier] !== undefined) counts[tier]++;
+      const sub = subMap.get(m._id.toString());
+      const tier = sub?.planTier || m.planTier || 'TRIAL';
+      counts[tier] = (counts[tier] || 0) + 1;
+
+      const status = sub?.status || 'TRIAL';
+      if (status === 'ACTIVE') {
+        activeSubscriptions++;
+        mrrPaise += sub?.monthlyPriceInPaise || 0;
+      } else if (status === 'TRIAL') {
+        trialSubscriptions++;
+      }
+
+      if (sub?.invoiceHistory?.length) {
+        totalCollectedPaise += sub.invoiceHistory.reduce((acc, inv) => acc + (inv.amountInPaise || 0), 0);
+      }
     });
 
-    const mrr =
-      counts.STARTER * 1999 +
-      counts.GROWTH * 4999 +
-      counts.BUSINESS * 11999 +
-      counts.ENTERPRISE * 29999;
+    const estimatedMRR = Math.round(mrrPaise / 100);
 
     res.status(200).json({
       success: true,
       data: {
         totalSubscribers: merchants.length,
+        activeSubscriptions,
+        trialSubscriptions,
         tierCounts: counts,
-        estimatedMRR: mrr,
-        estimatedARR: mrr * 12,
+        estimatedMRR,
+        estimatedARR: estimatedMRR * 12,
+        totalCollectedRevenueInr: Math.round(totalCollectedPaise / 100),
         currency: 'INR',
+        subscriptionPlans: getSubscriptionPlanCatalog(settings),
+        collectorStatus: {
+          enabled: collector.enabled,
+          configured: collector.configured,
+          reason: collector.reason || null,
+          merchantId: collector.merchantId || null,
+          businessName: collector.businessName || null,
+          email: collector.email || null,
+          upiId: collector.upiId || null,
+          upiName: collector.upiName || null,
+          onlineDevicesCount: collector.onlineDevicesCount,
+          totalDevicesCount: collector.totalDevicesCount,
+        },
       },
     });
   } catch (err: any) {
@@ -556,9 +660,37 @@ export const getPlatformSettings = async (_req: Request, res: Response): Promise
     if (!settings) {
       settings = await SystemSetting.create({});
     }
+    const [collector, availableMerchants] = await Promise.all([
+      resolvePlatformCollectorMerchant(settings),
+      Merchant.find({ isActive: true })
+        .select('businessName name email upiId upiName createdAt')
+        .sort({ createdAt: -1 }),
+    ]);
+
     res.status(200).json({
       success: true,
-      data: settings,
+      data: {
+        ...settings.toObject(),
+        subscriptionPlans: getSubscriptionPlanCatalog(settings),
+        platformBilling: {
+          collectorMerchantEmail: settings.platformBilling?.collectorMerchantEmail || '',
+          collectorApiKey: settings.platformBilling?.collectorApiKey || '',
+          isEnabled: settings.platformBilling?.isEnabled !== false,
+        },
+        collectorStatus: {
+          enabled: collector.enabled,
+          configured: collector.configured,
+          reason: collector.reason || null,
+          merchantId: collector.merchantId || null,
+          businessName: collector.businessName || null,
+          email: collector.email || null,
+          upiId: collector.upiId || null,
+          upiName: collector.upiName || null,
+          onlineDevicesCount: collector.onlineDevicesCount,
+          totalDevicesCount: collector.totalDevicesCount,
+        },
+        availableMerchants,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
@@ -567,7 +699,7 @@ export const getPlatformSettings = async (_req: Request, res: Response): Promise
 
 export const updatePlatformSettings = async (req: Request, res: Response): Promise<void> => {
   try {
-    const adminEmail = (req as any).superAdmin?.email || 'superadmin@sumiopay.internal';
+    const adminEmail = (req as any).superAdmin?.email || 'admin@sumiotech.in';
     let settings = await SystemSetting.findOne();
     if (!settings) {
       settings = new SystemSetting({});
@@ -590,6 +722,8 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
       supportPhone,
       featureFlags,
       pricingTiers,
+      subscriptionPlans,
+      platformBilling,
     } = req.body;
 
     if (announcementText !== undefined) settings.announcementText = announcementText;
@@ -605,9 +739,40 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
     if (supportPhone !== undefined) settings.supportPhone = supportPhone;
     if (featureFlags !== undefined) settings.featureFlags = { ...settings.featureFlags, ...featureFlags };
     if (pricingTiers !== undefined) settings.pricingTiers = { ...settings.pricingTiers, ...pricingTiers };
+    if (subscriptionPlans !== undefined) {
+      const currentCatalog = getSubscriptionPlanCatalog(settings);
+      settings.subscriptionPlans = {
+        ...currentCatalog,
+        ...subscriptionPlans,
+        trialDays: Math.max(0, Number(subscriptionPlans.trialDays ?? currentCatalog.trialDays)),
+        monthlyPrice: Math.max(1, Number(subscriptionPlans.monthlyPrice ?? currentCatalog.monthlyPrice)),
+        monthlyDurationDays: Math.max(1, Number(subscriptionPlans.monthlyDurationDays ?? currentCatalog.monthlyDurationDays)),
+        halfYearlyPrice: Math.max(1, Number(subscriptionPlans.halfYearlyPrice ?? currentCatalog.halfYearlyPrice)),
+        halfYearlyDurationDays: Math.max(1, Number(subscriptionPlans.halfYearlyDurationDays ?? currentCatalog.halfYearlyDurationDays)),
+        customPrice: Math.max(0, Number(subscriptionPlans.customPrice ?? currentCatalog.customPrice)),
+      };
+    }
+    if (platformBilling !== undefined) {
+      settings.platformBilling = {
+        collectorMerchantEmail:
+          platformBilling.collectorMerchantEmail !== undefined
+            ? String(platformBilling.collectorMerchantEmail).toLowerCase().trim()
+            : (settings.platformBilling?.collectorMerchantEmail || ''),
+        collectorApiKey:
+          platformBilling.collectorApiKey !== undefined
+            ? String(platformBilling.collectorApiKey).trim()
+            : (settings.platformBilling?.collectorApiKey || ''),
+        isEnabled:
+          platformBilling.isEnabled !== undefined
+            ? Boolean(platformBilling.isEnabled)
+            : settings.platformBilling?.isEnabled !== false,
+      };
+    }
 
     settings.updatedBy = adminEmail;
     await settings.save();
+
+    const collector = await resolvePlatformCollectorMerchant(settings);
 
     // Log privileged audit event
     await AuditLog.create({
@@ -625,7 +790,22 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
     res.status(200).json({
       success: true,
       message: 'Global platform settings updated successfully',
-      data: settings,
+      data: {
+        ...settings.toObject(),
+        subscriptionPlans: getSubscriptionPlanCatalog(settings),
+        collectorStatus: {
+          enabled: collector.enabled,
+          configured: collector.configured,
+          reason: collector.reason || null,
+          merchantId: collector.merchantId || null,
+          businessName: collector.businessName || null,
+          email: collector.email || null,
+          upiId: collector.upiId || null,
+          upiName: collector.upiName || null,
+          onlineDevicesCount: collector.onlineDevicesCount,
+          totalDevicesCount: collector.totalDevicesCount,
+        },
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

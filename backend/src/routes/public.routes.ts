@@ -5,6 +5,10 @@ import { SystemSetting } from '../models/systemSetting.model';
 import { Merchant } from '../models/merchant.model';
 import { Order } from '../models/order.model';
 import { downloadApk } from '../controllers/device.controller';
+import {
+  getSubscriptionPlanCatalog,
+  resolvePlatformCollectorMerchant,
+} from '../services/subscriptionActivation.service';
 
 const router = Router();
 
@@ -57,6 +61,8 @@ router.get('/platform-config', async (_req: Request, res: Response): Promise<voi
     // Dynamic stats to ensure authentic real-time metrics
     const totalMerchants = await Merchant.countDocuments();
     const totalOrdersPaid = await Order.countDocuments({ status: 'PAID' });
+    const subscriptionPlans = getSubscriptionPlanCatalog(settings);
+    const collector = await resolvePlatformCollectorMerchant(settings);
 
     res.status(200).json({
       success: true,
@@ -75,6 +81,8 @@ router.get('/platform-config', async (_req: Request, res: Response): Promise<voi
         supportPhone: settings.supportPhone,
         featureFlags: settings.featureFlags,
         pricingTiers: settings.pricingTiers,
+        subscriptionPlans,
+        selfBillingReady: Boolean(collector.configured && collector.upiId),
       },
     });
   } catch (err: any) {
