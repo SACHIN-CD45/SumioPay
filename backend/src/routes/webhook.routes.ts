@@ -3,6 +3,7 @@ import {
   handleListenerPush,
   testWebhookDispatch,
   getWebhookLogs,
+  resendWebhook,
   getUnmappedPayments,
   reconcileUnmappedPayment,
 } from '../controllers/webhook.controller';
@@ -17,6 +18,7 @@ router.post('/listener-push', requireDeviceToken, handleListenerPush);
 // Merchant testing & audit logs
 router.post('/test-dispatch', requireMerchantAuth, testWebhookDispatch);
 router.get('/logs', requireMerchantAuth, getWebhookLogs);
+router.post('/resend/:logId', requireMerchantAuth, resendWebhook);
 
 // Unmapped / Disputed Payments & Reconciliation
 router.get('/unmapped', requireMerchantAuth, getUnmappedPayments);

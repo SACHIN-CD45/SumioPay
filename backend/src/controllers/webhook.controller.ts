@@ -267,6 +267,45 @@ export const getWebhookLogs = async (req: Request, res: Response): Promise<void>
   }
 };
 
+// Merchant retries/redelivers a specific webhook event
+export const resendWebhook = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const merchantId = (req as any).merchant?.id || (req as any).merchant?._id;
+    const { logId } = req.params;
+
+    const log = await WebhookLog.findOne({ _id: logId, merchantId });
+    if (!log) {
+      res.status(404).json({ success: false, message: 'Webhook delivery log not found' });
+      return;
+    }
+
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      res.status(404).json({ success: false, message: 'Merchant not found' });
+      return;
+    }
+
+    const eventData = log.payload?.data || log.payload;
+    const eventType = log.payload?.type || 'payment.succeeded';
+
+    const delivered = await dispatchMerchantWebhook(
+      merchant._id,
+      log.orderId,
+      log.url,
+      merchant.webhookSecret,
+      eventData,
+      eventType as any
+    );
+
+    res.status(200).json({
+      success: delivered,
+      message: delivered ? 'Webhook event redelivered successfully' : 'Redelivery failed to destination endpoint',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // Merchant queries Unmapped Payments (Disputes / Unknown credits)
 export const getUnmappedPayments = async (req: Request, res: Response): Promise<void> => {
   try {

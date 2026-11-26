@@ -25,29 +25,61 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+interface NavSection {
+  title: string;
+  items: {
+    label: string;
+    to: string;
+    icon: any;
+    badge?: string;
+    badgeColor?: string;
+  }[];
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
-  const navItems = [
-    { label: 'Overview', to: '/dashboard', icon: LayoutDashboard },
-    { label: 'Connect Payments', to: '/connect', icon: Zap },
-    { label: 'Transactions Ledger', to: '/orders', icon: CreditCard },
-    { label: 'Reconciliation', to: '/reconciliation', icon: FileSpreadsheet },
-    { label: 'Refunds & Disputes', to: '/refunds', icon: RotateCcw },
-    { label: 'Project Workspaces', to: '/projects', icon: FolderGit2 },
-    { label: 'Team & RBAC', to: '/team', icon: Users },
-    { label: 'Billing & Plan', to: '/billing', icon: Receipt },
-    { label: 'Financial Reports', to: '/reports', icon: FileText },
-    { label: 'Listener Phones', to: '/devices', icon: Smartphone },
-    { label: 'API & Webhooks', to: '/webhooks', icon: KeyRound },
-    { label: 'Payment Simulator', to: '/simulator', icon: Cpu },
-    { label: 'Developer Docs', to: '/docs', icon: FileCode2 },
+  const navSections: NavSection[] = [
+    {
+      title: 'FINANCE & PAYMENTS',
+      items: [
+        { label: 'Overview', to: '/dashboard', icon: LayoutDashboard },
+        { label: 'Transactions Ledger', to: '/orders', icon: CreditCard },
+        { label: 'Bank Reconciliation', to: '/reconciliation', icon: FileSpreadsheet },
+        { label: 'Refunds & Disputes', to: '/refunds', icon: RotateCcw },
+        { label: 'Financial Reports', to: '/reports', icon: FileText },
+      ],
+    },
+    {
+      title: 'DEVELOPER & INTEGRATION',
+      items: [
+        { label: 'Connect & Integrate', to: '/connect', icon: Zap, badge: 'SDK', badgeColor: 'bg-blue-100 text-blue-700' },
+        { label: 'Webhooks & Events', to: '/webhooks', icon: KeyRound, badge: 'HMAC', badgeColor: 'bg-emerald-100 text-emerald-700' },
+        { label: 'Payment Simulator', to: '/simulator', icon: Cpu },
+        { label: 'Developer API Docs', to: '/docs', icon: FileCode2 },
+      ],
+    },
+    {
+      title: 'INFRASTRUCTURE & COMPANION',
+      items: [
+        { label: 'Listener Phones', to: '/devices', icon: Smartphone, badge: 'APK v2.5', badgeColor: 'bg-indigo-100 text-indigo-700' },
+      ],
+    },
+    {
+      title: 'ORGANIZATION & SETTINGS',
+      items: [
+        { label: 'Project Workspaces', to: '/projects', icon: FolderGit2 },
+        { label: 'Team & RBAC', to: '/team', icon: Users },
+        { label: 'Billing & Plans', to: '/billing', icon: Receipt },
+      ],
+    },
   ];
 
   const content = (
     <>
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="px-3 flex items-center justify-between">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            Merchant Console
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Merchant Console</span>
           </div>
           {onClose && (
             <button
@@ -60,49 +92,69 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
           )}
         </div>
 
-        <nav className="space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition ${
-                    isActive
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                      <span>{item.label}</span>
-                    </div>
-                    {isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-600" />}
-                  </>
-                )}
-              </NavLink>
-            );
-          })}
+        <nav className="space-y-4">
+          {navSections.map((section) => (
+            <div key={section.title} className="space-y-1">
+              <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {section.title}
+              </div>
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={onClose}
+                      className={({ isActive }) =>
+                        `flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <div className="flex items-center gap-2.5">
+                            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <span>{item.label}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {item.badge && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
+                                  item.badgeColor || 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                            {isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-600" />}
+                          </div>
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </div>
 
       {/* Website & Support Footer Link */}
-      <div className="pt-4 border-t border-slate-100 space-y-1">
+      <div className="pt-4 border-t border-slate-100 space-y-1 mt-auto">
         <NavLink
           to="/"
           onClick={onClose}
           className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition"
         >
           <Globe className="w-4 h-4 text-slate-400" />
-          <span>Public Website</span>
+          <span>Public Portal</span>
         </NavLink>
         <div className="mt-2 px-3 text-[10px] text-slate-400 text-center font-mono">
-          SumioPay Engine v2.4 &bull; Merchant Mode
+          SumioPay Engine v2.5 &bull; SumioTech
         </div>
       </div>
     </>

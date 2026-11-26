@@ -29,7 +29,7 @@ import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
 export const ConnectPage: React.FC = () => {
   const [merchant, setMerchant] = useState<any>(null);
   const [platform, setPlatform] = useState<
-    'sumiolab' | 'link' | 'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'
+    'api-tester' | 'sumiolab' | 'link' | 'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'
   >('sumiolab');
   const [testModalOpen, setTestModalOpen] = useState(false);
 
@@ -37,6 +37,13 @@ export const ConnectPage: React.FC = () => {
   const [showSecret, setShowSecret] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
+
+  // Interactive API Tester State
+  const [testApiAmount, setTestApiAmount] = useState<number>(299);
+  const [testApiAppName, setTestApiAppName] = useState<string>('SumioLab');
+  const [testApiEmail, setTestApiEmail] = useState<string>('customer@example.com');
+  const [executingApiCall, setExecutingApiCall] = useState(false);
+  const [apiCallResponse, setApiCallResponse] = useState<any>(null);
 
   // Webhook URL Settings
   const [webhookUrlInput, setWebhookUrlInput] = useState('');
@@ -155,6 +162,26 @@ export const ConnectPage: React.FC = () => {
       alert(e.response?.data?.message || 'Failed to create payment order');
     } finally {
       setGeneratingLink(false);
+    }
+  };
+
+  const handleExecuteApiTester = async () => {
+    try {
+      setExecutingApiCall(true);
+      setApiCallResponse(null);
+      const res = await api.post('/order/create', {
+        baseAmount: Number(testApiAmount) || 299,
+        appName: testApiAppName || 'SumioLab',
+        customerEmail: testApiEmail || 'customer@example.com',
+      });
+      setApiCallResponse(res.data);
+    } catch (err: any) {
+      setApiCallResponse({
+        success: false,
+        message: err.response?.data?.message || err.message,
+      });
+    } finally {
+      setExecutingApiCall(false);
     }
   };
 
@@ -448,6 +475,11 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
     "customerEmail": "user@sumiolab.in",
     "callbackWebhookUrl": "${merchant?.webhookUrl || 'https://yourapp.com/api/webhook'}"
   }'`,
+
+    'api-tester': `// Interactive Live API Explorer
+// Execute real payment creation requests directly from your browser.
+// Endpoint: POST https://apipay.sumiotech.in/api/v1/payments/orders
+// Authentication: x-api-key: ${liveApiKey}`,
   };
 
   return (
@@ -703,6 +735,18 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
               </button>
             </div>
           )}
+
+          {/* Webhook Delivery Center Navigation Pill */}
+          <div className="pt-2 border-t border-blue-200/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-blue-900">
+            <span>Need to inspect headers, review delivery history, or resend failed webhooks?</span>
+            <a
+              href="/webhooks"
+              className="font-bold underline text-blue-700 hover:text-blue-900 flex items-center gap-1"
+            >
+              <span>Open Webhooks &amp; Events Center</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </div>
       </div>
 
@@ -759,6 +803,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
 
           <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
             {[
+              { id: 'api-tester', label: '⚡ Live API Tester' },
               { id: 'sumiolab', label: '⭐ SumioLab (Flagship)' },
               { id: 'link', label: 'Direct Payment Link (URL)' },
               { id: 'woocommerce', label: 'WooCommerce / Shopify' },
@@ -783,6 +828,95 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
             ))}
           </div>
         </div>
+
+        {platform === 'api-tester' && (
+          <div className="p-5 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Interactive Live REST API Playground</h3>
+                  <p className="text-slate-600 text-[11px]">
+                    Simulate a real client order creation against <code className="bg-white px-1.5 py-0.5 rounded font-mono text-indigo-700">POST /api/v1/payments/orders</code>
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-bold text-[10px]">
+                Live Environment Sandbox
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Base Amount (₹)</label>
+                <input
+                  type="number"
+                  value={testApiAmount}
+                  onChange={(e) => setTestApiAmount(Number(e.target.value))}
+                  placeholder="299"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">App / Service Name</label>
+                <input
+                  type="text"
+                  value={testApiAppName}
+                  onChange={(e) => setTestApiAppName(e.target.value)}
+                  placeholder="SumioLab"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Customer Email</label>
+                <input
+                  type="email"
+                  value={testApiEmail}
+                  onChange={(e) => setTestApiEmail(e.target.value)}
+                  placeholder="customer@example.com"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExecuteApiTester}
+              disabled={executingApiCall}
+              className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50"
+            >
+              <Zap className={`w-3.5 h-3.5 ${executingApiCall ? 'animate-bounce' : ''}`} />
+              <span>{executingApiCall ? 'Executing Request...' : '⚡ Execute Live API Request'}</span>
+            </button>
+
+            {apiCallResponse && (
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 font-mono text-[11px]">
+                <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-2">
+                  <span className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${apiCallResponse.success ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                    <span className="text-white font-bold">Response: {apiCallResponse.success ? '201 Created' : 'Request Error'}</span>
+                  </span>
+                  {apiCallResponse.data?.orderId && (
+                    <a
+                      href={`${window.location.origin}/pay/${apiCallResponse.data.orderId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-sans text-xs font-bold flex items-center gap-1 transition"
+                    >
+                      <span>Preview Checkout Screen</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+                <pre className="text-emerald-400 overflow-x-auto max-h-48 leading-relaxed">
+                  {JSON.stringify(apiCallResponse, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
 
         {platform === 'link' && (
           <div className="p-5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-4">
