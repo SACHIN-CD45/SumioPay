@@ -16,7 +16,7 @@ export const generatePairingToken = async (req: Request, res: Response): Promise
     await Device.deleteMany({ merchantId, isPaired: { $ne: true } });
 
     const pairingToken = `pair_${crypto.randomBytes(16).toString('hex')}`;
-    const tokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    const tokenExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 mins validity
 
     // Create a provisional device record (isPaired: false, isActive: false, lastPingAt: null)
     const device = new Device({
@@ -63,15 +63,23 @@ export const completePairing = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const device = await Device.findOne({ pairingToken });
+    const cleanToken = pairingToken.trim();
+    const withPrefix = cleanToken.startsWith('pair_') ? cleanToken : `pair_${cleanToken}`;
+
+    const device = await Device.findOne({
+      $or: [{ pairingToken: cleanToken }, { pairingToken: withPrefix }],
+    });
     if (!device) {
-      res.status(404).json({ success: false, message: 'Invalid or expired pairing token' });
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or expired pairing token. Please generate a fresh token from your web dashboard.',
+      });
       return;
     }
 
     const merchant = await Merchant.findById(device.merchantId);
     if (!merchant) {
-      res.status(404).json({ success: false, message: 'Associated merchant not found' });
+      res.status(400).json({ success: false, message: 'Associated merchant not found' });
       return;
     }
 

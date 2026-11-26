@@ -140,6 +140,32 @@
     }
   };
 
+  window.pasteToken = async function() {
+    try {
+      const bridge = getBridge();
+      if (bridge && bridge.getClipboardText) {
+        const clip = bridge.getClipboardText();
+        if (clip && clip.trim()) {
+          document.getElementById('pairingToken').value = clip.trim();
+          return;
+        }
+      }
+
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          document.getElementById('pairingToken').value = text.trim();
+          return;
+        }
+      }
+    } catch (e) {}
+
+    const manual = prompt('Paste your Pairing Token (e.g. pair_xxxx):');
+    if (manual && manual.trim()) {
+      document.getElementById('pairingToken').value = manual.trim();
+    }
+  };
+
   window.pairDevice = function() {
     const serverUrl = document.getElementById('serverUrl').value.trim();
     const pairingToken = document.getElementById('pairingToken').value.trim();

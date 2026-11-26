@@ -3,6 +3,7 @@ package com.sumiotech.sumiopay;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -217,8 +218,21 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String getClipboardText() {
+            try {
+                ClipboardManager cm = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm != null && cm.hasPrimaryClip() && cm.getPrimaryClip().getItemCount() > 0) {
+                    CharSequence text = cm.getPrimaryClip().getItemAt(0).getText();
+                    return text != null ? text.toString().trim() : "";
+                }
+            } catch (Exception ignored) {}
+            return "";
+        }
+
+        @JavascriptInterface
         public void pairDevice(String serverUrl, String pairingToken) {
-            String cleanUrl = serverUrl != null ? serverUrl.trim() : "https://apipay.sumiotech.in";
+            String rawUrl = serverUrl != null && !serverUrl.trim().isEmpty() ? serverUrl.trim() : "https://apipay.sumiotech.in";
+            String cleanUrl = rawUrl.replaceAll("/+$", "");
             String cleanToken = pairingToken != null ? pairingToken.trim() : "";
 
             SharedPreferences prefs = activity.getSharedPreferences(WebhookDispatcher.PREFS_NAME, Context.MODE_PRIVATE);
@@ -266,14 +280,29 @@ public class MainActivity extends Activity {
                         }
                     }
 
+                    // Extract actual error description from server
+                    String errMsg = "Pairing Failed (HTTP " + code + ")";
+                    try {
+                        java.io.InputStream es = conn.getErrorStream();
+                        if (es != null) {
+                            java.util.Scanner s = new java.util.Scanner(es).useDelimiter("\\A");
+                            String errStr = s.hasNext() ? s.next() : "";
+                            JSONObject json = new JSONObject(errStr);
+                            if (json.has("message")) {
+                                errMsg = json.getString("message");
+                            }
+                        }
+                    } catch (Exception ignored) {}
+
+                    final String finalErrMsg = errMsg;
                     activity.runOnUiThread(() -> {
-                        Toast.makeText(activity, "Pairing Failed (HTTP " + code + ")", Toast.LENGTH_LONG).show();
+                        Toast.makeText(activity, finalErrMsg, Toast.LENGTH_LONG).show();
                         notifyWebUiStateChange();
                     });
 
                 } catch (Exception e) {
                     activity.runOnUiThread(() -> {
-                        Toast.makeText(activity, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(activity, "Connection error: " + e.getMessage(), Toast.LENGTH_LONG).show();
                         notifyWebUiStateChange();
                     });
                 }

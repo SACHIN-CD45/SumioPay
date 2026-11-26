@@ -78,8 +78,11 @@
 
       <!-- Android 13/14/15/16 Restricted Settings Helper -->
       <div class="android16-tip">
-        <strong>Android 13, 14, 15, 16 Tip:</strong> If notification toggle is greyed out with &ldquo;Restricted setting&rdquo;:
-        <a href="javascript:void(0)" onclick="openAppSettings()" class="tip-link">Tap here to open App Info</a> &rarr; tap 3 dots in top right &rarr; select <em>&ldquo;Allow restricted settings&rdquo;</em>.
+        <strong>Android 13 / 14 / 15 / 16 Restricted Settings:</strong><br>
+        If &ldquo;Allow notification access&rdquo; is greyed out: tap below to open App Info &rarr; tap <strong>3 dots (⋮) in top-right</strong> &rarr; select <strong>&ldquo;Allow restricted settings&rdquo;</strong> &rarr; enter PIN.
+        <button type="button" class="btn btn-sm btn-outline btn-full" onclick="openAppSettings()" style="margin-top: 8px; border-color: #3b82f6; color: #93c5fd; font-weight: bold;">
+          🔓 Open App Info &rarr; 3 Dots (Allow Restricted)
+        </button>
       </div>
     </section>
 
@@ -94,7 +97,10 @@
       </div>
 
       <div class="form-group">
-        <label>Pairing Token (From Merchant Console)</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <label style="margin: 0;">Pairing Token (From Merchant Console)</label>
+          <a href="javascript:void(0)" onclick="pasteToken()" style="color: #60a5fa; font-size: 11px; font-weight: bold; text-decoration: none;">📋 Paste Token</a>
+        </div>
         <input type="text" id="pairingToken" placeholder="pair_xxxxxxxxxxxxxxxx">
       </div>
 
