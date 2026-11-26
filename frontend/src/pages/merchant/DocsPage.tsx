@@ -41,7 +41,17 @@ export const DocsPage: React.FC = () => {
 function openSumioLabCheckout() {
   SumioPay.checkout({
     apiKey: "sp_live_YOUR_MERCHANT_KEY",      // Found on your Connect Page
-    amount: 299,                             // Base amount in Rupees (₹299)
+    websiteName: "YourBrandStore",           // Shown on checkout alongside Trusted Business badge
+    brandColor: "#4F3DF5",                   // Custom brand panel gradient color
+    amount: 2817.84,                         // Final payable INR (after coupon & taxes)
+    billDetails: {
+      subtotal: 3499,
+      couponCode: "SAVE20",
+      discountAmount: 681.16,
+      items: [{ label: "Pro Cloud Subscription (1 Yr)", quantity: 1, amount: 3499 }],
+      note: "To begin your subscription, ₹2,817.84 will be paid now via Direct UPI.",
+      returnUrl: "https://yourwebsite.com/billing/success"
+    },
     appName: "SUMIOLAB",                     // Your SaaS identifier
     planName: "SumioLab Pro Annual Tier",
     userId: "usr_84920",                     // Logged-in customer ID in your app

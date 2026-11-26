@@ -2,9 +2,19 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import Order from '../models/order.model.js';
 import Merchant from '../models/merchant.model.js';
+import Organization from '../models/organization.model.js';
+import UnmappedPayment from '../models/unmappedPayment.model.js';
 import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator.js';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner.js';
 import { selectUpiAndAdvanceRotation } from '../services/upiRouter.service.js';
+import { activatePlatformSubscriptionFromOrder } from '../services/subscriptionActivation.service.js';
+import {
+  buildCheckoutBranding,
+  normalizeBillDetails,
+  resolveCheckoutBaseRupees,
+  sanitizeBrandColor,
+  sanitizeSafeUrl,
+} from '../utils/checkoutBranding.js';
 import { ApiKeyRequest } from '../middleware/apiKey.middleware.js';
 import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { config } from '../config/index.js';
@@ -24,11 +34,15 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       metadata = {},
     } = req.body;
 
-    const numBase = parseFloat(baseAmount);
-    if (isNaN(numBase) || numBase <= 0) {
+    const billDetails = normalizeBillDetails(req.body);
+    const numBase = resolveCheckoutBaseRupees(baseAmount, billDetails);
+    if (numBase === null || isNaN(numBase) || numBase <= 0) {
       return res.status(400).json({
         success: false,
-        error: { code: 'INVALID_AMOUNT', message: 'baseAmount must be a positive number' },
+        error: {
+          code: 'INVALID_AMOUNT',
+          message: 'Provide a positive baseAmount or valid billDetails.subtotal after discount',
+        },
       });
     }
 
@@ -57,6 +71,21 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
     const safeMeta = metadata && typeof metadata === 'object' ? { ...metadata } : {};
     safeMeta.assignedUpiId = selectedUpi.upiId;
     safeMeta.assignedUpiAccountId = selectedUpi.accountId;
+    if (req.body.websiteName || safeMeta.websiteName) {
+      safeMeta.websiteName = String(req.body.websiteName || safeMeta.websiteName).trim().slice(0, 80);
+    }
+    if (req.body.websiteUrl || safeMeta.websiteUrl) {
+      safeMeta.websiteUrl = sanitizeSafeUrl(req.body.websiteUrl || safeMeta.websiteUrl);
+    }
+    if (req.body.websiteLogoUrl || safeMeta.websiteLogoUrl) {
+      safeMeta.websiteLogoUrl = sanitizeSafeUrl(req.body.websiteLogoUrl || safeMeta.websiteLogoUrl);
+    }
+    if (req.body.brandColor || safeMeta.brandColor) {
+      safeMeta.brandColor = sanitizeBrandColor(req.body.brandColor || safeMeta.brandColor);
+    }
+    if (billDetails) {
+      safeMeta.billDetails = billDetails;
+    }
 
     const order = new Order({
       orderId,
@@ -81,6 +110,16 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
     const frontendBase = (process.env.PUBLIC_URL || 'https://sumiopay.sumiotech.in').replace(/\/+$/, '');
     const hostedCheckoutUrl = `${frontendBase}/pay/${order.orderId}`;
 
+    const org = merchant.email
+      ? await Organization.findOne({ billingEmail: merchant.email }).select('kycStatus').lean()
+      : null;
+    const branding = buildCheckoutBranding({
+      orderMeta: order.metadata,
+      merchant,
+      kycStatus: org?.kycStatus,
+      fallbackAppName: order.appName,
+    });
+
     res.status(201).json({
       success: true,
       data: {
@@ -92,6 +131,15 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
         currency: 'INR',
         upiId: selectedUpi.upiId,
         merchantName: selectedUpi.upiName,
+        websiteName: branding.websiteName,
+        websiteUrl: branding.websiteUrl,
+        websiteLogoUrl: branding.websiteLogoUrl,
+        brandColor: branding.brandColor,
+        trustedBusiness: branding.trustedBusiness,
+        kycVerified: branding.kycVerified,
+        trustLabel: branding.trustLabel,
+        branding,
+        billDetails,
         upiIntentUrl: order.upiIntentUrl,
         hostedCheckoutUrl,
         metadata: order.metadata || {},
@@ -110,7 +158,10 @@ export const getOrderStatus = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
 
-    const order = await Order.findOne({ orderId }).populate('merchantId', 'businessName name upiId upiName');
+    const order = await Order.findOne({ orderId }).populate(
+      'merchantId',
+      'businessName name upiId upiName websiteName websiteUrl websiteLogoUrl brandColor isActive email'
+    );
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
@@ -122,6 +173,17 @@ export const getOrderStatus = async (req: Request, res: Response) => {
     }
 
     const merchantObj: any = order.merchantId || {};
+    const org = merchantObj.email
+      ? await Organization.findOne({ billingEmail: merchantObj.email }).select('kycStatus').lean()
+      : null;
+
+    const branding = buildCheckoutBranding({
+      orderMeta: order.metadata,
+      merchant: merchantObj,
+      kycStatus: org?.kycStatus,
+      fallbackAppName: order.appName,
+    });
+    const billDetails = order.metadata?.billDetails || null;
 
     res.json({
       success: true,
@@ -135,7 +197,17 @@ export const getOrderStatus = async (req: Request, res: Response) => {
         upiIntentUrl: order.upiIntentUrl,
         isTest: order.isTest || false,
         merchantName: merchantObj.businessName || merchantObj.name || 'Merchant',
-        upiId: merchantObj.upiId || '',
+        upiId: order.metadata?.assignedUpiId || merchantObj.upiId || '',
+        websiteName: branding.websiteName,
+        websiteUrl: branding.websiteUrl,
+        websiteLogoUrl: branding.websiteLogoUrl,
+        brandColor: branding.brandColor,
+        trustedBusiness: branding.trustedBusiness,
+        kycVerified: branding.kycVerified,
+        trustLabel: branding.trustLabel,
+        branding,
+        billDetails,
+        returnUrl: billDetails?.returnUrl || order.metadata?.returnUrl || '',
         utr: order.utrNumber,
         utrNumber: order.utrNumber,
         metadata: order.metadata || {},
@@ -282,6 +354,152 @@ export const simulatePayment = async (req: AuthenticatedRequest, res: Response) 
       success: true,
       message: `Payment simulated successfully for order ${orderId}! Amount: ₹${order.exactAmount}`,
       data: order,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Customer submits 12-digit UTR on checkout when bank notification arrived slightly ahead
+ * or landed in UnmappedPayment. Never auto-approves without matching a real listener credit.
+ */
+export const submitCustomerUtr = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const cleanUtr = String(req.body?.utrNumber || req.body?.utr || '').trim();
+
+    if (!/^\d{12}$/.test(cleanUtr)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter a valid 12-digit numeric UPI Reference / UTR number.',
+      });
+    }
+
+    const order = await Order.findOne({ orderId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status === 'PAID') {
+      return res.json({
+        success: true,
+        matchedImmediately: true,
+        alreadyPaid: true,
+        message: 'Order is already confirmed and PAID.',
+        data: order,
+      });
+    }
+
+    if (order.status === 'EXPIRED' || order.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        message: `Order is already ${order.status}. Please initiate a new payment.`,
+      });
+    }
+
+    const replayOrder = await Order.findOne({
+      merchantId: order.merchantId,
+      utrNumber: cleanUtr,
+      status: 'PAID',
+      orderId: { $ne: order.orderId },
+    });
+    if (replayOrder) {
+      return res.status(409).json({
+        success: false,
+        message: `UTR ${cleanUtr} is already used on order ${replayOrder.orderId}.`,
+      });
+    }
+
+    const unmapped = await UnmappedPayment.findOne({
+      merchantId: order.merchantId,
+      utrNumber: cleanUtr,
+      status: 'UNRESOLVED',
+    }).sort({ createdAt: -1 });
+
+    if (unmapped && Math.abs(Number(unmapped.amount || 0) - Number(order.exactAmount || 0)) <= 0.02) {
+      order.status = 'PAID';
+      order.utrNumber = cleanUtr;
+      order.paidAt = new Date();
+      order.senderName = order.senderName || unmapped.senderName || '';
+      order.bankAppName = order.bankAppName || unmapped.bankAppName || 'UTR_MATCHED';
+      order.rawNotificationMessage = order.rawNotificationMessage || unmapped.rawMessage;
+      await order.save();
+
+      unmapped.status = 'RESOLVED';
+      unmapped.resolvedOrderId = order.orderId;
+      unmapped.notes = `Matched via customer checkout UTR submission at ${new Date().toISOString()}`;
+      await unmapped.save();
+
+      const merchant = await Merchant.findById(order.merchantId);
+      if (merchant && !order.isTest) {
+        await Merchant.findByIdAndUpdate(merchant._id, {
+          $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
+        });
+      }
+
+      await activatePlatformSubscriptionFromOrder(order).catch(() => {});
+
+      const targetWebhook = order.callbackWebhookUrl || merchant?.webhookUrl;
+      if (targetWebhook && merchant) {
+        dispatchMerchantWebhook(
+          merchant._id,
+          order.orderId,
+          targetWebhook,
+          merchant.webhookSecret,
+          {
+            orderId: order.orderId,
+            appName: order.appName,
+            userId: order.customerUserId,
+            customerUserId: order.customerUserId,
+            baseAmount: order.baseAmount,
+            exactAmount: order.exactAmount,
+            amount: order.exactAmount,
+            amountInPaise: Math.round(order.exactAmount * 100),
+            utr: order.utrNumber,
+            utrNumber: order.utrNumber,
+            status: 'PAID',
+            metadata: order.metadata || {},
+            paidAt: order.paidAt,
+          }
+        );
+      }
+
+      if (order.customerEmail && merchant) {
+        EmailService.sendPaymentReceipt(order.customerEmail, order.customerPhone || merchant.businessName, {
+          orderId: order.orderId,
+          amount: order.baseAmount,
+          exactAmount: order.exactAmount,
+          paiseOffset: order.paiseOffset,
+          utr: cleanUtr,
+          merchantBusinessName: merchant.businessName,
+          appName: order.appName,
+          paymentDate: order.paidAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        }).catch(() => {});
+      }
+
+      return res.json({
+        success: true,
+        matchedImmediately: true,
+        message: 'UTR matched with bank credit! Payment confirmed.',
+        data: order,
+      });
+    }
+
+    order.metadata = {
+      ...(order.metadata && typeof order.metadata === 'object' ? order.metadata : {}),
+      customerSubmittedUtr: cleanUtr,
+      customerSubmittedUtrAt: new Date().toISOString(),
+    };
+    order.markModified('metadata');
+    await order.save();
+
+    res.json({
+      success: true,
+      matchedImmediately: false,
+      status: order.status,
+      utrNumber: cleanUtr,
+      message: `UTR ${cleanUtr} recorded. Auto-confirming as soon as the bank SMS/notification arrives.`,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

@@ -35,6 +35,7 @@ import {
   parseUpiQrString,
   syncMerchantUpiState,
 } from '../services/upiRouter.service';
+import { sanitizeBrandColor, sanitizeSafeUrl } from '../utils/checkoutBranding';
 
 export const sendRegistrationOtp = async (req: Request, res: Response) => {
   try {
@@ -400,6 +401,10 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
         email: merchant.email,
         phone: merchant.phone,
         businessName: merchant.businessName,
+        websiteName: merchant.websiteName || merchant.businessName || '',
+        websiteUrl: merchant.websiteUrl || '',
+        websiteLogoUrl: merchant.websiteLogoUrl || '',
+        brandColor: sanitizeBrandColor(merchant.brandColor),
         upiId: merchant.upiId,
         upiName: merchant.upiName,
         upiAccounts: syncedAccounts,
@@ -422,10 +427,26 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
 export const updateMerchantProfile = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const merchant = req.merchant!;
-    const { name, businessName, upiId, upiName, webhookUrl, phone, upiRoutingMode } = req.body;
+    const {
+      name,
+      businessName,
+      websiteName,
+      websiteUrl,
+      websiteLogoUrl,
+      brandColor,
+      upiId,
+      upiName,
+      webhookUrl,
+      phone,
+      upiRoutingMode,
+    } = req.body;
 
     if (name && name.trim()) merchant.name = name.trim();
     if (businessName && businessName.trim()) merchant.businessName = businessName.trim();
+    if (websiteName !== undefined) merchant.websiteName = String(websiteName || '').trim().slice(0, 80);
+    if (websiteUrl !== undefined) merchant.websiteUrl = sanitizeSafeUrl(websiteUrl);
+    if (websiteLogoUrl !== undefined) merchant.websiteLogoUrl = sanitizeSafeUrl(websiteLogoUrl);
+    if (brandColor !== undefined) merchant.brandColor = sanitizeBrandColor(brandColor);
     if (webhookUrl !== undefined) merchant.webhookUrl = (webhookUrl || '').trim();
     if (phone !== undefined) merchant.phone = (phone || '').trim();
     if (upiRoutingMode && ['PRIMARY_ONLY', 'ROUND_ROBIN', 'FAILOVER'].includes(upiRoutingMode)) {

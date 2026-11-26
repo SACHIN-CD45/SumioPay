@@ -5,7 +5,15 @@ import { paymentOrchestrator } from '../../services/providers/paymentOrchestrato
 import { StateMachineService } from '../../services/stateMachine.service';
 import { dispatchMerchantWebhook } from '../../utils/hmacSigner';
 import { Order } from '../../models/order.model';
+import { Organization } from '../../models/organization.model';
 import { Refund } from '../../models/refund.model';
+import {
+  buildCheckoutBranding,
+  normalizeBillDetails,
+  resolveCheckoutBaseRupees,
+  sanitizeBrandColor,
+  sanitizeSafeUrl,
+} from '../../utils/checkoutBranding';
 import crypto from 'crypto';
 
 const router = Router();
@@ -76,12 +84,15 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       metadata = {},
     } = req.body;
 
-    const finalPaise = amountInPaise ? parseInt(amountInPaise, 10) : Math.round(parseFloat(baseAmount || '0') * 100);
+    const billDetails = normalizeBillDetails(req.body);
+    let finalPaise = amountInPaise
+      ? parseInt(amountInPaise, 10)
+      : Math.round((resolveCheckoutBaseRupees(baseAmount, billDetails) || 0) * 100);
 
     if (isNaN(finalPaise) || finalPaise <= 0) {
       res.status(400).json({
         success: false,
-        error: { code: 'INVALID_AMOUNT', message: 'amountInPaise must be a positive integer' },
+        error: { code: 'INVALID_AMOUNT', message: 'amountInPaise or valid billDetails.subtotal must be positive' },
       });
       return;
     }
@@ -100,6 +111,26 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
 
     const isTest = Boolean(req.body.isTest || req.headers['x-test-mode'] === 'true' || (req as any).isTestKey);
 
+    const safeMeta: Record<string, any> = {
+      ...(metadata && typeof metadata === 'object' ? metadata : {}),
+      ...(initiation.metadata || {}),
+    };
+    if (req.body.websiteName || safeMeta.websiteName) {
+      safeMeta.websiteName = String(req.body.websiteName || safeMeta.websiteName).trim().slice(0, 80);
+    }
+    if (req.body.websiteUrl || safeMeta.websiteUrl) {
+      safeMeta.websiteUrl = sanitizeSafeUrl(req.body.websiteUrl || safeMeta.websiteUrl);
+    }
+    if (req.body.websiteLogoUrl || safeMeta.websiteLogoUrl) {
+      safeMeta.websiteLogoUrl = sanitizeSafeUrl(req.body.websiteLogoUrl || safeMeta.websiteLogoUrl);
+    }
+    if (req.body.brandColor || safeMeta.brandColor) {
+      safeMeta.brandColor = sanitizeBrandColor(req.body.brandColor || safeMeta.brandColor);
+    }
+    if (billDetails) {
+      safeMeta.billDetails = billDetails;
+    }
+
     const order = new Order({
       orderId,
       merchantId: merchant._id,
@@ -115,16 +146,23 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       upiIntentUrl: initiation.upiIntentUrl || '',
       expiresAt: initiation.expiresAt,
       callbackWebhookUrl: callbackWebhookUrl || merchant.webhookUrl || '',
-      metadata: {
-        ...(metadata && typeof metadata === 'object' ? metadata : {}),
-        ...(initiation.metadata || {}),
-      },
+      metadata: safeMeta,
     });
 
     await order.save();
 
     const frontendBase = (process.env.PUBLIC_URL || 'https://sumiopay.sumiotech.in').replace(/\/+$/, '');
     const hostedCheckoutUrl = `${frontendBase}/pay/${order.orderId}`;
+
+    const org = merchant.email
+      ? await Organization.findOne({ billingEmail: merchant.email }).select('kycStatus').lean()
+      : null;
+    const branding = buildCheckoutBranding({
+      orderMeta: order.metadata,
+      merchant,
+      kycStatus: org?.kycStatus,
+      fallbackAppName: order.appName,
+    });
 
     res.status(201).json({
       success: true,
@@ -139,6 +177,16 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
         isTest: order.isTest || false,
         upiId: initiation.metadata?.assignedUpiId || merchant.upiId,
         merchantName: merchant.upiName || merchant.businessName,
+        websiteName: branding.websiteName,
+        websiteUrl: branding.websiteUrl,
+        websiteLogoUrl: branding.websiteLogoUrl,
+        brandColor: branding.brandColor,
+        trustedBusiness: branding.trustedBusiness,
+        kycVerified: branding.kycVerified,
+        trustLabel: branding.trustLabel,
+        branding,
+        billDetails,
+        returnUrl: billDetails?.returnUrl || safeMeta.returnUrl || '',
         upiIntentUrl: order.upiIntentUrl,
         checkoutUrl: initiation.checkoutUrl || hostedCheckoutUrl,
         hostedCheckoutUrl,
@@ -155,7 +203,10 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
 // GET /api/v1/payments/orders/:id — Retrieve Order
 router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => {
   try {
-    const order = await Order.findOne({ orderId: req.params.id }).populate('merchantId', 'businessName name upiId upiName');
+    const order = await Order.findOne({ orderId: req.params.id }).populate(
+      'merchantId',
+      'businessName name upiId upiName websiteName websiteUrl websiteLogoUrl brandColor isActive email'
+    );
     if (!order) {
       res.status(404).json({ success: false, message: 'Payment order not found' });
       return;
@@ -167,6 +218,16 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
     }
 
     const merchantObj: any = order.merchantId || {};
+    const org = merchantObj.email
+      ? await Organization.findOne({ billingEmail: merchantObj.email }).select('kycStatus').lean()
+      : null;
+    const branding = buildCheckoutBranding({
+      orderMeta: order.metadata,
+      merchant: merchantObj,
+      kycStatus: org?.kycStatus,
+      fallbackAppName: order.appName,
+    });
+    const billDetails = order.metadata?.billDetails || null;
 
     res.status(200).json({
       success: true,
@@ -178,8 +239,19 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
         amountInPaise: Math.round(order.baseAmount * 100),
         exactAmountInPaise: Math.round(order.exactAmount * 100),
         currency: 'INR',
-        upiId: merchantObj.upiId || '',
+        isTest: order.isTest || false,
+        upiId: order.metadata?.assignedUpiId || merchantObj.upiId || '',
         merchantName: merchantObj.upiName || merchantObj.businessName || 'Merchant',
+        websiteName: branding.websiteName,
+        websiteUrl: branding.websiteUrl,
+        websiteLogoUrl: branding.websiteLogoUrl,
+        brandColor: branding.brandColor,
+        trustedBusiness: branding.trustedBusiness,
+        kycVerified: branding.kycVerified,
+        trustLabel: branding.trustLabel,
+        branding,
+        billDetails,
+        returnUrl: billDetails?.returnUrl || order.metadata?.returnUrl || '',
         status: order.status,
         utr: order.utrNumber,
         utrNumber: order.utrNumber,

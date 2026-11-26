@@ -1410,7 +1410,16 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
         appName="SUMIOPAY"
         userId="demo_visitor"
         planName="Monthly Pro Preview"
+        websiteName="SumioTech Cloud"
+        brandColor="#4F3DF5"
         baseAmount={monthlyPrice}
+        billDetails={{
+          items: [{ label: 'SumioPay Merchant License (Monthly)', quantity: 1, amount: monthlyPrice + 100 }],
+          subtotal: monthlyPrice + 100,
+          couponCode: 'SUMIO100',
+          discountAmount: 100,
+          note: `Preview how customers see your brand, applied coupon discount, and SumioPay Trusted Business shield at checkout.`,
+        }}
         demoMode={true}
       />
 

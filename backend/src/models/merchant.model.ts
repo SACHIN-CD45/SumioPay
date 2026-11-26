@@ -36,6 +36,10 @@ export interface IMerchant extends Document {
   email: string;
   passwordHash: string;
   businessName: string;
+  websiteName?: string;
+  websiteUrl?: string;
+  websiteLogoUrl?: string;
+  brandColor?: string;
   phone?: string;
   upiId: string; // Active Primary UPI e.g. sumiotech@okaxis
   upiName: string; // Active Merchant Display Name in UPI
@@ -60,6 +64,10 @@ const MerchantSchema = new Schema<IMerchant>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     businessName: { type: String, required: true, trim: true },
+    websiteName: { type: String, trim: true, default: '' },
+    websiteUrl: { type: String, trim: true, default: '' },
+    websiteLogoUrl: { type: String, trim: true, default: '' },
+    brandColor: { type: String, trim: true, default: '#4F3DF5' },
     phone: { type: String, trim: true },
     upiId: { type: String, required: true, trim: true },
     upiName: { type: String, required: true, trim: true },

@@ -45,6 +45,10 @@ export const ProfilePage: React.FC = () => {
   // Editable Profile Form Fields
   const [ownerName, setOwnerName] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [websiteName, setWebsiteName] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [websiteLogoUrl, setWebsiteLogoUrl] = useState('');
+  const [brandColor, setBrandColor] = useState('#4F3DF5');
   const [phone, setPhone] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [routingMode, setRoutingMode] = useState<'PRIMARY_ONLY' | 'ROUND_ROBIN' | 'FAILOVER'>('PRIMARY_ONLY');
@@ -72,6 +76,10 @@ export const ProfilePage: React.FC = () => {
         setProfile(d);
         setOwnerName(d.name || '');
         setBusinessName(d.businessName || '');
+        setWebsiteName(d.websiteName || d.businessName || '');
+        setWebsiteUrl(d.websiteUrl || '');
+        setWebsiteLogoUrl(d.websiteLogoUrl || '');
+        setBrandColor(d.brandColor || '#4F3DF5');
         setPhone(d.phone || '');
         setWebhookUrl(d.webhookUrl || '');
         setRoutingMode(d.upiRoutingMode || 'PRIMARY_ONLY');
@@ -98,6 +106,10 @@ export const ProfilePage: React.FC = () => {
       const res = await api.put('/merchant/profile', {
         name: ownerName,
         businessName,
+        websiteName,
+        websiteUrl,
+        websiteLogoUrl,
+        brandColor,
         phone,
         webhookUrl,
         upiRoutingMode: routingMode,
@@ -385,6 +397,125 @@ export const ProfilePage: React.FC = () => {
               placeholder="https://yoursite.com/api/webhook"
               className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono focus:outline-none focus:border-blue-500"
             />
+          </div>
+        </div>
+
+        {/* Website & Checkout Modal Branding */}
+        <div className="pt-4 border-t border-slate-100 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Customer Checkout Branding &amp; Trusted Business Badge</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Displayed on your hosted checkout &amp; SDK modal (e.g. Website Name + SumioPay Trusted Business shield).
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div>
+              <label className="text-slate-600 font-semibold block mb-1">Website / App Display Name</label>
+              <input
+                type="text"
+                value={websiteName}
+                onChange={(e) => setWebsiteName(e.target.value)}
+                placeholder={businessName || 'e.g. Hostinger, SumioLab'}
+                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-slate-600 font-semibold block mb-1">Website URL</label>
+              <input
+                type="url"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://yourwebsite.com"
+                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-slate-600 font-semibold block mb-1">Website Logo Image URL (Optional)</label>
+              <input
+                type="url"
+                value={websiteLogoUrl}
+                onChange={(e) => setWebsiteLogoUrl(e.target.value)}
+                placeholder="https://yourwebsite.com/logo.png"
+                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-slate-600 font-semibold block mb-1">Checkout Brand Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={/^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : '#4F3DF5'}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="w-10 h-10 rounded-xl border border-slate-200 bg-white p-0.5 cursor-pointer shrink-0"
+                />
+                <input
+                  type="text"
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  placeholder="#4F3DF5"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                {['#4F3DF5', '#2563EB', '#0F766E', '#7C3AED', '#1E293B'].map((swatch) => (
+                  <button
+                    key={swatch}
+                    type="button"
+                    onClick={() => setBrandColor(swatch)}
+                    className={`w-5 h-5 rounded-full border-2 transition ${
+                      brandColor.toLowerCase() === swatch.toLowerCase()
+                        ? 'border-slate-900 scale-110'
+                        : 'border-white shadow-xs'
+                    }`}
+                    style={{ backgroundColor: swatch }}
+                    title={swatch}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Live Customer Checkout Header Preview */}
+          <div
+            className="rounded-2xl p-4 text-white flex flex-wrap items-center justify-between gap-3 shadow-sm"
+            style={{
+              background: `linear-gradient(135deg, ${
+                /^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : '#4F3DF5'
+              } 0%, #1E1B4B 100%)`,
+            }}
+          >
+            <div className="flex items-center gap-3">
+              {websiteLogoUrl ? (
+                <img
+                  src={websiteLogoUrl}
+                  alt={websiteName || businessName}
+                  className="w-10 h-10 rounded-xl bg-white p-1 object-contain"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-white text-slate-900 font-black text-base flex items-center justify-center">
+                  {(websiteName || businessName || 'S').trim().charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-extrabold">{websiteName || businessName || 'Your Website'}</p>
+                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-950/35 border border-white/20">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  <span>SumioPay Trusted Business</span>
+                </span>
+              </div>
+            </div>
+            <div className="text-[11px] bg-white/15 px-3 py-1.5 rounded-xl font-semibold">
+              Live Customer Checkout Header Preview
+            </div>
           </div>
         </div>
 

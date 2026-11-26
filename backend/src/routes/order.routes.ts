@@ -4,6 +4,7 @@ import {
   getOrderStatus,
   getMerchantOrders,
   simulatePayment,
+  submitCustomerUtr,
 } from '../controllers/order.controller';
 import { requireApiKeyOrMerchantAuth } from '../middleware/apiKey.middleware';
 import { requireMerchantAuth } from '../middleware/auth.middleware';
@@ -15,6 +16,9 @@ router.post('/create', requireApiKeyOrMerchantAuth, createOrder);
 
 // Poll order status (public endpoint with CORS allowed for frontend modals)
 router.get('/status/:orderId', getOrderStatus);
+
+// Public checkout customer UTR submission (matches against real listener credits only)
+router.post('/submit-utr/:orderId', submitCustomerUtr);
 
 // Merchant ledger
 router.get('/my-orders', requireMerchantAuth, getMerchantOrders);
