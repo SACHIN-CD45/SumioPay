@@ -32,6 +32,7 @@ export interface IOrder extends Document {
   expiresAt: Date; // 15 mins TTL
   paidAt?: Date;
   callbackWebhookUrl?: string;
+  metadata?: Record<string, any>;
   webhookDeliveryStatus: 'NOT_SENT' | 'DELIVERED' | 'FAILED';
   webhookResponseCode?: number;
   webhookRetries: number;
@@ -75,6 +76,7 @@ const OrderSchema = new Schema<IOrder>(
     expiresAt: { type: Date, required: true },
     paidAt: { type: Date },
     callbackWebhookUrl: { type: String, default: '' },
+    metadata: { type: Schema.Types.Mixed, default: {} },
     webhookDeliveryStatus: {
       type: String,
       enum: ['NOT_SENT', 'DELIVERED', 'FAILED'],

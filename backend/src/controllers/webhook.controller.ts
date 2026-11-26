@@ -161,10 +161,15 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
           orderId: matchingOrder.orderId,
           appName: matchingOrder.appName,
           userId: matchingOrder.customerUserId,
+          customerUserId: matchingOrder.customerUserId,
           baseAmount: matchingOrder.baseAmount,
           exactAmount: matchingOrder.exactAmount,
+          amount: matchingOrder.exactAmount,
+          amountInPaise: Math.round(matchingOrder.exactAmount * 100),
           status: 'PAID',
           utr: matchingOrder.utrNumber,
+          utrNumber: matchingOrder.utrNumber,
+          metadata: matchingOrder.metadata || {},
           paidAt: matchingOrder.paidAt,
         }
       ).catch((err) => {

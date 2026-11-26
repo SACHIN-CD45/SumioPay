@@ -4,19 +4,24 @@ import { SumioSignatureVerificationError } from './errors';
 
 export class Webhooks {
   /**
-   * Verifies an incoming webhook HMAC-SHA256 signature against raw request body
-   * @param rawBody - Raw string payload as received on your endpoint
-   * @param signatureHeader - The 'x-sumiopay-signature' header string
-   * @param webhookSecret - Merchant or Project webhook secret
+   * Verifies an incoming webhook HMAC-SHA256 signature against raw request body.
+   * When `timestamp` (`x-sumiopay-timestamp` header) is supplied, verifies `${timestamp}.${rawBody}`.
    */
-  public static verifySignature(rawBody: string, signatureHeader: string, webhookSecret: string): boolean {
+  public static verifySignature(
+    rawBody: string,
+    signatureHeader: string,
+    webhookSecret: string,
+    timestamp?: string | number
+  ): boolean {
     if (!rawBody || !signatureHeader || !webhookSecret) {
       throw new SumioSignatureVerificationError('Missing rawBody, signature, or webhook secret');
     }
 
+    const signedContent = timestamp !== undefined && timestamp !== '' ? `${timestamp}.${rawBody}` : rawBody;
+
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
-      .update(rawBody)
+      .update(signedContent)
       .digest('hex');
 
     const expectedBuffer = Buffer.from(expectedSignature, 'utf8');

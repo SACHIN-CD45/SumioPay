@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../../lib/api';
+import { api, API_BASE } from '../../lib/api';
 import {
   Zap,
   CheckCircle2,
@@ -29,8 +29,8 @@ import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
 export const ConnectPage: React.FC = () => {
   const [merchant, setMerchant] = useState<any>(null);
   const [platform, setPlatform] = useState<
-    'api-tester' | 'sumiolab' | 'link' | 'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'
-  >('sumiolab');
+    'api-tester' | 'saas' | 'sumiolab' | 'link' | 'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'
+  >('saas');
   const [testModalOpen, setTestModalOpen] = useState(false);
 
   // Show/Hide Secrets
@@ -108,7 +108,7 @@ export const ConnectPage: React.FC = () => {
     setTestingWebhook(true);
     setTestWebhookResult(null);
     try {
-      const res = await api.post('/webhooks/test', {
+      const res = await api.post('/webhook/test-dispatch', {
         targetUrl: webhookUrlInput.trim() || merchant?.webhookUrl,
       });
       setTestWebhookResult({
@@ -193,6 +193,114 @@ export const ConnectPage: React.FC = () => {
   const webhookSecret = merchant?.webhookSecret || 'sp_whsec_xxxxxx';
 
   const codeExamples = {
+    saas: `// =========================================================================
+// SENIOR SAAS ARCHITECTURE: SuperAdmin Price Control + Active Plan Sync
+// Prevents price tampering in browser & auto-activates SaaS subscriptions
+// =========================================================================
+
+// [A] IN YOUR SAAS BACKEND (e.g. Node.js / Express / Next.js):
+// Never accept "amount" from the frontend! Fetch plan price from your SaaS SuperAdmin DB.
+
+app.post('/api/billing/subscribe', requireUserAuth, async (req, res) => {
+  const { planId } = req.body; // e.g. "PRO_YEARLY" controlled in YOUR SuperAdmin panel
+  const plan = await saasDb.plans.findOne({ id: planId, isActive: true });
+  if (!plan) return res.status(404).json({ error: 'Plan not found' });
+
+  // 1. Call SumioPay server-to-server with authoritative price in Paise
+  const spRes = await fetch('https://apipay.sumiotech.in/api/v1/payments/orders', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': "${liveApiKey}",
+      'x-api-secret': "${liveSecret}",
+      'Idempotency-Key': \`sub_\${req.user.id}_\${plan.id}_\${Date.now()}\`,
+    },
+    body: JSON.stringify({
+      amountInPaise: Math.round(plan.priceInInr * 100), // e.g. 99900 for ₹999
+      appName: 'MY_SAAS_APP',
+      customerUserId: req.user.id,
+      customerEmail: req.user.email,
+      callbackWebhookUrl: "${merchant?.webhookUrl || 'https://mysaas.com/api/webhooks/sumiopay'}",
+      metadata: {
+        saasPlanId: plan.id,
+        durationDays: plan.durationDays, // e.g. 365
+        saasUserId: req.user.id,
+      },
+    }),
+  });
+
+  const { data: order } = await spRes.json();
+
+  // 2. Record PENDING invoice in YOUR SaaS SuperAdmin database
+  await saasDb.invoices.create({
+    sumiopayOrderId: order.orderId,
+    userId: req.user.id,
+    planId: plan.id,
+    expectedAmount: plan.priceInInr,
+    status: 'PENDING',
+  });
+
+  // 3. Return ONLY orderId / hostedCheckoutUrl to frontend (user cannot alter price!)
+  res.json({ orderId: order.orderId, checkoutUrl: order.hostedCheckoutUrl });
+});
+
+// [B] IN YOUR SAAS FRONTEND:
+// <script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>
+async function startCheckout(planId) {
+  const res = await fetch('/api/billing/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planId }),
+  });
+  const { orderId } = await res.json();
+
+  // Open tamper-proof modal for that locked server order (or redirect to checkoutUrl)
+  SumioPay.checkout({
+    orderId: orderId,
+    onSuccess: function(verified) {
+      window.location.href = '/dashboard?upgraded=1';
+    },
+  });
+}
+
+// [C] IN YOUR SAAS WEBHOOK (Verify HMAC + Anti-Replay + Unlock Plan in SuperAdmin DB):
+// IMPORTANT: Use express.raw({ type: 'application/json' }) so rawBody bytes match exact signature!
+app.post('/api/webhooks/sumiopay', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = req.headers['x-sumiopay-signature'];
+  const timestamp = req.headers['x-sumiopay-timestamp'];
+  const rawBody   = req.body.toString('utf8');
+  const secret    = "${webhookSecret}";
+
+  // 1. Replay defense (reject requests older than 5 mins)
+  if (Math.abs(Math.floor(Date.now() / 1000) - parseInt(timestamp, 10)) > 300) {
+    return res.status(401).send('Timestamp expired');
+  }
+
+  // 2. Cryptographic HMAC-SHA256 verification over "\${timestamp}.\${rawBody}"
+  const expected = crypto.createHmac('sha256', secret).update(\`\${timestamp}.\${rawBody}\`).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(signature || '', 'utf8'), Buffer.from(expected, 'utf8'))) {
+    return res.status(401).send('Invalid HMAC signature');
+  }
+
+  const event = JSON.parse(rawBody);
+  if (event.type === 'payment.succeeded') {
+    const { orderId, exactAmount, utr, metadata } = event.data;
+    const invoice = await saasDb.invoices.findOne({ sumiopayOrderId: orderId });
+
+    // 3. Idempotency & Amount Integrity Guard
+    if (invoice && invoice.status !== 'PAID' && exactAmount >= invoice.expectedAmount) {
+      await saasDb.invoices.updateOne({ _id: invoice._id }, { $set: { status: 'PAID', utr, paidAt: new Date() } });
+      await saasDb.subscriptions.upsert(invoice.userId, {
+        planId: metadata.saasPlanId || invoice.planId,
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() + (metadata.durationDays || 30) * 86400000),
+      });
+    }
+  }
+
+  res.status(200).json({ received: true });
+});`,
+
     sumiolab: `// =========================================================================
 // SumioLab Official 1-Click Subscription & Upgrade Integration
 // Flow: ₹299 Upgrade Button -> Dynamic UPI Modal -> Bank SMS Telemetry -> Auto-Verify
@@ -202,7 +310,7 @@ export const ConnectPage: React.FC = () => {
 // Include drop-in script in your <head> or layout:
 // <script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>
 
-// Attach to your "Subscribe to Pro (₹299)" button:
+// Attach to your "Subscribe to Pro (₹299)" button (or pass server-created orderId):
 function handleSubscribeToPro() {
   SumioPay.checkout({
     apiKey: "${liveApiKey}",
@@ -212,6 +320,7 @@ function handleSubscribeToPro() {
     userId: currentUser.id,
     customerEmail: currentUser.email,
     customerPhone: currentUser.phone || "9875182659",
+    metadata: { planId: "PRO_ANNUAL" },
     onSuccess: function(verifiedOrder) {
       console.log("Payment Confirmed in <1.2s!", verifiedOrder.orderId, verifiedOrder.utrNumber);
       alert("🎉 Welcome to SumioLab Pro! Your subscription is active.");
@@ -231,45 +340,42 @@ function handleSubscribeToPro() {
 // -------------------------------------------------------------------------
 
 // STEP 3: In SumioLab Backend (Next.js App Router / Express)
-// File: /app/api/webhooks/sumiopay/route.ts (or /api/webhooks/sumiopay.js)
+// File: /app/api/webhooks/sumiopay/route.ts
 
 import crypto from 'crypto';
 
 export async function POST(req) {
-  const signature = req.headers.get('x-sumiopay-signature');
+  const signature = req.headers.get('x-sumiopay-signature') || '';
+  const timestamp = req.headers.get('x-sumiopay-timestamp') || '';
   const payloadText = await req.text();
   const secret = "${webhookSecret}";
 
-  // Cryptographic HMAC-SHA256 verification prevents spoofing
+  // Cryptographic HMAC-SHA256 verification over "\${timestamp}.\${rawBody}"
   const expectedSignature = crypto
     .createHmac('sha256', secret)
-    .update(payloadText)
+    .update(\`\${timestamp}.\${payloadText}\`)
     .digest('hex');
 
-  if (signature !== expectedSignature) {
+  if (!crypto.timingSafeEqual(Buffer.from(signature, 'utf8'), Buffer.from(expectedSignature, 'utf8'))) {
     return new Response('Unauthorized Webhook Signature', { status: 401 });
   }
 
-  const { event, data } = JSON.parse(payloadText);
+  const event = JSON.parse(payloadText);
 
-  if (event === 'payment.success') {
-    const { orderId, userId, amount, utrNumber } = data;
+  if (event.type === 'payment.succeeded') {
+    const { orderId, userId, exactAmount, utr, metadata } = event.data;
     
     // Automatically activate user's subscription in SumioLab DB:
     // await db.users.updateOne(
     //   { _id: userId },
-    //   { $set: { isPro: true, planTier: 'PRO', proExpiresAt: new Date(Date.now() + 365*24*60*60*1000) } }
+    //   { $set: { isPro: true, planTier: metadata?.planId || 'PRO', proExpiresAt: new Date(Date.now() + 365*24*60*60*1000) } }
     // );
 
-    console.log(\`✅ SumioLab Pro activated for user \${userId} (UTR: \${utrNumber})\`);
+    console.log(\`✅ SumioLab Pro activated for user \${userId} (Order: \${orderId}, UTR: \${utr})\`);
   }
 
   return new Response(JSON.stringify({ received: true }), { status: 200 });
-}
-
-// STEP 4: Automated Tax Invoice Email
-// SumioPay automatically sends a branded payment receipt and invoice
-// from contact@sumiotech.in directly to the customer's email!`,
+}`,
 
     link: `// =======================================================
 // Hosted Direct Payment Link / URL Integration
@@ -381,27 +487,30 @@ const express = require('express');
 const crypto = require('crypto');
 const app = express();
 
-app.post('/api/webhook', express.json(), (req, res) => {
-  const signature = req.headers['x-sumiopay-signature'];
+// Use express.raw so signature matches exact raw request bytes
+app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const signature = req.headers['x-sumiopay-signature'] || '';
+  const timestamp = req.headers['x-sumiopay-timestamp'] || '';
+  const rawBody = req.body.toString('utf8');
   const secret = "${webhookSecret}";
 
-  // Verify HMAC-SHA256 signature
+  // Verify HMAC-SHA256 signature over "\${timestamp}.\${rawBody}"
   const expected = crypto.createHmac('sha256', secret)
-    .update(JSON.stringify(req.body))
+    .update(\`\${timestamp}.\${rawBody}\`)
     .digest('hex');
 
-  if (signature !== expected) {
+  if (!crypto.timingSafeEqual(Buffer.from(signature, 'utf8'), Buffer.from(expected, 'utf8'))) {
     return res.status(401).send('Invalid signature');
   }
 
-  const { event, data } = req.body;
-  if (event === 'payment.success') {
-    const { orderId, appName, userId, amount, utrNumber } = data;
-    // Auto-mark order as PAID and dispatch products!
-    console.log(\`Verified payment ₹\${amount} for user \${userId} (UTR: \${utrNumber})\`);
+  const { type, data } = JSON.parse(rawBody);
+  if (type === 'payment.succeeded') {
+    const { orderId, userId, exactAmount, utr, metadata } = data;
+    // Auto-mark order as PAID and unlock plan in your SaaS DB!
+    console.log(\`Verified payment ₹\${exactAmount} for user \${userId} (UTR: \${utr})\`, metadata);
   }
 
-  res.status(200).send('Webhook processed');
+  res.status(200).json({ received: true });
 });`,
 
     php: `<?php
@@ -409,12 +518,13 @@ app.post('/api/webhook', express.json(), (req, res) => {
 // 3. PHP / Laravel / Custom eCommerce Webhook
 // ==========================================
 
-// A. Verify incoming HMAC-SHA256 signature from SumioPay
+// Verify incoming HMAC-SHA256 signature from SumioPay
 $signature = $_SERVER['HTTP_X_SUMIOPAY_SIGNATURE'] ?? '';
-$payload = file_get_contents('php://input');
-$secret = "${webhookSecret}";
+$timestamp = $_SERVER['HTTP_X_SUMIOPAY_TIMESTAMP'] ?? '';
+$payload   = file_get_contents('php://input');
+$secret    = "${webhookSecret}";
 
-$expectedSignature = hash_hmac('sha256', $payload, $secret);
+$expectedSignature = hash_hmac('sha256', $timestamp . '.' . $payload, $secret);
 
 if (!hash_equals($signature, $expectedSignature)) {
     http_response_code(401);
@@ -423,14 +533,13 @@ if (!hash_equals($signature, $expectedSignature)) {
 
 $event = json_decode($payload, true);
 
-if ($event['event'] === 'payment.success') {
+if (($event['type'] ?? '') === 'payment.succeeded') {
     $orderId = $event['data']['orderId'];
-    $utr = $event['data']['utrNumber'];
-    $amount = $event['data']['amount'];
+    $utr = $event['data']['utr'];
+    $amount = $event['data']['exactAmount'];
 
     // Update your MySQL/PostgreSQL database:
-    // UPDATE orders SET status = 'PAID', utr = '$utr' WHERE order_id = '$orderId';
-    // Fulfill customer order automatically!
+    // UPDATE subscriptions SET status = 'ACTIVE', utr = '$utr' WHERE order_id = '$orderId';
 }
 
 http_response_code(200);
@@ -438,7 +547,7 @@ echo json_encode(['status' => 'acknowledged']);
 ?>`,
 
     python: `# 4. Python FastAPI / Flask Webhook Verification
-import hmac, hashlib, json
+import hmac, hashlib, json, time
 from fastapi import FastAPI, Request, HTTPException
 
 app = FastAPI()
@@ -447,21 +556,25 @@ WEBHOOK_SECRET = "${webhookSecret}"
 @app.post("/api/webhook")
 async def verify_payment(request: Request):
     body = await request.body()
-    signature = request.headers.get("x-sumiopay-signature")
+    signature = request.headers.get("x-sumiopay-signature") or ""
+    timestamp = request.headers.get("x-sumiopay-timestamp") or "0"
     
+    if abs(time.time() - int(timestamp)) > 300:
+        raise HTTPException(status_code=401, detail="Webhook timestamp expired")
+
     expected = hmac.new(
         WEBHOOK_SECRET.encode(),
-        body,
+        f"{timestamp}.{body.decode('utf-8')}".encode(),
         hashlib.sha256
     ).hexdigest()
     
-    if not hmac.compare_digest(signature or "", expected):
+    if not hmac.compare_digest(signature, expected):
         raise HTTPException(status_code=401, detail="Invalid signature")
         
     payload = json.loads(body)
-    data = payload.get("data", {})
-    # Upgrade customer account in Python DB
-    print(f"Verified payment {data.get('orderId')} with UTR {data.get('utrNumber')}")
+    if payload.get("type") == "payment.succeeded":
+        data = payload.get("data", {})
+        print(f"Verified payment {data.get('orderId')} with UTR {data.get('utr')}")
     return {"status": "success"}`,
 
     curl: `# 5. Create Payment Order via REST API
@@ -803,6 +916,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
 
           <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
             {[
+              { id: 'saas', label: '🏢 SaaS SuperAdmin Pattern' },
               { id: 'api-tester', label: '⚡ Live API Tester' },
               { id: 'sumiolab', label: '⭐ SumioLab (Flagship)' },
               { id: 'link', label: 'Direct Payment Link (URL)' },
@@ -1072,6 +1186,8 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
         userId="enterprise_demo_usr"
         planName="SumioLab Pro Tier"
         baseAmount={299}
+        apiUrl={API_BASE}
+        apiKey={liveApiKey}
         onSuccess={(data) => {
           alert(`Test Payment Confirmed! Order: ${data.orderId}, Amount: ₹${data.amount}`);
           setTestModalOpen(false);

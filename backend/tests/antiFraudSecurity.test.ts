@@ -58,6 +58,19 @@ describe('Anti-Fraud & Security Architecture', () => {
     });
   });
 
+  test('verifies timestamp-prefixed HMAC-SHA256 webhook signatures', () => {
+    const timestamp = 1764175200;
+    const timestampedSig = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(`${timestamp}.${samplePayload}`)
+      .digest('hex');
+
+    assert.equal(Webhooks.verifySignature(samplePayload, timestampedSig, webhookSecret, timestamp), true);
+    assert.throws(() => {
+      Webhooks.verifySignature(samplePayload, timestampedSig, webhookSecret, timestamp + 1);
+    });
+  });
+
   test('detects and defends against duplicate UTR replay attacks', () => {
     const processedUTRs = new Set<string>();
     const incomingUTR = '432198765432';

@@ -111,21 +111,30 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       upiIntentUrl: initiation.upiIntentUrl || '',
       expiresAt: initiation.expiresAt,
       callbackWebhookUrl: callbackWebhookUrl || merchant.webhookUrl || '',
+      metadata: metadata && typeof metadata === 'object' ? metadata : {},
     });
 
     await order.save();
+
+    const frontendBase = (process.env.PUBLIC_URL || 'https://sumiopay.sumiotech.in').replace(/\/+$/, '');
+    const hostedCheckoutUrl = `${frontendBase}/pay/${order.orderId}`;
 
     res.status(201).json({
       success: true,
       data: {
         orderId: order.orderId,
+        appName: order.appName,
+        baseAmount: order.baseAmount,
+        exactAmount: order.exactAmount,
         amountInPaise: finalPaise,
         exactAmountInPaise: initiation.exactAmountInPaise,
         currency: 'INR',
         upiId: merchant.upiId,
         merchantName: merchant.upiName || merchant.businessName,
         upiIntentUrl: order.upiIntentUrl,
-        checkoutUrl: initiation.checkoutUrl,
+        checkoutUrl: initiation.checkoutUrl || hostedCheckoutUrl,
+        hostedCheckoutUrl,
+        metadata: order.metadata || {},
         status: order.status,
         expiresAt: order.expiresAt,
       },
@@ -138,11 +147,18 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
 // GET /api/v1/payments/orders/:id — Retrieve Order
 router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => {
   try {
-    const order = await Order.findOne({ orderId: req.params.id });
+    const order = await Order.findOne({ orderId: req.params.id }).populate('merchantId', 'businessName name upiId upiName');
     if (!order) {
       res.status(404).json({ success: false, message: 'Payment order not found' });
       return;
     }
+
+    if (order.status === 'PENDING' && new Date() > order.expiresAt) {
+      order.status = 'EXPIRED';
+      await order.save();
+    }
+
+    const merchantObj: any = order.merchantId || {};
 
     res.status(200).json({
       success: true,
@@ -154,9 +170,13 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
         amountInPaise: Math.round(order.baseAmount * 100),
         exactAmountInPaise: Math.round(order.exactAmount * 100),
         currency: 'INR',
+        upiId: merchantObj.upiId || '',
+        merchantName: merchantObj.upiName || merchantObj.businessName || 'Merchant',
         status: order.status,
+        utr: order.utrNumber,
         utrNumber: order.utrNumber,
         upiIntentUrl: order.upiIntentUrl,
+        metadata: order.metadata || {},
         expiresAt: order.expiresAt,
         paidAt: order.paidAt,
         createdAt: order.createdAt,
@@ -170,7 +190,7 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
 // GET /api/v1/payments/orders/:id/status — Fast status check for frontends
 router.get('/orders/:id/status', async (req: Request, res: Response): Promise<void> => {
   try {
-    const order = await Order.findOne({ orderId: req.params.id }).select('orderId status exactAmount utrNumber paidAt expiresAt');
+    const order = await Order.findOne({ orderId: req.params.id }).select('orderId status exactAmount utrNumber paidAt expiresAt metadata');
     if (!order) {
       res.status(404).json({ success: false, message: 'Order not found' });
       return;
@@ -188,7 +208,10 @@ router.get('/orders/:id/status', async (req: Request, res: Response): Promise<vo
         orderId: order.orderId,
         status: order.status,
         amount: order.exactAmount,
+        exactAmount: order.exactAmount,
         utr: order.utrNumber,
+        utrNumber: order.utrNumber,
+        metadata: order.metadata || {},
         paidAt: order.paidAt,
       },
     });

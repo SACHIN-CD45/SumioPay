@@ -20,6 +20,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       customerEmail = '',
       callbackWebhookUrl,
       isTest = false,
+      metadata = {},
     } = req.body;
 
     const numBase = parseFloat(baseAmount);
@@ -64,9 +65,13 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       upiIntentUrl,
       expiresAt,
       callbackWebhookUrl: callbackWebhookUrl || merchant.webhookUrl || '',
+      metadata: metadata && typeof metadata === 'object' ? metadata : {},
     });
 
     await order.save();
+
+    const frontendBase = (process.env.PUBLIC_URL || 'https://sumiopay.sumiotech.in').replace(/\/+$/, '');
+    const hostedCheckoutUrl = `${frontendBase}/pay/${order.orderId}`;
 
     res.status(201).json({
       success: true,
@@ -80,6 +85,8 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
         upiId: merchant.upiId,
         merchantName: merchant.upiName,
         upiIntentUrl: order.upiIntentUrl,
+        hostedCheckoutUrl,
+        metadata: order.metadata || {},
         status: order.status,
         expiresAt: order.expiresAt,
         ttlSeconds: config.orderTtlMinutes * 60,
@@ -121,7 +128,9 @@ export const getOrderStatus = async (req: Request, res: Response) => {
         isTest: order.isTest || false,
         merchantName: merchantObj.businessName || merchantObj.name || 'Merchant',
         upiId: merchantObj.upiId || '',
+        utr: order.utrNumber,
         utrNumber: order.utrNumber,
+        metadata: order.metadata || {},
         paidAt: order.paidAt,
         expiresAt: order.expiresAt,
       },
@@ -233,10 +242,16 @@ export const simulatePayment = async (req: AuthenticatedRequest, res: Response) 
         {
           orderId: order.orderId,
           appName: order.appName,
+          userId: order.customerUserId,
           customerUserId: order.customerUserId,
+          baseAmount: order.baseAmount,
+          exactAmount: order.exactAmount,
           amount: order.exactAmount,
+          amountInPaise: Math.round(order.exactAmount * 100),
+          utr: order.utrNumber,
           utrNumber: order.utrNumber,
           status: 'PAID',
+          metadata: order.metadata || {},
           paidAt: order.paidAt,
         }
       );
