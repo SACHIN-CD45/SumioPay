@@ -60,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     {
       title: 'INFRASTRUCTURE & COMPANION',
       items: [
-        { label: 'Listener Phones', to: '/devices', icon: Smartphone, badge: 'APK v2.5', badgeColor: 'bg-indigo-100 text-indigo-700' },
+        { label: 'Listener Phones', to: '/devices', icon: Smartphone, badge: 'APK v2.6', badgeColor: 'bg-indigo-100 text-indigo-700' },
       ],
     },
     {

@@ -75,20 +75,22 @@ echo "[6/7] Aligning APK (4-byte alignment with zipalign)..."
 "${BUILD_TOOLS}/zipalign" -v -p 4 "${BUILD_DIR}/unaligned.apk" "${BUILD_DIR}/aligned.apk"
 
 echo "[7/7] Cryptographically signing APK (v1, v2, v3 schemes)..."
-KEYSTORE_PATH="${BUILD_DIR}/release.keystore"
-rm -f "${KEYSTORE_PATH}"
-"${KEYTOOL}" -genkeypair -v \
-  -keystore "${KEYSTORE_PATH}" \
-  -storepass sumiopay123 \
-  -alias sumiopay \
-  -keypass sumiopay123 \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000 \
-  -dname "CN=SumioPay, OU=Fintech, O=SumioTech, L=New Delhi, ST=Delhi, C=IN"
+KEYSTORE_PATH="${SCRIPT_DIR}/sumiopay-release.keystore"
+if [ ! -f "${KEYSTORE_PATH}" ]; then
+  "${KEYTOOL}" -genkeypair -v \
+    -keystore "${KEYSTORE_PATH}" \
+    -storepass sumiopay123 \
+    -alias sumiopay \
+    -keypass sumiopay123 \
+    -keyalg RSA \
+    -keysize 2048 \
+    -validity 10000 \
+    -dname "CN=SumioPay, OU=Fintech, O=SumioTech, L=New Delhi, ST=Delhi, C=IN"
+fi
 
-FINAL_APK="${SCRIPT_DIR}/SumioPayListener-v2.4.apk"
+FINAL_APK="${SCRIPT_DIR}/SumioPayListener-v2.6.apk"
 FINAL_APK_V25="${SCRIPT_DIR}/SumioPayListener-v2.5.apk"
+FINAL_APK_V24="${SCRIPT_DIR}/SumioPayListener-v2.4.apk"
 "${BUILD_TOOLS}/apksigner" sign \
   --ks "${KEYSTORE_PATH}" \
   --ks-pass pass:sumiopay123 \
@@ -101,6 +103,7 @@ FINAL_APK_V25="${SCRIPT_DIR}/SumioPayListener-v2.5.apk"
   "${BUILD_DIR}/aligned.apk"
 
 cp -f "${FINAL_APK}" "${FINAL_APK_V25}"
+cp -f "${FINAL_APK}" "${FINAL_APK_V24}"
 
 echo "Verifying APK integrity..."
 "${BUILD_TOOLS}/apksigner" verify -v "${FINAL_APK}"
@@ -108,15 +111,14 @@ echo "Verifying APK integrity..."
 # Distribute final APK to backend and frontend download paths
 echo "Distributing APK to download endpoints..."
 mkdir -p "${ROOT_DIR}/backend/public/downloads" "${ROOT_DIR}/frontend/public/downloads" "${ROOT_DIR}/frontend/dist/downloads"
-cp -f "${FINAL_APK}" "${ROOT_DIR}/backend/public/downloads/SumioPayListener-v2.4.apk"
-cp -f "${FINAL_APK}" "${ROOT_DIR}/frontend/public/downloads/SumioPayListener-v2.4.apk"
-cp -f "${FINAL_APK}" "${ROOT_DIR}/frontend/dist/downloads/SumioPayListener-v2.4.apk"
-cp -f "${FINAL_APK}" "${ROOT_DIR}/backend/public/downloads/SumioPayListener-v2.5.apk"
-cp -f "${FINAL_APK}" "${ROOT_DIR}/frontend/public/downloads/SumioPayListener-v2.5.apk"
-cp -f "${FINAL_APK}" "${ROOT_DIR}/frontend/dist/downloads/SumioPayListener-v2.5.apk"
+for VER in v2.4 v2.5 v2.6; do
+  cp -f "${FINAL_APK}" "${ROOT_DIR}/backend/public/downloads/SumioPayListener-${VER}.apk"
+  cp -f "${FINAL_APK}" "${ROOT_DIR}/frontend/public/downloads/SumioPayListener-${VER}.apk"
+  cp -f "${FINAL_APK}" "${ROOT_DIR}/frontend/dist/downloads/SumioPayListener-${VER}.apk"
+done
 
 echo "=========================================================="
-echo "  SUCCESS: SumioPayListener-v2.5.apk (and v2.4) compiled & signed!"
-echo "  Location: ${FINAL_APK_V25}"
-echo "  Size: $(du -h "${FINAL_APK_V25}" | awk '{print $1}')"
+echo "  SUCCESS: SumioPayListener-v2.6.apk (and v2.5/v2.4 mirrors) compiled & signed!"
+echo "  Location: ${FINAL_APK}"
+echo "  Size: $(du -h "${FINAL_APK}" | awk '{print $1}')"
 echo "=========================================================="

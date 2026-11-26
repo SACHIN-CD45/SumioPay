@@ -35,10 +35,10 @@ export const DevicesPage: React.FC = () => {
   const apkDownloadUrl =
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:8090/api/public/download-apk'
-      : 'https://apipay.sumiotech.in/api/public/download-apk';
+      ? 'http://localhost:8090/api/public/download-apk?v=2.6.0'
+      : 'https://apipay.sumiotech.in/api/public/download-apk?v=2.6.0';
 
-  const apkDirectMirrorUrl = '/downloads/SumioPayListener-v2.5.apk';
+  const apkDirectMirrorUrl = '/downloads/SumioPayListener-v2.6.apk?v=2.6.0';
 
   const fetchDevices = async () => {
     try {
@@ -138,15 +138,15 @@ export const DevicesPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <a
                 href={apkDownloadUrl}
-                download="SumioPayListener-v2.5.apk"
+                download="SumioPayListener-v2.6.apk"
                 className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg transition"
               >
                 <Download className="w-4 h-4" />
-                <span>Download SumioPayListener.apk (v2.5)</span>
+                <span>Download SumioPayListener.apk (v2.6)</span>
               </a>
               <a
                 href={apkDirectMirrorUrl}
-                download="SumioPayListener-v2.5.apk"
+                download="SumioPayListener-v2.6.apk"
                 className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 font-bold text-xs flex items-center gap-2 border border-white/20 transition"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
