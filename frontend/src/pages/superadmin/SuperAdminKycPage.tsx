@@ -48,7 +48,9 @@ export const SuperAdminKycPage: React.FC = () => {
       });
       if (res.data.success) {
         setKycList((prev) =>
-          prev.map((k) => (k._id === orgId ? { ...k, kycStatus: 'VERIFIED' } : k))
+          prev.map((k) =>
+            k._id === orgId ? { ...k, kycStatus: 'VERIFIED', kycRejectionReason: '' } : k
+          )
         );
       }
     } catch (err) {

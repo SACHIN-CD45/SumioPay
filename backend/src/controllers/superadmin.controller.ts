@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { SuperAdmin } from '../models/superadmin.model';
 import { Merchant } from '../models/merchant.model';
 import { Order } from '../models/order.model';
@@ -14,12 +15,14 @@ import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { WebhookLog } from '../models/webhookLog.model';
 import { config } from '../config';
 import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator';
+import { dispatchMerchantWebhook } from '../utils/hmacSigner';
 import {
   PLATFORM_SUBSCRIPTION_METADATA_TYPE,
   getSubscriptionPlanCatalog,
   resolvePlatformCollectorMerchant,
   computeTrialPeriodEnd,
   computeExtendedPeriodEnd,
+  activatePlatformSubscriptionFromOrder,
 } from '../services/subscriptionActivation.service';
 
 // SuperAdmin Login
@@ -326,6 +329,12 @@ export const updateKycStatus = async (req: Request, res: Response): Promise<void
     const { orgId } = req.params;
     const { kycStatus, kycRejectionReason } = req.body;
 
+    const allowedStatuses = ['NOT_SUBMITTED', 'SUBMITTED', 'UNDER_REVIEW', 'VERIFIED', 'REJECTED'];
+    if (!allowedStatuses.includes(kycStatus)) {
+      res.status(400).json({ success: false, message: 'Invalid KYC status value' });
+      return;
+    }
+
     const org = await Organization.findById(orgId);
     if (!org) {
       res.status(404).json({ success: false, message: 'Organization not found' });
@@ -333,16 +342,20 @@ export const updateKycStatus = async (req: Request, res: Response): Promise<void
     }
 
     org.kycStatus = kycStatus;
-    if (kycRejectionReason) org.kycRejectionReason = kycRejectionReason;
+    if (kycStatus === 'VERIFIED') {
+      org.kycRejectionReason = '';
+    } else if (kycRejectionReason !== undefined) {
+      org.kycRejectionReason = String(kycRejectionReason).trim();
+    }
     await org.save();
 
     await AuditLog.create({
       actorType: 'SUPERADMIN',
-      actorEmail: (req as any).superAdmin?.email || 'admin@sumiopay.internal',
+      actorEmail: (req as any).superAdmin?.email || 'superadmin@sumiotech.in',
       action: 'KYC_STATUS_UPDATED',
       resourceType: 'ORGANIZATION',
       resourceId: orgId,
-      newState: { kycStatus, kycRejectionReason },
+      newState: { kycStatus, kycRejectionReason: org.kycRejectionReason },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -413,15 +426,47 @@ export const listAuditLogs = async (_req: Request, res: Response): Promise<void>
 // Provider & System Health
 export const getSystemHealth = async (_req: Request, res: Response): Promise<void> => {
   try {
+    const dbState = mongoose.connection.readyState;
+    const mongoConnected = dbState === 1;
+    let dbLatencyMs: number | null = null;
+    if (mongoConnected && mongoose.connection.db) {
+      const start = Date.now();
+      await mongoose.connection.db.admin().ping();
+      dbLatencyMs = Date.now() - start;
+    }
+
+    const [activeMerchants, onlineDevicesCount] = await Promise.all([
+      Merchant.countDocuments({ isActive: true }),
+      Device.countDocuments({ lastPingAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) } }),
+    ]);
+
     res.status(200).json({
       success: true,
       data: {
+        version: 'v2.6 Enterprise',
         uptime: process.uptime(),
         memoryUsage: process.memoryUsage(),
+        mongoConnected,
+        mongoState: dbState,
+        dbLatencyMs,
+        activeMerchants,
+        onlineDevicesCount,
         providers: [
-          { name: 'UPI Direct Engine', status: 'HEALTHY', latencyMs: 12 },
-          { name: 'Standard Gateway Adapter (Cashfree/Razorpay)', status: 'HEALTHY', latencyMs: 45 },
-          { name: 'Bank Statement Reconciler', status: 'READY', latencyMs: 8 },
+          {
+            name: 'MongoDB Primary Ledger',
+            status: mongoConnected ? 'HEALTHY' : 'DEGRADED',
+            latencyMs: dbLatencyMs ?? 0,
+          },
+          {
+            name: 'UPI Intent & Paise Allocator',
+            status: 'HEALTHY',
+            latencyMs: dbLatencyMs ?? 0,
+          },
+          {
+            name: 'Android Listener Ingestion Engine',
+            status: onlineDevicesCount > 0 ? 'HEALTHY' : 'IDLE',
+            latencyMs: dbLatencyMs ?? 0,
+          },
         ],
         timestamp: new Date().toISOString(),
       },
@@ -1109,6 +1154,163 @@ export const deleteSubscriptionBill = async (req: Request, res: Response): Promi
       success: true,
       message: `Invoice ${invoiceId} voided & removed`,
       data: sub,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Force-revoke / disconnect an Android Listener device (SuperAdmin emergency control)
+export const revokeDevice = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const deviceId = String(req.params.deviceId || '');
+    if (!mongoose.Types.ObjectId.isValid(deviceId)) {
+      res.status(400).json({ success: false, message: 'Invalid device ID' });
+      return;
+    }
+
+    const device = await Device.findById(deviceId);
+    if (!device) {
+      res.status(404).json({ success: false, message: 'Device not found' });
+      return;
+    }
+
+    await Device.deleteOne({ _id: device._id });
+
+    await AuditLog.create({
+      actorType: 'SUPERADMIN',
+      actorEmail: (req as any).superAdmin?.email || 'superadmin@sumiotech.in',
+      merchantId: device.merchantId,
+      action: 'DEVICE_REVOKED_BY_SUPERADMIN',
+      resourceType: 'DEVICE',
+      resourceId: deviceId,
+      previousState: {
+        deviceName: device.deviceName,
+        deviceModel: device.deviceModel,
+        androidVersion: device.androidVersion,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    }).catch(() => {});
+
+    res.status(200).json({
+      success: true,
+      message: `Device ${device.deviceName} revoked and disconnected`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Resolve or refund an Unmapped / Orphaned Bank Payment, optionally linking to a pending Order
+export const resolveUnmappedPayment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const unmappedId = String(req.params.unmappedId || '');
+    const { status, resolvedOrderId, notes } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(unmappedId)) {
+      res.status(400).json({ success: false, message: 'Invalid unmapped payment ID' });
+      return;
+    }
+
+    const targetStatus: 'RESOLVED' | 'REFUNDED' =
+      status === 'REFUNDED' ? 'REFUNDED' : 'RESOLVED';
+
+    const unmapped = await UnmappedPayment.findById(unmappedId);
+    if (!unmapped) {
+      res.status(404).json({ success: false, message: 'Unmapped payment record not found' });
+      return;
+    }
+
+    let linkedOrder: any = null;
+    const cleanOrderId = resolvedOrderId ? String(resolvedOrderId).trim() : '';
+
+    if (cleanOrderId && targetStatus === 'RESOLVED') {
+      linkedOrder = await Order.findOne({ orderId: cleanOrderId });
+      if (!linkedOrder) {
+        res.status(404).json({ success: false, message: `Order ${cleanOrderId} not found` });
+        return;
+      }
+
+      if (linkedOrder.merchantId.toString() !== unmapped.merchantId.toString()) {
+        res.status(400).json({
+          success: false,
+          message: 'Order belongs to a different merchant than the unmapped bank credit',
+        });
+        return;
+      }
+
+      if (linkedOrder.status !== 'PAID') {
+        linkedOrder.status = 'PAID';
+        linkedOrder.utrNumber = linkedOrder.utrNumber || unmapped.utrNumber || '';
+        linkedOrder.senderName = linkedOrder.senderName || unmapped.senderName || '';
+        linkedOrder.bankAppName = linkedOrder.bankAppName || unmapped.bankAppName || '';
+        linkedOrder.paidAt = linkedOrder.paidAt || new Date();
+        await linkedOrder.save();
+
+        const merchant = await Merchant.findByIdAndUpdate(
+          linkedOrder.merchantId,
+          { $inc: { totalVolume: linkedOrder.exactAmount, totalTransactions: 1 } },
+          { new: true }
+        );
+
+        await activatePlatformSubscriptionFromOrder(linkedOrder);
+
+        const targetWebhookUrl = linkedOrder.callbackWebhookUrl || merchant?.webhookUrl;
+        if (targetWebhookUrl && merchant) {
+          await dispatchMerchantWebhook(
+            linkedOrder.merchantId,
+            linkedOrder.orderId,
+            targetWebhookUrl,
+            merchant.webhookSecret,
+            {
+              orderId: linkedOrder.orderId,
+              status: 'PAID',
+              amount: linkedOrder.exactAmount,
+              utrNumber: linkedOrder.utrNumber,
+              senderName: linkedOrder.senderName,
+              bankAppName: linkedOrder.bankAppName,
+              paidAt: linkedOrder.paidAt,
+              reconciledBy: 'SUPERADMIN',
+            },
+            'payment.succeeded'
+          ).catch(() => {});
+        }
+      }
+    }
+
+    unmapped.status = targetStatus;
+    if (cleanOrderId) unmapped.resolvedOrderId = cleanOrderId;
+    if (notes !== undefined) unmapped.notes = String(notes).trim();
+    await unmapped.save();
+
+    await AuditLog.create({
+      actorType: 'SUPERADMIN',
+      actorEmail: (req as any).superAdmin?.email || 'superadmin@sumiotech.in',
+      merchantId: unmapped.merchantId,
+      action: 'UNMAPPED_PAYMENT_RESOLVED',
+      resourceType: 'RECONCILIATION',
+      resourceId: unmappedId,
+      newState: {
+        status: unmapped.status,
+        resolvedOrderId: unmapped.resolvedOrderId,
+        notes: unmapped.notes,
+        amount: unmapped.amount,
+        utrNumber: unmapped.utrNumber,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    }).catch(() => {});
+
+    res.status(200).json({
+      success: true,
+      message: cleanOrderId
+        ? `Unmapped payment ${targetStatus.toLowerCase()} and linked to ${cleanOrderId}`
+        : `Unmapped payment marked ${targetStatus}`,
+      data: {
+        unmapped,
+        linkedOrder,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

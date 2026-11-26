@@ -21,7 +21,9 @@ import {
   getPlatformSettings,
   updatePlatformSettings,
   listUnmappedPayments,
+  resolveUnmappedPayment,
   listWebhookLogs,
+  revokeDevice,
 } from '../controllers/superadmin.controller';
 import { requireSuperAdminAuth } from '../middleware/auth.middleware';
 
@@ -40,9 +42,11 @@ router.patch('/merchants/:merchantId/toggle-status', requireSuperAdminAuth, togg
 // Global Orders & Devices
 router.get('/orders', requireSuperAdminAuth, listAllOrders);
 router.get('/devices', requireSuperAdminAuth, listAllDevices);
+router.delete('/devices/:deviceId', requireSuperAdminAuth, revokeDevice);
 
 // Reconciliation Engine & Unmapped Payments
 router.get('/unmapped-payments', requireSuperAdminAuth, listUnmappedPayments);
+router.patch('/unmapped-payments/:unmappedId/resolve', requireSuperAdminAuth, resolveUnmappedPayment);
 
 // Global Webhook Delivery Logs
 router.get('/webhook-logs', requireSuperAdminAuth, listWebhookLogs);

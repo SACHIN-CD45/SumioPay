@@ -98,9 +98,9 @@ export const SuperAdminRiskSecurityPage: React.FC = () => {
           </span>
         </div>
         <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
-          <span className="text-slate-400 font-sans">Anti-Replay Filter:</span>
-          <span className="text-amber-400 font-bold text-base">
-            100% ARMED
+          <span className="text-slate-400 font-sans">Resolved Events:</span>
+          <span className="text-emerald-400 font-bold text-base">
+            {alerts.filter((a) => a.isResolved).length}
           </span>
         </div>
       </div>
@@ -160,7 +160,7 @@ export const SuperAdminRiskSecurityPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-4 px-4 text-slate-300">
-                      {a.ipAddress || '127.0.0.1'}
+                      {a.ipAddress || '—'}
                     </td>
                     <td className="py-4 px-4 font-sans text-slate-300 max-w-md">
                       {a.description}

@@ -225,11 +225,23 @@ export const SuperAdminTransactionsPage: React.FC = () => {
               </div>
               <div className="flex justify-between py-1 border-b border-slate-900">
                 <span className="text-slate-500">Customer User ID:</span>
-                <span className="text-slate-300">{selectedOrder.customerUserId}</span>
+                <span className="text-slate-300">{selectedOrder.customerUserId || '—'}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-500">Payer Sender Name:</span>
+                <span className="text-slate-300">{selectedOrder.senderName || '—'}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-500">Receiving UPI / App:</span>
+                <span className="text-slate-300">{selectedOrder.bankAppName || '—'}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500">Paid Timestamp:</span>
-                <span className="text-slate-300">{selectedOrder.paidAt ? new Date(selectedOrder.paidAt).toISOString() : 'Pending Confirmation'}</span>
+                <span className="text-slate-300">
+                  {selectedOrder.paidAt
+                    ? new Date(selectedOrder.paidAt).toLocaleString('en-IN')
+                    : 'Pending Confirmation'}
+                </span>
               </div>
             </div>
 

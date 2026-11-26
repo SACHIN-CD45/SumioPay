@@ -93,7 +93,7 @@ export const SuperAdminAuditLogsPage: React.FC = () => {
                 <th className="py-3.5 px-4">Target Resource</th>
                 <th className="py-3.5 px-4">Origin IP Address</th>
                 <th className="py-3.5 px-4">Audit Metadata</th>
-                <th className="py-3.5 px-5 text-right">Timestamp (UTC)</th>
+                <th className="py-3.5 px-5 text-right">Timestamp (IST)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
@@ -107,7 +107,7 @@ export const SuperAdminAuditLogsPage: React.FC = () => {
                 filtered.map((l) => (
                   <tr key={l._id} className="hover:bg-slate-800/30 transition">
                     <td className="py-4 px-5 font-sans">
-                      <div className="font-bold text-white text-xs">{l.actorEmail || 'admin@sumiopay.internal'}</div>
+                      <div className="font-bold text-white text-xs">{l.actorEmail || 'system@sumiotech.in'}</div>
                       <div className="text-[10px] text-amber-400/80 font-mono">{l.actorType || 'SUPERADMIN'}</div>
                     </td>
                     <td className="py-4 px-4">
@@ -119,7 +119,7 @@ export const SuperAdminAuditLogsPage: React.FC = () => {
                       {l.resourceType}
                     </td>
                     <td className="py-4 px-4 text-slate-400">
-                      {l.ipAddress || '127.0.0.1'}
+                      {l.ipAddress || '—'}
                     </td>
                     <td className="py-4 px-4 text-slate-400 max-w-xs truncate" title={JSON.stringify(l.newState || {})}>
                       {l.newState ? JSON.stringify(l.newState) : 'Privileged Operation'}

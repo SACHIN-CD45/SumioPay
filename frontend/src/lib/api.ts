@@ -135,6 +135,24 @@ adminApi.interceptors.request.use((config) => {
   return config;
 });
 
+adminApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const requestUrl = error.config?.url || '';
+    const isAuthRequest = requestUrl.includes('/login');
+    if (error.response?.status === 401 && !isAuthRequest) {
+      localStorage.removeItem('sumiopay_superadmin_token');
+      if (
+        window.location.pathname.startsWith('/superadmin') &&
+        !window.location.pathname.includes('/superadmin/login')
+      ) {
+        window.location.href = '/superadmin/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Public Unauthenticated API Client (Landing page & checkout)
 export const publicApi = axios.create({
   baseURL: `${API_BASE}/public`,
