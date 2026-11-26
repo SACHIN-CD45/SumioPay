@@ -17,6 +17,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
+  Check,
+  Radio,
 } from 'lucide-react';
 
 export const DevicesPage: React.FC = () => {
@@ -25,6 +27,17 @@ export const DevicesPage: React.FC = () => {
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const [pairingData, setPairingData] = useState<any>(null);
   const [pairLoading, setPairLoading] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+
+  // Dedicated Absolute Direct Download Endpoint
+  // Always routes to the backend stream or static asset with Content-Disposition: attachment
+  const apkDownloadUrl =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? 'http://localhost:8090/api/public/download-apk'
+      : 'https://apipay.sumiotech.in/api/public/download-apk';
+
+  const apkDirectMirrorUrl = '/downloads/SumioPayListener-v2.4.apk';
 
   const fetchDevices = async () => {
     try {
@@ -50,7 +63,7 @@ export const DevicesPage: React.FC = () => {
     try {
       setPairLoading(true);
       const res = await api.post('/device/generate-pairing-token', {
-        deviceName: `Android Phone (${new Date().toLocaleDateString()})`,
+        deviceName: `Android Phone (${new Date().toLocaleDateString('en-IN')})`,
       });
       if (res.data.success) {
         setPairingData(res.data.data);
@@ -80,10 +93,10 @@ export const DevicesPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             <Smartphone className="w-6 h-6 text-blue-600" />
-            Android Listener Phones
+            Android Telemetry &amp; Listener Devices
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Install the SumioPay Capacitor APK on an Android device to auto-intercept bank SMS & notification alerts.
+            Install the SumioPay Background Listener APK on any Android phone to auto-capture bank SMS and UPI notifications in &lt;1.2s.
           </p>
         </div>
 
@@ -91,7 +104,7 @@ export const DevicesPage: React.FC = () => {
           <button
             onClick={handleStartPairing}
             disabled={pairLoading}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             Pair New Android Device
@@ -99,6 +112,7 @@ export const DevicesPage: React.FC = () => {
           <button
             onClick={fetchDevices}
             className="p-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 transition shadow-subtle"
+            title="Refresh Devices"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -111,27 +125,35 @@ export const DevicesPage: React.FC = () => {
           <div className="lg:col-span-2 space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-bold uppercase tracking-wider border border-blue-400/30">
               <Zap className="w-3.5 h-3.5 text-blue-400" />
-              <span>Step 1: Download Companion Android APK</span>
+              <span>Step 1: Download Official Companion APK</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
               Get the SumioPay Background Listener for Your Phone
             </h2>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
-              Install this lightweight application on any Android phone (version 7.0+) that receives incoming bank credit alerts. It intercepts UPI notifications from PhonePe, GPay, Paytm, BHIM, and bank SMS in &lt;1.2 seconds with zero battery drain.
+              Install this lightweight application on any Android phone (version 7.0 to Android 16) that receives incoming bank credit alerts. It intercepts UPI notifications from PhonePe, GPay, Paytm, BHIM, and bank SMS in &lt;1.2 seconds with zero battery drain.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <a
-                href={`${API_BASE}/public/download-apk`}
+                href={apkDownloadUrl}
                 download="SumioPayListener-v2.4.apk"
                 className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg transition"
               >
                 <Download className="w-4 h-4" />
                 <span>Download SumioPayListener.apk (v2.4)</span>
               </a>
+              <a
+                href={apkDirectMirrorUrl}
+                download="SumioPayListener-v2.4.apk"
+                className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 font-bold text-xs flex items-center gap-2 border border-white/20 transition"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Direct Mirror Link</span>
+              </a>
               <button
                 onClick={handleStartPairing}
-                className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-2 border border-white/20 transition"
+                className="px-5 py-3 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 font-bold text-xs flex items-center gap-2 border border-emerald-500/40 transition"
               >
                 <QrCode className="w-4 h-4 text-emerald-400" />
                 <span>Generate Pairing QR Code</span>
@@ -142,17 +164,17 @@ export const DevicesPage: React.FC = () => {
           {/* Direct Phone Download QR Code */}
           <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-center flex flex-col items-center space-y-3">
             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-              Scan with Phone to Download APK
+              Scan with Camera to Download APK
             </span>
             <div className="p-3 bg-white rounded-xl shadow-inner inline-block">
               <QRCodeSVG
-                value={`${API_BASE}/public/download-apk`}
+                value={apkDownloadUrl}
                 size={140}
                 level="M"
               />
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">
-              Direct Phone Camera Scan
+            <span className="text-[10px] text-emerald-400 font-bold">
+              Direct Phone Camera Scan (.apk)
             </span>
           </div>
         </div>
@@ -163,7 +185,7 @@ export const DevicesPage: React.FC = () => {
             <div className="flex items-center gap-2 text-blue-400 font-bold text-[11px]">
               <span>1. Install APK</span>
             </div>
-            <p className="text-[10px] text-slate-400">Enable &quot;Install from unknown sources&quot; in Chrome/Files.</p>
+            <p className="text-[10px] text-slate-400">Enable &quot;Install from unknown sources&quot; in Chrome or Files.</p>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
@@ -177,14 +199,14 @@ export const DevicesPage: React.FC = () => {
             <div className="flex items-center gap-2 text-cyan-400 font-bold text-[11px]">
               <span>3. Battery Optimization</span>
             </div>
-            <p className="text-[10px] text-slate-400">Select &quot;Unrestricted / Don&apos;t Optimize&quot; so service never dies.</p>
+            <p className="text-[10px] text-slate-400">Select &quot;Unrestricted / Don&apos;t Optimize&quot; so background service never dies.</p>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
             <div className="flex items-center gap-2 text-purple-400 font-bold text-[11px]">
               <span>4. Scan Pairing QR</span>
             </div>
-            <p className="text-[10px] text-slate-400">Tap &quot;Pair Device&quot; on dashboard and scan with phone.</p>
+            <p className="text-[10px] text-slate-400">Click &quot;Pair New Android Device&quot; and point app camera at the QR code.</p>
           </div>
         </div>
       </div>
@@ -198,34 +220,35 @@ export const DevicesPage: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+                <div className={`p-3 rounded-2xl ${dev.status === 'ONLINE' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
                   <Smartphone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">{dev.deviceName}</h3>
-                  <p className="text-[11px] text-slate-500">{dev.deviceModel} • Android {dev.androidVersion}</p>
+                  <h3 className="font-extrabold text-slate-900 text-sm leading-tight">
+                    {dev.deviceName}
+                  </h3>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {dev.deviceModel || 'Android Phone'} • Android {dev.androidVersion || '13+'}
+                  </span>
                 </div>
               </div>
 
-              <span
-                className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 ${
-                  dev.status === 'ONLINE'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    dev.status === 'ONLINE' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                  }`}
-                />
-                {dev.status}
-              </span>
+              {dev.status === 'ONLINE' ? (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  ONLINE
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                  OFFLINE
+                </span>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 py-3 border-y border-slate-100 text-xs">
+            <div className="grid grid-cols-2 gap-2 text-xs py-2 border-y border-slate-100">
               <div>
-                <span className="text-[10px] text-slate-400 block font-medium">Battery & Power</span>
+                <span className="text-[10px] text-slate-400 block font-medium">Battery &amp; Power</span>
                 <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
                   {dev.isCharging ? (
                     <BatteryCharging className="w-4 h-4 text-emerald-600" />
@@ -238,13 +261,13 @@ export const DevicesPage: React.FC = () => {
               <div>
                 <span className="text-[10px] text-slate-400 block font-medium">Last Active Ping</span>
                 <span className="font-bold text-slate-800 block mt-0.5">
-                  {dev.lastPingAt ? new Date(dev.lastPingAt).toLocaleTimeString() : 'Never'}
+                  {dev.lastPingAt ? new Date(dev.lastPingAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'Never'}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              <span className="text-[10px] font-mono text-slate-400">ID: {dev.id.slice(-8)}</span>
+              <span className="text-[10px] font-mono text-slate-400">ID: {String(dev.id).slice(-8)}</span>
               <button
                 onClick={() => handleDeleteDevice(dev.id)}
                 className="text-xs text-rose-600 hover:text-rose-700 flex items-center gap-1 font-semibold transition"
@@ -257,15 +280,15 @@ export const DevicesPage: React.FC = () => {
         ))}
 
         {devices.length === 0 && !loading && (
-          <div className="col-span-full py-16 text-center bg-white border border-dashed border-slate-200 rounded-3xl">
+          <div className="col-span-full py-16 text-center bg-white border border-dashed border-slate-300 rounded-3xl p-6">
             <Smartphone className="w-12 h-12 text-slate-400 mx-auto mb-3" />
             <h3 className="text-base font-bold text-slate-900">No Listener Phone Paired Yet</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-              Click the button below to generate a pairing QR code and link your Android smartphone in 10 seconds.
+            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4 leading-relaxed">
+              Download and open the <span className="font-mono text-blue-600 font-bold">SumioPayListener.apk</span> on your Android phone, then click below to scan the pairing QR code.
             </p>
             <button
               onClick={handleStartPairing}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-sm transition"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition"
             >
               Pair Phone Now
             </button>
@@ -279,24 +302,24 @@ export const DevicesPage: React.FC = () => {
           <HelpCircle className="w-4 h-4 text-blue-600" />
           How the Single Android APK Listener Works
         </h3>
-        <ol className="list-decimal list-inside space-y-1.5 text-xs text-blue-950">
+        <ol className="list-decimal list-inside space-y-1.5 text-xs text-blue-950 leading-relaxed">
           <li>Install the lightweight <span className="font-mono text-blue-800 font-bold">SumioPayListener.apk</span> on any spare Android phone.</li>
-          <li>Open the app and grant <span className="font-bold">Notification Access</span> permission.</li>
-          <li>Scan the Pairing QR code or paste your Pairing Token to pair the device.</li>
-          <li>That's it! When customer payments land in PhonePe, Paytm, GPay, BHIM, or Bank SMS, payments auto-verify in 1-2 seconds.</li>
+          <li>Open the app and grant <span className="font-bold">Notification Access &amp; SMS</span> permissions.</li>
+          <li>Scan the Pairing QR code or paste your Pairing Token in the app.</li>
+          <li>That&apos;s it! When customer payments land in PhonePe, Paytm, GPay, BHIM, or Bank SMS, payments auto-verify in 1-2 seconds.</li>
         </ol>
       </div>
 
       {/* Pairing QR Code Modal */}
       {isPairingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-center space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center justify-center gap-1.5">
               <QrCode className="w-5 h-5 text-blue-600" />
               Scan QR in SumioPay APK
             </h3>
             <p className="text-xs text-slate-500">
-              Open the Android Listener app on your phone and point the camera at this QR code.
+              Open the Android Listener app on your phone and point the camera at this QR code to complete pairing.
             </p>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 inline-block shadow-subtle">
@@ -307,9 +330,22 @@ export const DevicesPage: React.FC = () => {
               />
             </div>
 
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-[11px] font-mono text-slate-800 break-all text-left">
-              <span className="text-slate-400 block text-[9px] uppercase font-bold">Pairing Token:</span>
-              {pairingData?.pairingToken}
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-[11px] font-mono text-slate-800 break-all text-left space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 block text-[9px] uppercase font-bold">Pairing Token:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(pairingData?.pairingToken || '');
+                    setCopiedToken(true);
+                    setTimeout(() => setCopiedToken(false), 2000);
+                  }}
+                  className="text-[10px] text-blue-600 hover:text-blue-700 font-bold"
+                >
+                  {copiedToken ? 'Copied!' : 'Copy Token'}
+                </button>
+              </div>
+              <div className="select-all text-slate-900 font-bold">{pairingData?.pairingToken}</div>
             </div>
 
             <button

@@ -130,6 +130,7 @@ export const createApp = (): express.Application => {
   app.use('/api/webhook', webhookRoutes);
   app.use('/api/superadmin', superadminRoutes);
   app.use('/api/public', publicRoutes);
+  app.use('/public', publicRoutes);
 
   // Central Payment Compatibility Route (Cross-app single Android listener)
   app.use('/api/central-payment', centralPaymentRoutes);
@@ -138,6 +139,7 @@ export const createApp = (): express.Application => {
   const backendPublic = path.resolve(__dirname, '../public');
   if (fs.existsSync(backendPublic)) {
     app.use(express.static(backendPublic));
+    app.use('/downloads', express.static(path.join(backendPublic, 'downloads')));
   }
 
   // Unified Single-Server Deployment: Serve built React frontend SPA if present

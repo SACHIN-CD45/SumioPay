@@ -135,17 +135,6 @@ export const registerMerchant = async (req: Request, res: Response) => {
     });
     await organization.save();
 
-    // Starter device pairing token
-    const starterDevice = new Device({
-      merchantId: merchant._id,
-      deviceName: `${merchant.businessName} Primary Listener`,
-      deviceToken: `dev_${crypto.randomBytes(18).toString('hex')}`,
-      batteryPercent: 100,
-      isCharging: true,
-      isActive: true,
-    });
-    await starterDevice.save();
-
     // Initialize Subscription
     const subscription = new Subscription({
       merchantId: merchant._id,
@@ -432,15 +421,16 @@ export const getDashboardStats = async (req: AuthenticatedRequest, res: Response
         paidAt: { $gte: startOfToday },
       }),
       Order.countDocuments({ merchantId }),
-      Device.findOne({ merchantId, isActive: true }).sort({ lastPingAt: -1 }),
+      Device.findOne({ merchantId, isPaired: true, isActive: true }).sort({ lastPingAt: -1 }),
     ]);
 
     const todayVolume = todayOrders.reduce((acc, curr) => acc + curr.exactAmount, 0);
     const todayTransactions = todayOrders.length;
 
-    const isDeviceOnline = activeDevice
-      ? Date.now() - new Date(activeDevice.lastPingAt).getTime() < 4 * 60 * 1000
-      : false;
+    const isDeviceOnline =
+      activeDevice && activeDevice.lastPingAt
+        ? Date.now() - new Date(activeDevice.lastPingAt).getTime() < 4 * 60 * 1000
+        : false;
 
     const recentOrders = await Order.find({ merchantId })
       .sort({ createdAt: -1 })

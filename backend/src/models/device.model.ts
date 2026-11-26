@@ -6,12 +6,13 @@ export interface IDevice extends Document {
   deviceName: string;
   deviceToken: string; // Live pair token for Android APK
   pairingToken?: string; // Short-lived token for initial QR pairing
+  isPaired: boolean;
   deviceModel?: string;
   androidVersion?: string;
   androidId?: string;
   batteryPercent: number;
   isCharging: boolean;
-  lastPingAt: Date;
+  lastPingAt?: Date;
   isActive: boolean;
   fcmToken?: string;
   createdAt: Date;
@@ -29,13 +30,14 @@ const DeviceSchema = new Schema<IDevice>(
       default: () => `dev_${crypto.randomBytes(20).toString('hex')}`,
     },
     pairingToken: { type: String, sparse: true },
-    deviceModel: { type: String, default: 'Android Device' },
-    androidVersion: { type: String, default: '13' },
+    isPaired: { type: Boolean, default: false },
+    deviceModel: { type: String, default: '' },
+    androidVersion: { type: String, default: '' },
     androidId: { type: String, default: '' },
     batteryPercent: { type: Number, default: 100 },
     isCharging: { type: Boolean, default: true },
-    lastPingAt: { type: Date, default: Date.now },
-    isActive: { type: Boolean, default: true },
+    lastPingAt: { type: Date },
+    isActive: { type: Boolean, default: false },
     fcmToken: { type: String, default: '' },
   },
   { timestamps: true }

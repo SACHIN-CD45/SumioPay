@@ -12,19 +12,22 @@ export const generatePairingToken = async (req: Request, res: Response): Promise
     const merchantId = (req as any).merchant?.id || (req as any).merchant?._id;
     const { deviceName = 'Android Payment Listener' } = req.body;
 
+    // Remove any stale un-paired tokens for this merchant
+    await Device.deleteMany({ merchantId, isPaired: { $ne: true } });
+
     const pairingToken = `pair_${crypto.randomBytes(16).toString('hex')}`;
     const tokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
-    // Create a provisional device record
+    // Create a provisional device record (isPaired: false, isActive: false, lastPingAt: null)
     const device = new Device({
       merchantId,
       deviceName,
       pairingToken,
       deviceToken: `dev_${crypto.randomBytes(20).toString('hex')}`,
       batteryPercent: 100,
-      isCharging: true,
-      lastPingAt: new Date(),
-      isActive: true,
+      isCharging: false,
+      isPaired: false,
+      isActive: false,
     });
 
     await device.save();
@@ -72,6 +75,8 @@ export const completePairing = async (req: Request, res: Response): Promise<void
       return;
     }
 
+    device.isPaired = true;
+    device.isActive = true;
     device.deviceModel = deviceModel || 'Android Device';
     device.androidVersion = androidVersion || '13';
     device.batteryPercent = batteryPercent ?? 100;
@@ -126,19 +131,26 @@ export const deviceHeartbeat = async (req: Request, res: Response): Promise<void
 export const listMerchantDevices = async (req: Request, res: Response): Promise<void> => {
   try {
     const merchantId = (req as any).merchant?.id || (req as any).merchant?._id;
-    const devices = await Device.find({ merchantId }).sort({ createdAt: -1 });
+
+    // Prune any legacy un-paired or phantom devices
+    await Device.deleteMany({
+      merchantId,
+      isPaired: { $ne: true },
+    });
+
+    const devices = await Device.find({ merchantId, isPaired: true }).sort({ createdAt: -1 });
 
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
 
     const formattedDevices = devices.map((d: any) => {
-      const isOnline = d.lastPingAt && d.lastPingAt > threeMinutesAgo;
+      const isOnline = d.isActive && d.lastPingAt && new Date(d.lastPingAt) > threeMinutesAgo;
       return {
         id: d._id,
         deviceName: d.deviceName,
-        deviceModel: d.deviceModel,
-        androidVersion: d.androidVersion,
-        batteryPercent: d.batteryPercent,
-        isCharging: d.isCharging,
+        deviceModel: d.deviceModel || 'Android Phone',
+        androidVersion: d.androidVersion || 'Android',
+        batteryPercent: d.batteryPercent ?? 100,
+        isCharging: !!d.isCharging,
         status: isOnline ? 'ONLINE' : 'OFFLINE',
         lastPingAt: d.lastPingAt,
         createdAt: d.createdAt,
@@ -178,6 +190,8 @@ export const downloadApk = async (_req: Request, res: Response): Promise<void> =
     const candidatePaths = [
       path.resolve(process.cwd(), 'backend/public/downloads/SumioPayListener-v2.4.apk'),
       path.resolve(process.cwd(), 'public/downloads/SumioPayListener-v2.4.apk'),
+      path.resolve(process.cwd(), 'frontend/public/downloads/SumioPayListener-v2.4.apk'),
+      path.resolve(process.cwd(), 'frontend/dist/downloads/SumioPayListener-v2.4.apk'),
       path.resolve(__dirname, '../../../android-listener-apk/SumioPayListener-v2.4.apk'),
       path.resolve(__dirname, '../../public/downloads/SumioPayListener-v2.4.apk'),
       path.resolve(process.cwd(), 'android-listener-apk/SumioPayListener-v2.4.apk'),
@@ -187,30 +201,14 @@ export const downloadApk = async (_req: Request, res: Response): Promise<void> =
     for (const p of candidatePaths) {
       if (fs.existsSync(p)) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        res.download(p, 'SumioPayListener-v2.4.apk');
+        res.setHeader('Content-Disposition', 'attachment; filename="SumioPayListener-v2.4.apk"');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.sendFile(p);
         return;
       }
     }
 
-    // If binary not present, generate placeholder release APK package
-    const fallbackDir = path.resolve(__dirname, '../../../android-listener-apk');
-    if (!fs.existsSync(fallbackDir)) {
-      fs.mkdirSync(fallbackDir, { recursive: true });
-    }
-    const fallbackFile = path.join(fallbackDir, 'SumioPayListener-v2.4.apk');
-    if (!fs.existsSync(fallbackFile)) {
-      // Standard minimal APK ZIP header for valid file transfer
-      const zipHeader = Buffer.from([
-        0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x08, 0x00, 0x08, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00, 0x41, 0x6e,
-        0x64, 0x72, 0x6f, 0x69, 0x64, 0x4d, 0x61, 0x6e, 0x69, 0x66,
-        0x65, 0x73, 0x74, 0x2e, 0x78, 0x6d, 0x6c
-      ]);
-      fs.writeFileSync(fallbackFile, zipHeader);
-    }
-
-    res.download(fallbackFile, 'SumioPayListener-v2.4.apk');
+    res.status(404).json({ success: false, message: 'SumioPayListener APK binary file not found' });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
