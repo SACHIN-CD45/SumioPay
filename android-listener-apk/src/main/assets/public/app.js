@@ -51,11 +51,13 @@
           batteryBadge.className = 'perm-status badge-success';
           batteryBadge.innerText = 'Unrestricted';
           btnBattery.className = 'btn btn-sm btn-outline';
-          btnBattery.innerText = 'Disabled';
+          btnBattery.innerText = 'Allowed';
           btnBattery.disabled = true;
         } else {
           batteryBadge.className = 'perm-status badge-warn';
           batteryBadge.innerText = 'Optimized';
+          btnBattery.className = 'btn btn-sm btn-outline';
+          btnBattery.innerText = 'Allow';
           btnBattery.disabled = false;
         }
       }
@@ -92,9 +94,13 @@
         statusDesc.innerText = 'Auto-intercepting Bank SMS & UPI Notifications 24x7.';
         deviceBadge.className = 'badge badge-connected';
         deviceBadge.innerText = 'ONLINE';
+      }
 
+      if (status.isPaired && status.deviceToken) {
         pairedInfo.classList.remove('hidden');
         deviceTokenDisplay.innerText = status.deviceToken.substring(0, 16) + '...';
+      } else if (pairedInfo) {
+        pairedInfo.classList.add('hidden');
       }
 
     } catch (e) {
@@ -189,6 +195,14 @@
     }
   };
 
+  window.unpairDevice = function() {
+    if (!confirm('Disconnect this phone from the current merchant console?')) return;
+    const bridge = getBridge();
+    if (bridge && bridge.unpairDevice) {
+      bridge.unpairDevice();
+    }
+  };
+
   window.simulateTestPayment = function() {
     const bridge = getBridge();
     if (bridge && bridge.simulateTestAlert) {
@@ -224,7 +238,7 @@
             </div>
             <div class="log-message">${item.message || item.title || ''}</div>
             <div class="log-status ${isOk ? 'log-success' : 'log-fail'}">
-              ${isOk ? '✓ Webhook Dispatched (HTTP ' + item.code + ')' : '⚠ Failed (HTTP ' + item.code + ')'}
+              ${isOk ? 'Webhook Dispatched (HTTP ' + item.code + ')' : 'Dispatch Failed (HTTP ' + item.code + ')'}
             </div>
           </div>
         `;

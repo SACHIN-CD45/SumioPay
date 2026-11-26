@@ -24,8 +24,9 @@ export interface UpiCheckoutModalProps {
   customerPhone?: string;
   customerEmail?: string;
   callbackWebhookUrl?: string;
-  apiUrl?: string; // Default: http://localhost:8090/api
+  apiUrl?: string; // Default: auto-detected origin /api
   apiKey?: string;
+  demoMode?: boolean;
   onSuccess?: (paymentData: {
     orderId: string;
     amount: number;
@@ -59,8 +60,11 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
   customerPhone,
   customerEmail,
   callbackWebhookUrl,
-  apiUrl = 'http://localhost:8090/api',
+  apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `${window.location.origin}/api`
+    : 'http://localhost:8090/api',
   apiKey,
+  demoMode = false,
   onSuccess,
 }) => {
   const [loading, setLoading] = useState<boolean>(true);
@@ -84,6 +88,29 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
     setError(null);
 
     const initOrder = async () => {
+      if (demoMode) {
+        const exactAmount = Number((baseAmount + 0.42).toFixed(2));
+        const demoId = `ORD-DEMO-${Math.floor(1000 + Math.random() * 9000)}`;
+        const upiIntentUrl = `upi://pay?pa=sumiotech@upi&pn=${encodeURIComponent('SumioTech Preview')}&am=${exactAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(demoId)}`;
+        setOrder({
+          orderId: demoId,
+          appName,
+          baseAmount,
+          paiseOffset: 0.42,
+          exactAmount,
+          currency: 'INR',
+          upiId: 'sumiotech@upi',
+          merchantName: 'SumioTech Preview',
+          upiIntentUrl,
+          status: 'PENDING',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          ttlSeconds: 900,
+        });
+        setTimeLeft(900);
+        setLoading(false);
+        return;
+      }
+
       try {
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -130,7 +157,7 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, appName, baseAmount, userId, apiUrl, apiKey]);
+  }, [isOpen, appName, baseAmount, userId, apiUrl, apiKey, demoMode]);
 
   // Countdown timer
   useEffect(() => {
@@ -149,9 +176,9 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
     return () => clearInterval(interval);
   }, [order, isPaid, timeLeft]);
 
-  // Polling loop
+  // Polling loop (skipped in interactive preview demoMode)
   useEffect(() => {
-    if (!order || isPaid || timeLeft <= 0) return;
+    if (!order || isPaid || timeLeft <= 0 || demoMode) return;
 
     let isCancelled = false;
 
@@ -208,9 +235,7 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
         {/* Top Header */}
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white text-xs shadow-sm">
-              SP
-            </div>
+            <img src="/sumiopay-icon.png" alt="SumioPay" className="w-8 h-8 rounded-xl shadow-sm object-contain" />
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                 UPI Instant Checkout
@@ -361,6 +386,25 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
+
+              {/* Interactive Preview Simulate Credit Button (demoMode only) */}
+              {demoMode && order && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const utr = `4321${Math.floor(10000000 + Math.random() * 89999999)}`;
+                    setVerifiedUtr(utr);
+                    setIsPaid(true);
+                    try {
+                      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                    } catch {}
+                  }}
+                  className="w-full mb-3 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Simulate Bank Credit (₹{order.exactAmount.toFixed(2)})</span>
+                </button>
+              )}
 
               {/* Footer Timer */}
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">

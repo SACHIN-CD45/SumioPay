@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { SuperAdmin } from '../models/superadmin.model';
 import { Merchant } from '../models/merchant.model';
@@ -12,10 +13,13 @@ import { SystemSetting } from '../models/systemSetting.model';
 import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { WebhookLog } from '../models/webhookLog.model';
 import { config } from '../config';
+import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator';
 import {
+  PLATFORM_SUBSCRIPTION_METADATA_TYPE,
   getSubscriptionPlanCatalog,
   resolvePlatformCollectorMerchant,
   computeTrialPeriodEnd,
+  computeExtendedPeriodEnd,
 } from '../services/subscriptionActivation.service';
 
 // SuperAdmin Login
@@ -468,6 +472,7 @@ export const listAllSubscriptions = async (_req: Request, res: Response): Promis
         monthlyPriceInPaise: sub?.monthlyPriceInPaise ?? 0,
         totalCollectedPaise,
         invoicesCount: sub?.invoiceHistory?.length || 0,
+        invoiceHistory: sub?.invoiceHistory || [],
         lastInvoiceUtr:
           sub?.invoiceHistory && sub.invoiceHistory.length > 0
             ? sub.invoiceHistory[sub.invoiceHistory.length - 1].utrNumber || ''
@@ -840,6 +845,241 @@ export const listWebhookLogs = async (_req: Request, res: Response): Promise<voi
     res.status(200).json({
       success: true,
       data: logs,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Create Subscription Bill (Paid Invoice + Plan Activation OR Pending SumioPay UPI Payment Link)
+export const createSubscriptionBill = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { merchantId } = req.params;
+    const {
+      mode = 'MARK_PAID',
+      planTier = 'MONTHLY',
+      amountInr,
+      durationDays = 30,
+      utrNumber = '',
+    } = req.body;
+
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      res.status(404).json({ success: false, message: 'Merchant not found' });
+      return;
+    }
+
+    const parsedAmount = Number(amountInr);
+    const parsedDays = Math.max(1, Number(durationDays) || 30);
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      res.status(400).json({ success: false, message: 'Valid non-negative amountInr is required' });
+      return;
+    }
+
+    const adminEmail = (req as any).superAdmin?.email || 'admin@sumiotech.in';
+
+    if (mode === 'GENERATE_UPI_BILL') {
+      if (parsedAmount <= 0) {
+        res.status(400).json({ success: false, message: 'UPI payment bill requires amountInr > 0' });
+        return;
+      }
+
+      const settings = await SystemSetting.findOne();
+      const collector = await resolvePlatformCollectorMerchant(settings);
+      if (!collector.configured || !collector.merchant || !collector.upiId) {
+        res.status(503).json({
+          success: false,
+          message:
+            collector.reason ||
+            'Platform Collector Merchant is not configured yet in SuperAdmin Settings.',
+        });
+        return;
+      }
+
+      const { exactAmount, paiseOffset } = await allocateUniquePaise(
+        collector.merchant._id,
+        parsedAmount
+      );
+
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
+      const orderId = `SUB-BILL-${dateStr}-${randomSuffix}`;
+      const displayName = collector.upiName || collector.businessName || 'SumioTech';
+      const upiIntentUrl = buildUpiIntentUrl(collector.upiId, displayName, exactAmount, orderId);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h payable window for admin bills
+
+      const order = new Order({
+        orderId,
+        merchantId: collector.merchant._id,
+        appName: 'SUMIOPAY_SAAS',
+        customerUserId: merchant._id.toString(),
+        customerPhone: merchant.phone || '',
+        customerEmail: merchant.email,
+        baseAmount: parsedAmount,
+        paiseOffset,
+        exactAmount,
+        isTest: false,
+        status: 'PENDING',
+        upiIntentUrl,
+        expiresAt,
+        callbackWebhookUrl: '',
+        metadata: {
+          type: PLATFORM_SUBSCRIPTION_METADATA_TYPE,
+          subscriberMerchantId: merchant._id.toString(),
+          subscriberEmail: merchant.email,
+          subscriberBusinessName: merchant.businessName,
+          planTier,
+          planLabel: `${planTier} (${parsedDays} days)`,
+          durationDays: parsedDays,
+          basePriceInr: parsedAmount,
+          createdBySuperAdmin: adminEmail,
+        },
+      });
+      await order.save();
+
+      const frontendBase = (process.env.PUBLIC_URL || 'https://sumiopay.sumiotech.in').replace(/\/+$/, '');
+      const hostedCheckoutUrl = `${frontendBase}/pay/${order.orderId}`;
+
+      await AuditLog.create({
+        actorType: 'SUPERADMIN',
+        actorEmail: adminEmail,
+        action: 'SUBSCRIPTION_UPI_BILL_GENERATED',
+        resourceType: 'SUBSCRIPTION',
+        resourceId: orderId,
+        newState: { merchantId, planTier, exactAmount, durationDays: parsedDays, hostedCheckoutUrl },
+      });
+
+      res.status(201).json({
+        success: true,
+        message: `Payable UPI bill created (₹${exactAmount.toFixed(2)}) for ${merchant.businessName}`,
+        data: {
+          mode: 'GENERATE_UPI_BILL',
+          orderId,
+          exactAmount,
+          upiId: collector.upiId,
+          upiIntentUrl,
+          hostedCheckoutUrl,
+          expiresAt,
+        },
+      });
+      return;
+    }
+
+    // Default mode: MARK_PAID (record manual/offline bill and activate/extend plan)
+    let sub = await Subscription.findOne({ merchantId });
+    if (!sub) {
+      sub = new Subscription({ merchantId });
+    }
+
+    const now = new Date();
+    const newPeriodEnd = computeExtendedPeriodEnd(sub.currentPeriodEnd, sub.status, parsedDays, now);
+    const invoiceId = `INV-ADM-${Date.now().toString().slice(-6)}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+    const amountPaise = Math.round(parsedAmount * 100);
+    const monthlyEqPaise =
+      planTier === 'HALF_YEARLY' ? Math.round(amountPaise / 6) : amountPaise;
+
+    sub.planTier = planTier;
+    sub.status = 'ACTIVE';
+    sub.currentPeriodStart = now;
+    sub.currentPeriodEnd = newPeriodEnd;
+    sub.monthlyPriceInPaise = monthlyEqPaise;
+    sub.invoiceHistory.push({
+      invoiceId,
+      orderId: 'MANUAL-BILL',
+      planTier,
+      durationDays: parsedDays,
+      utrNumber: (utrNumber || 'ADMIN_RECORDED').trim(),
+      amountInPaise: amountPaise,
+      paidAt: now,
+    });
+    await sub.save();
+
+    merchant.planTier = planTier;
+    await merchant.save();
+
+    await AuditLog.create({
+      actorType: 'SUPERADMIN',
+      actorEmail: adminEmail,
+      action: 'SUBSCRIPTION_BILL_CREATED',
+      resourceType: 'SUBSCRIPTION',
+      resourceId: invoiceId,
+      newState: { merchantId, planTier, amountPaise, durationDays: parsedDays, utrNumber },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Bill ${invoiceId} recorded & ${planTier} activated for ${parsedDays} days`,
+      data: {
+        mode: 'MARK_PAID',
+        invoiceId,
+        subscription: sub,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Edit / Update an existing Subscription Bill / Invoice in Merchant's Invoice History
+export const updateSubscriptionBill = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { merchantId, invoiceId } = req.params;
+    const { amountInr, utrNumber, planTier, durationDays } = req.body;
+
+    const sub = await Subscription.findOne({ merchantId });
+    if (!sub) {
+      res.status(404).json({ success: false, message: 'Subscription not found' });
+      return;
+    }
+
+    const inv = sub.invoiceHistory.find((i) => i.invoiceId === invoiceId);
+    if (!inv) {
+      res.status(404).json({ success: false, message: 'Invoice bill not found' });
+      return;
+    }
+
+    if (amountInr !== undefined && !isNaN(Number(amountInr)) && Number(amountInr) >= 0) {
+      inv.amountInPaise = Math.round(Number(amountInr) * 100);
+    }
+    if (utrNumber !== undefined) inv.utrNumber = String(utrNumber).trim();
+    if (planTier !== undefined) inv.planTier = planTier;
+    if (durationDays !== undefined && Number(durationDays) > 0) inv.durationDays = Number(durationDays);
+
+    await sub.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Invoice ${invoiceId} updated`,
+      data: sub,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Delete / Void a Subscription Bill / Invoice
+export const deleteSubscriptionBill = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { merchantId, invoiceId } = req.params;
+    const sub = await Subscription.findOne({ merchantId });
+    if (!sub) {
+      res.status(404).json({ success: false, message: 'Subscription not found' });
+      return;
+    }
+
+    const beforeCount = sub.invoiceHistory.length;
+    sub.invoiceHistory = sub.invoiceHistory.filter((i) => i.invoiceId !== invoiceId);
+    if (sub.invoiceHistory.length === beforeCount) {
+      res.status(404).json({ success: false, message: 'Invoice bill not found' });
+      return;
+    }
+
+    await sub.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Invoice ${invoiceId} voided & removed`,
+      data: sub,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

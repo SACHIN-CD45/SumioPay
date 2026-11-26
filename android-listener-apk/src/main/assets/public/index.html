@@ -8,25 +8,30 @@
 </head>
 <body>
   <div class="app-container">
-    <!-- Header -->
+    <!-- Top Native-Feel App Header -->
     <header class="header">
       <div class="brand">
-        <div class="brand-icon">S</div>
+        <div class="brand-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="m9 12 2 2 4-4"></path>
+          </svg>
+        </div>
         <div>
           <h1 class="brand-title">SumioPay Listener</h1>
-          <span class="brand-sub">Universal SMS & UPI Interceptor v2.4</span>
+          <span class="brand-sub">SumioTech Companion &bull; v2.5</span>
         </div>
       </div>
       <div id="deviceBadge" class="badge badge-disconnected">Checking...</div>
     </header>
 
-    <!-- Main Live Status Card -->
+    <!-- Live Interceptor Status Card -->
     <section class="card status-card">
       <div class="status-header">
         <span class="status-indicator" id="statusDot"></span>
         <div class="status-info">
           <h3 id="statusHeading">Initializing...</h3>
-          <p id="statusDesc">Verifying background listening permissions</p>
+          <p id="statusDesc">Checking Android permissions and server link</p>
         </div>
       </div>
       <div class="status-meta">
@@ -35,112 +40,123 @@
           <span class="meta-value" id="batteryLevel">--%</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">MODE</span>
-          <span class="meta-value">24x7 Real-Time</span>
+          <span class="meta-label">LISTENER</span>
+          <span class="meta-value">24/7 Service</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">AUTO-VERIFY</span>
-          <span class="meta-value">&lt; 1.2s</span>
+          <span class="meta-label">MATCH SPEED</span>
+          <span class="meta-value">&lt; 1.2 sec</span>
         </div>
       </div>
     </section>
 
-    <!-- Permissions Hub -->
+    <!-- Step 1: Android System Permissions -->
     <section class="card">
-      <h2 class="card-title">Required Android Permissions</h2>
-      <p class="card-subtitle">Required to intercept incoming bank payment alerts & SMS</p>
+      <div class="card-header-flex" style="margin-bottom: 4px;">
+        <h2 class="card-title">1. System Permissions</h2>
+        <span class="step-tag">Required</span>
+      </div>
+      <p class="card-subtitle">Allow credit notification read &amp; keep background service alive</p>
 
       <div class="perm-list">
-        <!-- 1. Notification Permission -->
         <div class="perm-item">
           <div class="perm-info">
             <div class="perm-title">
-              <span>🔔 UPI &amp; Bank Notification Access</span>
+              <svg class="inline-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+              <span>Notification Access</span>
               <span id="notifBadge" class="perm-status badge-warn">Disabled</span>
             </div>
-            <p class="perm-desc">Listens to PhonePe, GPay, Paytm, BHIM &amp; Bank SMS credit alerts in &lt;1.2s</p>
+            <p class="perm-desc">Reads PhonePe, GPay, Paytm, BHIM &amp; Bank SMS credit alerts</p>
           </div>
-          <button id="btnNotif" class="btn btn-sm btn-primary" onclick="openNotifSettings()">Enable Access</button>
+          <button id="btnNotif" class="btn btn-sm btn-primary" onclick="openNotifSettings()">Enable</button>
         </div>
 
-        <!-- 2. Battery Optimization -->
         <div class="perm-item">
           <div class="perm-info">
             <div class="perm-title">
-              <span>⚡ Battery Unrestricted</span>
+              <svg class="inline-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              <span>Battery Unrestricted</span>
               <span id="batteryBadge" class="perm-status badge-warn">Optimized</span>
             </div>
-            <p class="perm-desc">Prevents Android power saving from killing background listener</p>
+            <p class="perm-desc">Stops Android OS from sleeping listener while screen is off</p>
           </div>
-          <button id="btnBattery" class="btn btn-sm btn-outline" onclick="disableBatteryOpt()">Unrestrict</button>
+          <button id="btnBattery" class="btn btn-sm btn-outline" onclick="disableBatteryOpt()">Allow</button>
         </div>
       </div>
 
-      <!-- Android 13/14/15/16 Restricted Settings Helper -->
+      <!-- Android 13-16 Restricted Settings Shortcut -->
       <div class="android16-tip">
-        <strong>Android 13 / 14 / 15 / 16 Restricted Settings:</strong><br>
-        If &ldquo;Allow notification access&rdquo; is greyed out: tap below to open App Info &rarr; tap <strong>3 dots (⋮) in top-right</strong> &rarr; select <strong>&ldquo;Allow restricted settings&rdquo;</strong> &rarr; enter PIN.
-        <button type="button" class="btn btn-sm btn-outline btn-full" onclick="openAppSettings()" style="margin-top: 8px; border-color: #3b82f6; color: #93c5fd; font-weight: bold;">
-          🔓 Open App Info &rarr; 3 Dots (Allow Restricted)
+        <strong>Android 13–16 Restricted Setting?</strong>
+        Tap below to open App Info, tap the top-right menu <strong>(&vellip;)</strong>, and choose <strong>Allow restricted settings</strong> before toggling Notification Access.
+        <button type="button" class="btn btn-sm btn-outline btn-full" onclick="openAppSettings()" style="margin-top: 10px; border-color: rgba(96, 165, 250, 0.45); color: #93C5FD;">
+          Open App Info &rarr; Allow Restricted Settings
         </button>
       </div>
     </section>
 
-    <!-- Pairing Configuration -->
+    <!-- Step 2: Merchant Console Pairing -->
     <section class="card">
-      <h2 class="card-title">Device Pairing & Server Link</h2>
-      <p class="card-subtitle">Link this phone to your merchant dashboard</p>
+      <div class="card-header-flex" style="margin-bottom: 4px;">
+        <h2 class="card-title">2. Merchant Server Pairing</h2>
+        <span class="step-tag">Sync</span>
+      </div>
+      <p class="card-subtitle">Link this phone using a pairing token from SumioPay Console &rarr; Listener Phones</p>
 
       <div class="form-group">
-        <label>Central Backend API URL</label>
-        <input type="text" id="serverUrl" value="https://apipay.sumiotech.in" placeholder="https://apipay.sumiotech.in">
+        <label for="serverUrl">Backend API URL</label>
+        <input type="url" id="serverUrl" value="https://apipay.sumiotech.in" placeholder="https://apipay.sumiotech.in" autocomplete="off">
       </div>
 
       <div class="form-group">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <label style="margin: 0;">Pairing Token (From Merchant Console)</label>
-          <a href="javascript:void(0)" onclick="pasteToken()" style="color: #60a5fa; font-size: 11px; font-weight: bold; text-decoration: none;">📋 Paste Token</a>
+        <div class="label-row">
+          <label for="pairingToken" style="margin: 0;">Pairing Token</label>
+          <button type="button" class="text-action" onclick="pasteToken()">Paste from Clipboard</button>
         </div>
-        <input type="text" id="pairingToken" placeholder="pair_xxxxxxxxxxxxxxxx">
+        <input type="text" id="pairingToken" placeholder="pair_xxxxxxxxxxxxxxxx" autocomplete="off">
       </div>
 
       <button id="btnPair" class="btn btn-success btn-full" onclick="pairDevice()">
-        🔗 Complete Device Pairing
+        Complete Device Pairing
       </button>
 
       <div id="pairedInfo" class="paired-details hidden">
-        <span class="text-muted">Paired Token:</span>
-        <code id="deviceTokenDisplay">--</code>
+        <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+          <span class="text-muted">Device ID:</span>
+          <code id="deviceTokenDisplay">--</code>
+        </div>
+        <button type="button" class="btn btn-xs btn-danger-outline" onclick="unpairDevice()">Disconnect</button>
       </div>
     </section>
 
-    <!-- Test Payment Dispatcher -->
+    <!-- Sandbox Diagnostic Action -->
     <section class="card">
       <div class="card-header-flex">
-        <h2 class="card-title">Test Payment Simulator</h2>
-        <span class="badge badge-info">Zero Real Money</span>
+        <h2 class="card-title">Sandbox Relay Check</h2>
+        <span class="badge badge-info">Test Mode Only</span>
       </div>
-      <p class="card-subtitle">Send a simulated ₹500 credit to verify webhook flow instantly</p>
+      <p class="card-subtitle">Dispatches a simulated ₹500.14 PhonePe payload to verify server connectivity</p>
       <button class="btn btn-secondary btn-full" onclick="simulateTestPayment()">
-        ⚡ Simulate Test Credit &amp; Fire Webhook
+        Send Test Credit Webhook
       </button>
     </section>
 
-    <!-- Intercepted Payments Live Feed -->
+    <!-- Intercepted Signals Ledger -->
     <section class="card">
-      <div class="card-header-flex">
-        <h2 class="card-title">Live Payment Intercept Log</h2>
-        <button class="btn btn-xs btn-outline" onclick="loadLogs()">↻ Refresh</button>
+      <div class="card-header-flex" style="margin-bottom: 10px;">
+        <div>
+          <h2 class="card-title">Intercepted Payment Feed</h2>
+          <p class="card-subtitle" style="margin-bottom:0;">Recent bank &amp; UPI alerts pushed by this device</p>
+        </div>
+        <button class="btn btn-xs btn-outline" onclick="loadLogs()">Refresh</button>
       </div>
-      <p class="card-subtitle">Real-time alerts captured by this device</p>
 
       <div id="logsFeed" class="logs-feed">
-        <div class="empty-feed">No transactions intercepted yet. Waiting for bank credits...</div>
+        <div class="empty-feed">Waiting for incoming bank SMS or UPI credit notifications...</div>
       </div>
     </section>
 
     <footer class="footer">
-      <p>SumioPay Enterprise SaaS • 100% Direct Bank Settlement</p>
+      <p>SumioPay by SumioTech &bull; Direct NPCI UPI Settlement</p>
     </footer>
   </div>
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowRight,
   CheckCircle2,
@@ -146,7 +147,7 @@ export const LandingPage: React.FC = () => {
   const halfYearlySavings = Math.max(0, monthlyPrice * 6 - halfYearlyPrice);
 
   const handleActivateFromLanding = (plan?: string) => {
-    const loggedIn = Boolean(localStorage.getItem('token') || localStorage.getItem('accessToken'));
+    const loggedIn = Boolean(localStorage.getItem('sumiopay_token'));
     if (loggedIn) {
       navigate(plan ? `/billing?plan=${plan}` : '/billing');
     } else {
@@ -213,9 +214,6 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center gap-8">
             <div onClick={() => navigate('/')} className="cursor-pointer flex items-center gap-3">
               <img src="/sumiopay-logo.png" alt="SumioPay Smart Payment Solutions" className="h-9 sm:h-10 w-auto object-contain" />
-              <span className="hidden lg:inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                Enterprise Gateway
-              </span>
             </div>
 
             <nav className="hidden md:flex items-center gap-6 text-xs font-bold text-slate-600">
@@ -337,76 +335,74 @@ export const LandingPage: React.FC = () => {
         )}
       </header>
 
-      {/* World-Class Enterprise FinTech Hero Section */}
-      <section className="relative overflow-hidden bg-slate-950 text-white pt-16 sm:pt-24 pb-20 px-4 sm:px-6">
-        {/* Subtle Architectural Grid Background */}
-        <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-[#060B18] text-white pt-16 sm:pt-22 pb-20 px-4 sm:px-6 border-b border-slate-800/80">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[360px] bg-blue-600/15 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b33_1px,transparent_1px),linear-gradient(to_bottom,#1e293b33_1px,transparent_1px)] [background-size:48px_48px] opacity-30 pointer-events-none" />
 
         <div className="max-w-7xl mx-auto relative z-10 space-y-12">
-          {/* Hero Header & Value Statement */}
+          {/* Hero Header */}
           <div className="text-center max-w-4xl mx-auto space-y-6">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-blue-400 text-xs font-bold shadow-lg">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Enterprise UPI FinTech Infrastructure &bull; Direct NPCI UPI Settlement &bull; 0% Commission</span>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-200 text-xs font-semibold shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>0% Gateway Commission • Direct UPI to Your Bank • {trialDays}-Day Free Trial</span>
             </div>
 
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.14]">
-              Direct-to-Bank UPI Gateway for Indian SaaS &amp; High-Volume Merchants
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.12]">
+              Accept UPI Payments Straight Into Your Bank. Zero Fees.
             </h1>
 
-            <p className="text-sm sm:text-base lg:text-lg text-slate-300 max-w-3xl mx-auto font-normal leading-relaxed">
-              Eliminate 2% to 3% aggregator deductions. Receive customer payments directly into your verified bank account via UPI with sub-second automated webhook verification, zero intermediary escrow holding, and 100% data sovereignty.
+            <p className="text-sm sm:text-base lg:text-lg text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
+              Generate dynamic paise-locked UPI QR codes on your website or SaaS, verify real bank credits in under 1.2 seconds via our Android Listener app, and fire signed webhooks instantly.
             </p>
 
             <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-md sm:max-w-none mx-auto w-full">
               <button
                 onClick={() => navigate('/login?register=true')}
-                className="px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold shadow-xl transition flex items-center justify-center gap-2 min-h-[48px]"
+                className="px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold shadow-lg shadow-blue-600/20 transition flex items-center justify-center gap-2 min-h-[48px]"
               >
-                <span>Launch Merchant Console</span>
+                <span>Start {trialDays}-Day Free Trial</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setDemoOpen(true)}
-                className="px-6 py-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 text-sm font-bold shadow-md transition flex items-center justify-center gap-2 min-h-[48px]"
+                className="px-6 py-3.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:bg-slate-800 text-slate-100 text-sm font-bold transition flex items-center justify-center gap-2 min-h-[48px]"
               >
-                <Zap className="w-4 h-4 text-blue-400" />
-                <span>Test Live Checkout Modal</span>
+                <Play className="w-3.5 h-3.5 text-emerald-400 fill-current" />
+                <span>Preview Live Checkout</span>
               </button>
             </div>
 
-            {/* Trust Checkpoints */}
             <div className="pt-2 flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-xs text-slate-400 font-medium">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>0% Commission (100% Settled to Merchant UPI VPA)</span>
+                <span>100% Settled to Your UPI ID</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Zero Escrow Holds (Instant Direct Bank Credit)</span>
+                <span>Duplicate UTR Anti-Fraud Shield</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Developer Sandbox &amp; Test Mode Included</span>
+                <span>Starts at ₹{monthlyPrice}/mo After Trial</span>
               </div>
             </div>
           </div>
 
-          {/* Interactive Enterprise Architecture & Integration Suite (Hero Centerpiece) */}
-          <div id="simulator" className="max-w-5xl mx-auto bg-slate-900/95 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5 mb-6">
+          {/* Interactive Code & Live QR Terminal */}
+          <div id="simulator" className="max-w-5xl mx-auto bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-5">
               <div>
                 <div className="flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-blue-400" />
-                  <span className="font-extrabold text-sm text-white">Interactive Integration &amp; Telemetry Suite</span>
+                  <span className="font-bold text-sm text-white">Developer Integration &amp; Verification Preview</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Choose your integration framework below to see how seamlessly customer payments reconcile into your systems.
+                  Drop-in script, hosted payment link, REST API, and real-time Android verification flow.
                 </p>
               </div>
 
-              {/* Code Tab Switcher */}
-              <div className="flex items-center p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold">
+              <div className="flex flex-wrap items-center p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold">
                 <button
                   type="button"
                   onClick={() => setHeroTab('script')}
@@ -423,7 +419,7 @@ export const LandingPage: React.FC = () => {
                     heroTab === 'url' ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Hosted Link (URL)
+                  Payment Link
                 </button>
                 <button
                   type="button"
@@ -432,7 +428,7 @@ export const LandingPage: React.FC = () => {
                     heroTab === 'curl' ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  REST API (cURL)
+                  REST API
                 </button>
                 <button
                   type="button"
@@ -441,68 +437,66 @@ export const LandingPage: React.FC = () => {
                     heroTab === 'webhook' ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  HMAC Webhook
+                  Webhook
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
               {/* Left: Code Viewer */}
-              <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-slate-950 border border-slate-800 p-4 font-mono text-[11px] leading-relaxed overflow-hidden">
+              <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-[#040711] border border-slate-800 p-4 font-mono text-[11px] leading-relaxed overflow-hidden">
                 <div className="overflow-x-auto text-slate-300">
                   {heroTab === 'script' && (
-                    <pre><code>{`<!-- Universal Drop-In Script (Shopify / WooCommerce / HTML) -->
+                    <pre><code>{`<!-- Drop-In Checkout Script (HTML / React / PHP) -->
 <script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>
 
 <button onclick="SumioPay.checkout({
   apiKey: 'sp_live_YOUR_KEY',
-  amount: 499,
-  appName: 'MyStore',
+  amount: 399,
+  appName: 'MySaaS',
   onSuccess: function(order) {
-    // Verified via bank in <1.2s!
-    window.location.href = '/success?orderId=' + order.orderId;
+    // Verified via Android bank push + UTR
+    window.location.href = '/activated?orderId=' + order.orderId;
   }
 })">
-  Pay ₹499 via Direct UPI (0% Fee)
+  Pay ₹399 via UPI (0% Fee)
 </button>`}</code></pre>
                   )}
 
                   {heroTab === 'url' && (
-                    <pre><code>{`# Zero-Code Hosted Payment URL
-# Share via WhatsApp, Instagram, or direct button link:
-https://sumiopay.sumiotech.in/pay/ORD-20261125-9481
+                    <pre><code>{`# Zero-Code Hosted Checkout URL
+https://sumiopay.sumiotech.in/pay/ORD-20261126-9481
 
-- Opens responsive dynamic UPI intent & QR checkout
-- Unique paise collision lock (e.g. ₹499.42)
-- Auto-polls bank credit status in real time
-- Customer receives verified bank UTR receipt immediately`}</code></pre>
+- Locks unique fractional paise (e.g. ₹399.42)
+- Renders live UPI QR + GPay / PhonePe / Paytm Intent
+- Verifies bank SMS & UTR automatically
+- Redirects customer immediately upon confirmation`}</code></pre>
                   )}
 
                   {heroTab === 'curl' && (
-                    <pre><code>{`# REST API Order Intent Creation
+                    <pre><code>{`# Create Verified UPI Order via API
 curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
   -H "x-api-key: sp_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "baseAmount": 999,
-    "appName": "SAAS_PRO",
-    "customerUserId": "cust_8491"
+    "baseAmount": 399,
+    "appName": "SAAS_BILLING",
+    "customerUserId": "usr_8491"
   }'
 
-# Response: Returns { orderId, exactAmount: 999.42, upiIntentUrl }`}</code></pre>
+# Returns: { orderId: "ORD-20261126-9481", exactAmount: 399.42, upiIntentUrl }`}</code></pre>
                   )}
 
                   {heroTab === 'webhook' && (
-                    <pre><code>{`// POST /api/payment/webhook (HMAC-SHA256 Signed)
-// Header: x-sumiopay-signature: 4f8b2d...9e1a
+                    <pre><code>{`// POST https://yoursite.com/api/webhook
+// Header: x-sumiopay-signature: <HMAC-SHA256 hex>
 {
   "event": "PAYMENT_CONFIRMED",
-  "orderId": "ORD-20261125-9481",
-  "appName": "SAAS_PRO",
-  "amount": 999.42,
+  "orderId": "ORD-20261126-9481",
+  "appName": "SAAS_BILLING",
+  "amount": 399.42,
   "utrNumber": "432109876543",
-  "status": "PAID",
-  "paidAt": "${new Date().toISOString()}"
+  "status": "PAID"
 }`}</code></pre>
                   )}
                 </div>
@@ -510,7 +504,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                 <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
                   <div className="flex items-center gap-1.5 text-emerald-400">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Production Ready &bull; Zero Server Modifications</span>
+                    <span>HMAC-SHA256 Signed &bull; Idempotent</span>
                   </div>
                   <button
                     type="button"
@@ -519,60 +513,73 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                         heroTab === 'script'
                           ? `<script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>`
                           : heroTab === 'url'
-                          ? `https://sumiopay.sumiotech.in/pay/ORD-20261125-9481`
-                          : `curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders`;
+                          ? `https://sumiopay.sumiotech.in/pay/ORD-20261126-9481`
+                          : heroTab === 'curl'
+                          ? `curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders -H "x-api-key: sp_live_YOUR_KEY" -H "Content-Type: application/json" -d '{"baseAmount":399,"appName":"SAAS_BILLING"}'`
+                          : `{"event":"PAYMENT_CONFIRMED","orderId":"ORD-20261126-9481","amount":399.42,"utrNumber":"432109876543","status":"PAID"}`;
                       navigator.clipboard.writeText(textToCopy);
                       setCopiedHeroCode(true);
                       setTimeout(() => setCopiedHeroCode(false), 2000);
                     }}
-                    className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] transition"
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-[10px] transition"
                   >
-                    {copiedHeroCode ? 'Copied!' : 'Copy Snippet'}
+                    {copiedHeroCode ? 'Copied' : 'Copy Snippet'}
                   </button>
                 </div>
               </div>
 
-              {/* Right: Live Interactive Telemetry Engine */}
-              <div className="lg:col-span-5 p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Live Telemetry Simulation
-                    </span>
-                    <button
-                      onClick={runSimulation}
-                      disabled={isSimulating}
-                      className="px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-[11px] flex items-center gap-1 transition shadow-sm disabled:opacity-50"
-                    >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>{isSimulating ? 'Testing...' : 'Run Simulation'}</span>
-                    </button>
-                  </div>
+              {/* Right: Realistic QR Terminal Preview */}
+              <div className="lg:col-span-5 p-4 sm:p-5 rounded-2xl bg-[#040711] border border-slate-800 flex flex-col justify-between space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Live UPI Signal Flow
+                  </span>
+                  <button
+                    onClick={runSimulation}
+                    disabled={isSimulating}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[11px] flex items-center gap-1 transition disabled:opacity-60"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>{isSimulating ? 'Verifying...' : 'Run Flow'}</span>
+                  </button>
+                </div>
 
-                  {/* Dynamic Amount Card */}
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800/80 text-center space-y-1">
-                    <div className="text-[10px] text-slate-400 font-bold">LOCKED EXACT AMOUNT</div>
-                    <div className="text-2xl font-black text-white font-mono">₹499.42</div>
-                    <div className="text-[10px] text-emerald-400 font-bold">+₹0.42 Paise Collision Lock</div>
+                {/* Scannable QR Preview Card */}
+                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-4">
+                  <div className="p-2 bg-white rounded-xl shrink-0">
+                    <QRCodeSVG
+                      value="upi://pay?pa=sumiotech@upi&pn=SumioTech&am=399.42&cu=INR&tn=ORD-20261126-9481"
+                      size={74}
+                      level="M"
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                      Exact Amount Lock
+                    </div>
+                    <div className="text-2xl font-black text-white font-mono">₹399.42</div>
+                    <div className="text-[11px] text-emerald-400 font-semibold">
+                      +₹0.42 collision lock • sumiotech@upi
+                    </div>
                   </div>
                 </div>
 
-                {/* Steps Flow */}
-                <div className="space-y-2 text-xs font-mono">
-                  <div className={`p-2.5 rounded-xl border text-[11px] transition ${
-                    simStep >= 1 ? 'bg-blue-950/40 border-blue-500 text-blue-200' : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                {/* Real State Progression */}
+                <div className="space-y-2 text-[11px] font-mono">
+                  <div className={`p-2.5 rounded-xl border transition ${
+                    simStep >= 1 ? 'bg-blue-950/50 border-blue-500/60 text-blue-200' : 'bg-slate-900/60 border-slate-800 text-slate-400'
                   }`}>
-                    1. Intent Generated &bull; Scan via GPay / PhonePe
+                    1. QR Created &bull; ORD-20261126-9481
                   </div>
-                  <div className={`p-2.5 rounded-xl border text-[11px] transition ${
-                    simStep >= 2 ? 'bg-indigo-950/40 border-indigo-500 text-indigo-200' : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                  <div className={`p-2.5 rounded-xl border transition ${
+                    simStep >= 2 ? 'bg-indigo-950/50 border-indigo-500/60 text-indigo-200' : 'bg-slate-900/60 border-slate-800 text-slate-400'
                   }`}>
-                    2. Bank SMS / Push Intercepted by Phone
+                    2. Android Listener Parsed Bank Credit (UTR 432109876543)
                   </div>
-                  <div className={`p-2.5 rounded-xl border text-[11px] transition ${
-                    simStep >= 3 ? 'bg-emerald-950/40 border-emerald-500 text-emerald-200' : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                  <div className={`p-2.5 rounded-xl border transition ${
+                    simStep >= 3 ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-200' : 'bg-slate-900/60 border-slate-800 text-slate-400'
                   }`}>
-                    3. HMAC Webhook Fired &bull; Order #SP-9481 PAID
+                    3. Webhook Verified (200 OK) &bull; Status: PAID
                   </div>
                 </div>
 
@@ -581,30 +588,30 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                   onClick={() => setDemoOpen(true)}
                   className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition"
                 >
-                  <Zap className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Launch Live Checkout Preview</span>
+                  <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Open Interactive Checkout Modal</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Senior-Level Architectural Benchmarks (Verifiable FinTech Facts) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto pt-6 text-center border-t border-slate-800">
-            <div className="p-4">
-              <div className="text-2xl sm:text-3xl font-black text-white font-mono">0.00%</div>
-              <div className="text-xs text-slate-400 mt-1">Gateway Commission (Direct VPA)</div>
+          {/* Core Architectural Benchmarks */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto pt-4 text-center border-t border-slate-800/80">
+            <div className="p-3">
+              <div className="text-2xl sm:text-3xl font-black text-white font-mono">0%</div>
+              <div className="text-xs text-slate-400 mt-1">Gateway Fee Forever</div>
             </div>
-            <div className="p-4">
+            <div className="p-3">
               <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">&lt; 1.2s</div>
-              <div className="text-xs text-slate-400 mt-1">Average Interception &amp; Verify Time</div>
+              <div className="text-xs text-slate-400 mt-1">Average UPI Auto-Verify</div>
             </div>
-            <div className="p-4">
-              <div className="text-2xl sm:text-3xl font-black text-blue-400 font-mono">0-Day</div>
-              <div className="text-xs text-slate-400 mt-1">Settlement Delay (Instant Credit)</div>
+            <div className="p-3">
+              <div className="text-2xl sm:text-3xl font-black text-blue-400 font-mono">Instant</div>
+              <div className="text-xs text-slate-400 mt-1">Direct-to-Bank Settlement</div>
             </div>
-            <div className="p-4">
-              <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-mono">SHA-256</div>
-              <div className="text-xs text-slate-400 mt-1">Cryptographic Webhook Signatures</div>
+            <div className="p-3">
+              <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-mono">HMAC</div>
+              <div className="text-xs text-slate-400 mt-1">Signed Webhook Payloads</div>
             </div>
           </div>
         </div>
@@ -629,128 +636,93 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
         </div>
       </section>
 
-      {/* 5 Core Enterprise Product Modules Section */}
+      {/* Core Product Suite Section */}
       <section id="features" className="py-24 px-4 sm:px-6 max-w-7xl mx-auto">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3.5 py-1 rounded-full border border-blue-100">
-            Enterprise SaaS Architecture
+            Platform Architecture
           </span>
           <h2 className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tight mt-3">
-            5 Modular Pillars of the SumioPay Suite
+            Built for Developers, Finance &amp; Operations
           </h2>
           <p className="mt-3 text-slate-600 text-sm sm:text-base">
-            Engineered as a high-throughput, provider-agnostic payment orchestration and automated reconciliation platform.
+            Every tool required to generate UPI checkouts, auto-verify bank credits, and reconcile payouts at scale.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Module 1: Super Admin */}
           <div className="p-7 rounded-3xl bg-white border border-slate-200/90 hover:border-amber-400 shadow-xs hover:shadow-lg transition space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold">
-              <ShieldCheck className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
-                Core Module 1
-              </span>
-              <h3 className="text-base font-bold text-slate-900 mt-2">Super Admin Platform Governance</h3>
-            </div>
+            <h3 className="text-base font-bold text-slate-900">SuperAdmin SaaS Governance</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Centralized platform administration, tenant onboarding approval, KYC verification workflows, risk & fraud mitigation alerts, and subscription pricing controls.
+              Manage merchants, audit KYC submissions, control global subscription plans, create manual/UPI bills, and monitor live gateway risk alerts.
             </p>
             <ul className="space-y-1.5 text-[11px] text-slate-600 font-medium pt-2 border-t border-slate-100">
-              <li className="flex items-center gap-2">&bull; Global Platform GMV & Revenue Run-Rate</li>
-              <li className="flex items-center gap-2">&bull; Automated & Manual KYC Review Pipeline</li>
-              <li className="flex items-center gap-2">&bull; Merchant Tier & Custom Price Overrides</li>
-              <li className="flex items-center gap-2">&bull; Tamper-Proof Privileged Action Audit Trail</li>
+              <li>&bull; Live Plan Pricing &amp; Free Trial Control</li>
+              <li>&bull; Self-Billing Collector Setup &amp; Invoices</li>
+              <li>&bull; Complete Action Audit Trail &amp; KYC Queue</li>
             </ul>
           </div>
 
-          {/* Module 2: Merchant Dashboard */}
           <div className="p-7 rounded-3xl bg-white border border-slate-200/90 hover:border-blue-400 shadow-xs hover:shadow-lg transition space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold">
-              <LayoutDashboard className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold">
+              <LayoutDashboard className="w-5 h-5" />
             </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
-                Core Module 2
-              </span>
-              <h3 className="text-base font-bold text-slate-900 mt-2">Merchant Control Console</h3>
-            </div>
+            <h3 className="text-base font-bold text-slate-900">Merchant Control Console</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Complete multi-tenant merchant portal for real-time payment collection, dynamic UPI QR generation, transaction timelines, multi-project workspaces, and team RBAC.
+              Multi-tenant portal for live order tracking, instant dynamic QR generation, multi-project isolation, refunds, disputes, and team RBAC.
             </p>
             <ul className="space-y-1.5 text-[11px] text-slate-600 font-medium pt-2 border-t border-slate-100">
-              <li className="flex items-center gap-2">&bull; Direct UPI Intent & Dynamic QR Generator</li>
-              <li className="flex items-center gap-2">&bull; Orders & Payment Events Lifecycle Ledger</li>
-              <li className="flex items-center gap-2">&bull; Multi-Project Isolation (e.g. SumioLab, SumioBook)</li>
-              <li className="flex items-center gap-2">&bull; Team Invites, RBAC & Role Scopes</li>
+              <li>&bull; Dynamic Paise-Locked UPI Intent &amp; QR</li>
+              <li>&bull; Multi-Project Scopes (SaaS, Store, App)</li>
+              <li>&bull; Full Transaction Timeline &amp; Export Reports</li>
             </ul>
           </div>
 
-          {/* Module 3: Developer Portal */}
           <div className="p-7 rounded-3xl bg-white border border-slate-200/90 hover:border-indigo-400 shadow-xs hover:shadow-lg transition space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold">
-              <Terminal className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold">
+              <Terminal className="w-5 h-5" />
             </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-800 border border-indigo-200">
-                Core Module 3
-              </span>
-              <h3 className="text-base font-bold text-slate-900 mt-2">Developer Portal & SDK Suite</h3>
-            </div>
+            <h3 className="text-base font-bold text-slate-900">Developer Portal &amp; SDKs</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Modern developer infrastructure with dual keypairs, official TypeScript SDK, drop-in React Checkout Modal, HMAC-SHA256 signature verification, and simulator sandboxes.
+              Integrate any website or SaaS backend in minutes with live/test API keys, drop-in JavaScript checkout, React Modal, and signed webhooks.
             </p>
             <ul className="space-y-1.5 text-[11px] text-slate-600 font-medium pt-2 border-t border-slate-100">
-              <li className="flex items-center gap-2">&bull; Live & Test API Keypairs (sp_live / sp_test)</li>
-              <li className="flex items-center gap-2">&bull; Signed Webhook Dispatcher with Exponential Backoff</li>
-              <li className="flex items-center gap-2">&bull; @sumiopay/sdk & @sumiopay/checkout-react</li>
-              <li className="flex items-center gap-2">&bull; Interactive In-Browser Payment Sandbox</li>
+              <li>&bull; Live &amp; Sandbox Keypairs (sp_live / sp_test)</li>
+              <li>&bull; HMAC-SHA256 Signed Callback Verification</li>
+              <li>&bull; Interactive Webhook Delivery Inspector</li>
             </ul>
           </div>
 
-          {/* Module 4: Reconciliation Engine */}
           <div className="p-7 rounded-3xl bg-white border border-slate-200/90 hover:border-emerald-400 shadow-xs hover:shadow-lg transition space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-bold">
-              <FileSpreadsheet className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-bold">
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
-                Core Module 4
-              </span>
-              <h3 className="text-base font-bold text-slate-900 mt-2">Intelligent Reconciliation Engine</h3>
-            </div>
+            <h3 className="text-base font-bold text-slate-900">Passbook Reconciliation</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Multi-rule reconciliation matching bank statements with pending orders using exact 12-digit UTR, unique fractional paise windows, and delayed transaction rescue.
+              Match bank CSV statements against orders by UTR and exact paise, rescue late arrivals, and resolve unmapped credits with one click.
             </p>
             <ul className="space-y-1.5 text-[11px] text-slate-600 font-medium pt-2 border-t border-slate-100">
-              <li className="flex items-center gap-2">&bull; Multi-Rule Matching (UTR + Exact Minor Units)</li>
-              <li className="flex items-center gap-2">&bull; Bank Passbook CSV Ingestion & Parsing</li>
-              <li className="flex items-center gap-2">&bull; Delayed Payment Rescue & Manual Match Desk</li>
-              <li className="flex items-center gap-2">&bull; Exportable Financial Accounting Ledgers</li>
+              <li>&bull; Duplicate UTR Replay Fraud Prevention</li>
+              <li>&bull; Delayed Payment Rescue &amp; CSV Batch Match</li>
+              <li>&bull; Unmapped Payment Ledger Resolution</li>
             </ul>
           </div>
 
-          {/* Module 5: Android Device Connector */}
           <div className="p-7 rounded-3xl bg-white border border-slate-200/90 hover:border-purple-400 shadow-xs hover:shadow-lg transition space-y-4 md:col-span-2 lg:col-span-1">
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-200 text-purple-700 flex items-center justify-center font-bold">
-              <Smartphone className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-200 text-purple-700 flex items-center justify-center font-bold">
+              <Smartphone className="w-5 h-5" />
             </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
-                Core Module 5
-              </span>
-              <h3 className="text-base font-bold text-slate-900 mt-2">Android Companion Hardware</h3>
-            </div>
+            <h3 className="text-base font-bold text-slate-900">Android Listener Companion APK</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Companion Android listener application utilizing permitted notification hooks to capture official bank receipts, relay encrypted telemetry, and verify device health.
+              Lightweight Android companion app monitors PhonePe, GPay, Paytm, BHIM &amp; Bank SMS credit alerts and relays instant cryptographic signals.
             </p>
             <ul className="space-y-1.5 text-[11px] text-slate-600 font-medium pt-2 border-t border-slate-100">
-              <li className="flex items-center gap-2">&bull; 10-Second QR Pairing Protocol</li>
-              <li className="flex items-center gap-2">&bull; Heartbeat, Battery & Signal Telemetry</li>
-              <li className="flex items-center gap-2">&bull; Multi-App Routing from a Single Phone</li>
-              <li className="flex items-center gap-2">&bull; End-to-End Encrypted Sync Protocol</li>
+              <li>&bull; 10-Second QR Pairing &amp; Multi-Phone Failover</li>
+              <li>&bull; Live Battery, Signal &amp; Heartbeat Telemetry</li>
+              <li>&bull; Direct Background Notification Interceptor</li>
             </ul>
           </div>
         </div>
@@ -1195,7 +1167,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
               onClick={() => setDemoOpen(true)}
               className="px-6 py-3.5 rounded-xl bg-blue-700/80 border border-blue-400/40 text-white font-bold text-xs hover:bg-blue-700 transition"
             >
-              Test Live Payment Modal
+              Preview Live Checkout
             </button>
           </div>
         </div>
@@ -1213,7 +1185,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
               <div>
                 <div className="font-extrabold text-lg text-white flex items-center gap-2">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 uppercase tracking-wider">
-                    v2.4 Enterprise
+                    v2.5 Enterprise
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -1431,18 +1403,15 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
         </div>
       </footer>
 
-      {/* Demo Modal */}
+      {/* Demo Modal (Interactive Browser Preview) */}
       <UpiCheckoutModal
         isOpen={demoOpen}
         onClose={() => setDemoOpen(false)}
-        appName="SUMIOLAB"
-        userId="demo_visitor_123"
-        planName="SumioLab Annual Pro Tier"
-        baseAmount={499}
-        onSuccess={(data) => {
-          alert(`Test Payment Confirmed! Order: ${data.orderId}`);
-          setDemoOpen(false);
-        }}
+        appName="SUMIOPAY"
+        userId="demo_visitor"
+        planName="Monthly Pro Preview"
+        baseAmount={monthlyPrice}
+        demoMode={true}
       />
 
       {/* Enterprise Authentication Modal Overlay */}

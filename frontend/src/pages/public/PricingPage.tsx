@@ -30,7 +30,7 @@ export const PricingPage: React.FC = () => {
   const customPrice = subPlans?.customPrice ?? 0;
   const savings = Math.max(0, monthlyPrice * 6 - halfYearlyPrice);
 
-  const isLoggedIn = Boolean(localStorage.getItem('token') || localStorage.getItem('accessToken'));
+  const isLoggedIn = Boolean(localStorage.getItem('sumiopay_token'));
 
   const goActivate = (plan?: string) => {
     if (isLoggedIn) {
@@ -121,12 +121,7 @@ export const PricingPage: React.FC = () => {
       <header className="border-b border-slate-100 sticky top-0 z-40 bg-white/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div onClick={() => navigate('/')} className="cursor-pointer flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-base shadow-sm">
-              SP
-            </div>
-            <span className="font-extrabold text-lg tracking-tight text-slate-900">
-              Sumio<span className="text-blue-600">Pay</span>
-            </span>
+            <img src="/sumiopay-logo.png" alt="SumioPay" className="h-9 w-auto object-contain" />
           </div>
 
           <div className="flex items-center gap-4">
@@ -271,8 +266,9 @@ export const PricingPage: React.FC = () => {
         onClose={() => setDemoOpen(false)}
         appName="SUMIOLAB"
         userId="usr_pricing_demo"
-        planName="SumioLab Pro Plan"
+        planName="Monthly Pro Preview"
         baseAmount={monthlyPrice}
+        demoMode={true}
       />
     </div>
   );

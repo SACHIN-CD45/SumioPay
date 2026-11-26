@@ -310,6 +310,16 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void unpairDevice() {
+            SharedPreferences prefs = activity.getSharedPreferences(WebhookDispatcher.PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().remove("device_token").apply();
+            activity.runOnUiThread(() -> {
+                Toast.makeText(activity, "Device disconnected. Paste a new pairing token to link.", Toast.LENGTH_SHORT).show();
+                notifyWebUiStateChange();
+            });
+        }
+
+        @JavascriptInterface
         public String getLogs() {
             SharedPreferences prefs = activity.getSharedPreferences(WebhookDispatcher.PREFS_NAME, Context.MODE_PRIVATE);
             return prefs.getString("intercept_logs", "[]");

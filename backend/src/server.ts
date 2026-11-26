@@ -40,10 +40,10 @@ const bootstrap = async () => {
         email: 'contact@sumiotech.in',
         passwordHash,
         upiId: 'sumiotech@okhdfcbank',
-        upiName: 'SumioTech Tech Solutions',
-        phone: '9999999999',
-        webhookUrl: 'http://localhost:8080/api/payments/webhook',
-        planTier: 'ENTERPRISE',
+        upiName: 'SumioTech',
+        phone: '+91 9875182659',
+        webhookUrl: '',
+        planTier: 'CUSTOM',
         isActive: true,
       });
       await sumioMerchant.save();

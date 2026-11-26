@@ -14,6 +14,9 @@ import {
   getSystemHealth,
   listAllSubscriptions,
   updateMerchantSubscriptionTier,
+  createSubscriptionBill,
+  updateSubscriptionBill,
+  deleteSubscriptionBill,
   getSubscriptionMetrics,
   getPlatformSettings,
   updatePlatformSettings,
@@ -55,6 +58,9 @@ router.patch('/security-alerts/:alertId/resolve', requireSuperAdminAuth, resolve
 // Platform Subscriptions & Pricing Control (SuperAdmin)
 router.get('/subscriptions', requireSuperAdminAuth, listAllSubscriptions);
 router.patch('/subscriptions/:merchantId/tier', requireSuperAdminAuth, updateMerchantSubscriptionTier);
+router.post('/subscriptions/:merchantId/bills', requireSuperAdminAuth, createSubscriptionBill);
+router.patch('/subscriptions/:merchantId/bills/:invoiceId', requireSuperAdminAuth, updateSubscriptionBill);
+router.delete('/subscriptions/:merchantId/bills/:invoiceId', requireSuperAdminAuth, deleteSubscriptionBill);
 router.get('/subscriptions/metrics', requireSuperAdminAuth, getSubscriptionMetrics);
 
 // Global Platform Controls & Settings (SuperAdmin)
