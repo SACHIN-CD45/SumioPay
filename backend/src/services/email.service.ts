@@ -260,4 +260,97 @@ export class EmailService {
 
     return this.send(email, subject, renderEmailLayout('Security Alert: Login', body));
   }
+
+  /**
+   * 5. Send Payment Receipt / Invoice Email to Customer & Merchant
+   */
+  public static async sendPaymentReceipt(
+    email: string,
+    customerName: string,
+    orderDetails: {
+      orderId: string;
+      amount: number;
+      exactAmount: number;
+      paiseOffset: number;
+      utr: string;
+      merchantBusinessName: string;
+      appName?: string;
+      planOrItemName?: string;
+      paymentDate?: string;
+    }
+  ): Promise<boolean> {
+    const subject = `Payment Confirmed: Order #${orderDetails.orderId} (₹${orderDetails.exactAmount.toFixed(2)}) ✅`;
+    const formattedDate = orderDetails.paymentDate || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+    const body = `
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; width: 56px; height: 56px; line-height: 56px; border-radius: 50%; background: #DCFCE7; color: #16A34A; font-size: 28px; font-weight: bold;">
+          ✓
+        </div>
+        <h2 style="margin: 12px 0 4px 0; color: #0F172A; font-size: 22px; font-weight: 800;">Payment Successful!</h2>
+        <p style="margin: 0; color: #16A34A; font-size: 13px; font-weight: 700;">Verified via Instant UPI Telemetry</p>
+      </div>
+
+      <p style="font-size: 14px; color: #334155;">
+        Dear <strong>${customerName || 'Valued Customer'}</strong>,
+      </p>
+      <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+        Thank you for your payment to <strong>${orderDetails.merchantBusinessName || 'SumioTech'}</strong>. Your transaction has been auto-verified and confirmed directly through the UPI network. Here is your official payment receipt:
+      </p>
+
+      <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 16px; padding: 24px; margin: 24px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #CBD5E1; padding-bottom: 14px; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">Order Reference</div>
+            <div style="font-size: 15px; font-weight: 800; color: #0F172A; font-family: monospace;">#${orderDetails.orderId}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">Status</div>
+            <span style="display: inline-block; background: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px;">PAID</span>
+          </div>
+        </div>
+
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+          <tr>
+            <td style="color: #64748B; padding: 6px 0;">Merchant / Vendor:</td>
+            <td style="font-weight: 700; color: #0F172A; text-align: right; padding: 6px 0;">${orderDetails.merchantBusinessName}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748B; padding: 6px 0;">Application / Plan:</td>
+            <td style="font-weight: 700; color: #2563EB; text-align: right; padding: 6px 0;">${orderDetails.planOrItemName || orderDetails.appName || 'Online Subscription'}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748B; padding: 6px 0;">Base Amount:</td>
+            <td style="font-weight: 600; color: #0F172A; text-align: right; padding: 6px 0;">₹${orderDetails.amount.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748B; padding: 6px 0;">Collision Lock (Paise):</td>
+            <td style="font-weight: 600; color: #16A34A; text-align: right; padding: 6px 0;">+₹${orderDetails.paiseOffset.toFixed(2)}</td>
+          </tr>
+          <tr style="border-top: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;">
+            <td style="font-weight: 800; font-size: 16px; color: #0F172A; padding: 12px 0;">Total Amount Paid:</td>
+            <td style="font-weight: 900; font-size: 18px; color: #0F172A; text-align: right; font-family: monospace; padding: 12px 0;">₹${orderDetails.exactAmount.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748B; padding: 8px 0 4px 0;">Bank Reference / UTR:</td>
+            <td style="font-weight: 700; font-family: monospace; color: #1E40AF; text-align: right; padding: 8px 0 4px 0;">${orderDetails.utr || 'Direct Bank Credit'}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748B; padding: 4px 0;">Transaction Timestamp:</td>
+            <td style="font-weight: 600; color: #64748B; text-align: right; padding: 4px 0;">${formattedDate} IST</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="info-box">
+        <strong>Instant Settlement Notice:</strong> This payment was credited directly into the merchant's bank account via SumioPay's zero-commission UPI gateway. No gateway holding or wallet escrow involved.
+      </div>
+
+      <p style="font-size: 13px; color: #64748B; margin-top: 24px;">
+        For any billing queries or assistance with this transaction, contact <strong>${orderDetails.merchantBusinessName}</strong> or SumioTech support at <a href="mailto:${COMPANY.supportEmail}" style="color: #2563EB;">${COMPANY.supportEmail}</a> or call <strong>${COMPANY.supportPhone}</strong>.
+      </p>
+    `;
+
+    return this.send(email, subject, renderEmailLayout('Payment Receipt & Tax Invoice', body));
+  }
 }

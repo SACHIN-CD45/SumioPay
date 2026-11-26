@@ -7,6 +7,7 @@ import { dispatchMerchantWebhook } from '../utils/hmacSigner.js';
 import { ApiKeyRequest } from '../middleware/apiKey.middleware.js';
 import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { config } from '../config/index.js';
+import { EmailService } from '../services/email.service.js';
 
 export const createOrder = async (req: ApiKeyRequest, res: Response) => {
   try {
@@ -202,6 +203,23 @@ export const simulatePayment = async (req: AuthenticatedRequest, res: Response) 
     if (!order.isTest) {
       await Merchant.findByIdAndUpdate(merchant._id, {
         $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
+      });
+    }
+
+    // Send Payment Confirmation / Invoice Email
+    const recipientEmail = order.customerEmail || merchant.email;
+    if (recipientEmail) {
+      EmailService.sendPaymentReceipt(recipientEmail, order.customerPhone || merchant.businessName, {
+        orderId: order.orderId,
+        amount: order.baseAmount,
+        exactAmount: order.exactAmount,
+        paiseOffset: order.paiseOffset,
+        utr: order.utrNumber || fakeUtr,
+        merchantBusinessName: merchant.businessName,
+        appName: order.appName,
+        paymentDate: order.paidAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      }).catch((emailErr) => {
+        console.error(`[EmailReceipt Simulation Error] Failed to send receipt for ${order.orderId}:`, emailErr.message);
       });
     }
 

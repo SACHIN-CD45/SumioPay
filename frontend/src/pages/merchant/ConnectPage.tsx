@@ -12,22 +12,131 @@ import {
   Check,
   Download,
   PackageCheck,
+  Key,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Send,
+  AlertTriangle,
+  Layers,
+  Globe,
+  Lock,
+  FileCode,
+  Sparkles,
 } from 'lucide-react';
 import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
 
 export const ConnectPage: React.FC = () => {
   const [merchant, setMerchant] = useState<any>(null);
-  const [platform, setPlatform] = useState<'link' | 'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'>('link');
+  const [platform, setPlatform] = useState<
+    'sumiolab' | 'link' | 'woocommerce' | 'html' | 'react' | 'node' | 'php' | 'python' | 'curl'
+  >('sumiolab');
   const [testModalOpen, setTestModalOpen] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(false);
+
+  // Show/Hide Secrets
+  const [showSecret, setShowSecret] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
+
+  // Webhook URL Settings
+  const [webhookUrlInput, setWebhookUrlInput] = useState('');
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [savedWebhook, setSavedWebhook] = useState(false);
+  const [testingWebhook, setTestingWebhook] = useState(false);
+  const [testWebhookResult, setTestWebhookResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Key Rotation
+  const [regeneratingKeys, setRegeneratingKeys] = useState(false);
 
   // Instant Payment Link Generator State
-  const [linkAmount, setLinkAmount] = useState<number>(499);
-  const [linkAppName, setLinkAppName] = useState<string>('MyStore');
+  const [linkAmount, setLinkAmount] = useState<number>(299);
+  const [linkAppName, setLinkAppName] = useState<string>('SumioLab');
   const [generatingLink, setGeneratingLink] = useState<boolean>(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [generatedOrderId, setGeneratedOrderId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await api.get('/merchant/profile');
+      if (res.data.success) {
+        setMerchant(res.data.data);
+        setWebhookUrlInput(res.data.data.webhookUrl || '');
+      }
+    } catch (err: any) {
+      console.error('[ConnectPage] Failed to fetch profile', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedItem(label);
+    setTimeout(() => setCopiedItem(null), 2000);
+  };
+
+  const handleSaveWebhook = async () => {
+    setSavingWebhook(true);
+    setSavedWebhook(false);
+    try {
+      const res = await api.put('/merchant/profile', {
+        webhookUrl: webhookUrlInput.trim(),
+      });
+      if (res.data.success) {
+        setSavedWebhook(true);
+        setTimeout(() => setSavedWebhook(false), 2500);
+        fetchProfile();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update Webhook URL');
+    } finally {
+      setSavingWebhook(false);
+    }
+  };
+
+  const handleTestWebhookPing = async () => {
+    setTestingWebhook(true);
+    setTestWebhookResult(null);
+    try {
+      const res = await api.post('/webhooks/test', {
+        targetUrl: webhookUrlInput.trim() || merchant?.webhookUrl,
+      });
+      setTestWebhookResult({
+        success: res.data.success,
+        message: res.data.message || (res.data.success ? 'Webhook ping acknowledged with HTTP 200!' : 'Webhook delivery failed'),
+      });
+    } catch (err: any) {
+      setTestWebhookResult({
+        success: false,
+        message: err.response?.data?.message || 'Failed to reach webhook destination',
+      });
+    } finally {
+      setTestingWebhook(false);
+    }
+  };
+
+  const handleRegenerateKeys = async () => {
+    const confirmed = window.confirm(
+      '⚠️ WARNING: Regenerating API keys will immediately invalidate your current Live API Key, Secret, and Webhook Secret. All existing website integrations will need the new keys. Are you sure you want to proceed?'
+    );
+    if (!confirmed) return;
+
+    setRegeneratingKeys(true);
+    try {
+      const res = await api.post('/merchant/regenerate-api-keys');
+      if (res.data.success) {
+        alert('✅ New API credentials generated successfully!');
+        fetchProfile();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to regenerate credentials');
+    } finally {
+      setRegeneratingKeys(false);
+    }
+  };
 
   const handleGenerateLink = async () => {
     setGeneratingLink(true);
@@ -49,21 +158,92 @@ export const ConnectPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    api.get('/merchant/profile').then((res) => {
-      if (res.data.success) {
-        setMerchant(res.data.data);
-      }
-    });
-  }, []);
-
-  const copy = (val: string) => {
-    navigator.clipboard.writeText(val);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
-  };
+  const liveApiKey = merchant?.apiKey || 'sp_live_xxxxxx';
+  const liveSecret = merchant?.apiSecret || 'sp_sec_xxxxxx';
+  const testApiKey = liveApiKey.startsWith('sp_live_')
+    ? liveApiKey.replace('sp_live_', 'sp_test_')
+    : `sp_test_${liveApiKey}`;
+  const webhookSecret = merchant?.webhookSecret || 'sp_whsec_xxxxxx';
 
   const codeExamples = {
+    sumiolab: `// =========================================================================
+// SumioLab Official 1-Click Subscription & Upgrade Integration
+// Flow: ₹299 Upgrade Button -> Dynamic UPI Modal -> Bank SMS Telemetry -> Auto-Verify
+// =========================================================================
+
+// STEP 1: In SumioLab Frontend (React / Next.js / HTML)
+// Include drop-in script in your <head> or layout:
+// <script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>
+
+// Attach to your "Subscribe to Pro (₹299)" button:
+function handleSubscribeToPro() {
+  SumioPay.checkout({
+    apiKey: "${liveApiKey}",
+    amount: 299,
+    appName: "SUMIOLAB",
+    planName: "SumioLab Pro Annual Tier",
+    userId: currentUser.id,
+    customerEmail: currentUser.email,
+    customerPhone: currentUser.phone || "9875182659",
+    onSuccess: function(verifiedOrder) {
+      console.log("Payment Confirmed in <1.2s!", verifiedOrder.orderId, verifiedOrder.utrNumber);
+      alert("🎉 Welcome to SumioLab Pro! Your subscription is active.");
+      window.location.reload();
+    },
+    onFailure: function(err) {
+      console.error("Payment Cancelled/Failed:", err);
+    }
+  });
+}
+
+// -------------------------------------------------------------------------
+// STEP 2: Android Companion Phone (Automatic & Zero Manual Work)
+// Customer pays ₹299.09 via Google Pay, PhonePe, or Paytm.
+// Bank credits merchant account instantly. The SumioPay Listener APK
+// intercepts the SMS/Notification and posts payload to SumioPay core.
+// -------------------------------------------------------------------------
+
+// STEP 3: In SumioLab Backend (Next.js App Router / Express)
+// File: /app/api/webhooks/sumiopay/route.ts (or /api/webhooks/sumiopay.js)
+
+import crypto from 'crypto';
+
+export async function POST(req) {
+  const signature = req.headers.get('x-sumiopay-signature');
+  const payloadText = await req.text();
+  const secret = "${webhookSecret}";
+
+  // Cryptographic HMAC-SHA256 verification prevents spoofing
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(payloadText)
+    .digest('hex');
+
+  if (signature !== expectedSignature) {
+    return new Response('Unauthorized Webhook Signature', { status: 401 });
+  }
+
+  const { event, data } = JSON.parse(payloadText);
+
+  if (event === 'payment.success') {
+    const { orderId, userId, amount, utrNumber } = data;
+    
+    // Automatically activate user's subscription in SumioLab DB:
+    // await db.users.updateOne(
+    //   { _id: userId },
+    //   { $set: { isPro: true, planTier: 'PRO', proExpiresAt: new Date(Date.now() + 365*24*60*60*1000) } }
+    // );
+
+    console.log(\`✅ SumioLab Pro activated for user \${userId} (UTR: \${utrNumber})\`);
+  }
+
+  return new Response(JSON.stringify({ received: true }), { status: 200 });
+}
+
+// STEP 4: Automated Tax Invoice Email
+// SumioPay automatically sends a branded payment receipt and invoice
+// from contact@sumiotech.in directly to the customer's email!`,
+
     link: `// =======================================================
 // Hosted Direct Payment Link / URL Integration
 // =======================================================
@@ -80,28 +260,30 @@ export const ConnectPage: React.FC = () => {
 //
 // 3. Or create links dynamically from your backend:
 //    POST /api/v1/payments/orders
-//    Headers: { "x-api-key": "${merchant?.apiKey || 'sp_live_YOUR_KEY'}" }
+//    Headers: { "x-api-key": "${liveApiKey}" }
 //    Body:    { "baseAmount": 999, "appName": "STORE" }
 //
 //    Customer opens the link, scans the dynamic QR with any UPI app,
 //    and payment auto-verifies in <1.2s!`,
+
     woocommerce: `// ==========================================
 // WooCommerce & Shopify eCommerce Integration
 // ==========================================
 // Step 1: In your Store Admin, configure Webhook:
 // Webhook URL:    ${merchant?.webhookUrl || 'https://mystore.com/api/sumiopay-webhook'}
-// Webhook Secret: ${merchant?.webhookSecret || 'sp_whsec_YOUR_SECRET'}
+// Webhook Secret: ${webhookSecret}
 //
 // Step 2: When customer proceeds to checkout, create an Order via API:
 POST /api/v1/payments/orders
 Headers:
-  x-api-key: ${merchant?.apiKey || 'sp_live_YOUR_KEY'}
+  x-api-key: ${liveApiKey}
   Content-Type: application/json
 Body:
   {
     "baseAmount": 1499,
     "appName": "WOOCOMMERCE",
     "customerUserId": "order_#1092",
+    "customerEmail": "customer@example.com",
     "callbackWebhookUrl": "${merchant?.webhookUrl || 'https://mystore.com/api/sumiopay-webhook'}"
   }
 
@@ -123,12 +305,13 @@ Body:
 <button 
   id="sumiopay-buy-btn"
   onclick="SumioPay.checkout({
-    apiKey: '${merchant?.apiKey || 'sp_live_YOUR_KEY'}',
+    apiKey: '${liveApiKey}',
     amount: 999,
     appName: 'MyStore',
     userId: 'cust_84920',
+    customerEmail: 'buyer@example.com',
     onSuccess: function(order) {
-      console.log('Payment Auto-Verified:', order.orderId, order.utr);
+      console.log('Payment Auto-Verified:', order.orderId, order.utrNumber);
       // Auto-redirect customer to order confirmation page
       window.location.href = '/order-success?orderId=' + order.orderId;
     }
@@ -145,7 +328,7 @@ export const UpgradeButton = () => {
 
   return (
     <>
-      <button onClick={() => setOpen(true)}>Upgrade to Pro</button>
+      <button onClick={() => setOpen(true)}>Upgrade to Pro (₹299)</button>
 
       <UpiCheckoutModal
         isOpen={open}
@@ -153,9 +336,10 @@ export const UpgradeButton = () => {
         appName="SUMIOLAB"
         userId="user_12345"
         planName="Pro Annual Plan"
-        baseAmount={499}
+        baseAmount={299}
+        customerEmail="developer@sumiolab.in"
         callbackWebhookUrl="${merchant?.webhookUrl || 'https://yourapp.com/api/webhook'}"
-        apiKey="${merchant?.apiKey || 'sp_live_YOUR_KEY'}"
+        apiKey="${liveApiKey}"
         onSuccess={(payment) => {
           console.log("Auto-Verified in 1.1s:", payment.orderId, payment.utr);
           // Instantly activate user subscription or fulfill order!
@@ -172,7 +356,7 @@ const app = express();
 
 app.post('/api/webhook', express.json(), (req, res) => {
   const signature = req.headers['x-sumiopay-signature'];
-  const secret = "${merchant?.webhookSecret || 'sp_whsec_YOUR_SECRET'}";
+  const secret = "${webhookSecret}";
 
   // Verify HMAC-SHA256 signature
   const expected = crypto.createHmac('sha256', secret)
@@ -185,9 +369,9 @@ app.post('/api/webhook', express.json(), (req, res) => {
 
   const { event, data } = req.body;
   if (event === 'payment.success') {
-    const { orderId, appName, userId, amount, utr } = data;
+    const { orderId, appName, userId, amount, utrNumber } = data;
     // Auto-mark order as PAID and dispatch products!
-    console.log(\`Verified payment ₹\${amount} for user \${userId} (UTR: \${utr})\`);
+    console.log(\`Verified payment ₹\${amount} for user \${userId} (UTR: \${utrNumber})\`);
   }
 
   res.status(200).send('Webhook processed');
@@ -201,7 +385,7 @@ app.post('/api/webhook', express.json(), (req, res) => {
 // A. Verify incoming HMAC-SHA256 signature from SumioPay
 $signature = $_SERVER['HTTP_X_SUMIOPAY_SIGNATURE'] ?? '';
 $payload = file_get_contents('php://input');
-$secret = "${merchant?.webhookSecret || 'sp_whsec_YOUR_SECRET'}";
+$secret = "${webhookSecret}";
 
 $expectedSignature = hash_hmac('sha256', $payload, $secret);
 
@@ -214,7 +398,7 @@ $event = json_decode($payload, true);
 
 if ($event['event'] === 'payment.success') {
     $orderId = $event['data']['orderId'];
-    $utr = $event['data']['utr'];
+    $utr = $event['data']['utrNumber'];
     $amount = $event['data']['amount'];
 
     // Update your MySQL/PostgreSQL database:
@@ -231,7 +415,7 @@ import hmac, hashlib, json
 from fastapi import FastAPI, Request, HTTPException
 
 app = FastAPI()
-WEBHOOK_SECRET = "${merchant?.webhookSecret || 'sp_whsec_YOUR_SECRET'}"
+WEBHOOK_SECRET = "${webhookSecret}"
 
 @app.post("/api/webhook")
 async def verify_payment(request: Request):
@@ -250,42 +434,269 @@ async def verify_payment(request: Request):
     payload = json.loads(body)
     data = payload.get("data", {})
     # Upgrade customer account in Python DB
-    print(f"Verified payment {data.get('orderId')} with UTR {data.get('utr')}")
+    print(f"Verified payment {data.get('orderId')} with UTR {data.get('utrNumber')}")
     return {"status": "success"}`,
 
     curl: `# 5. Create Payment Order via REST API
 curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
   -H "Content-Type: application/json" \\
-  -H "x-api-key: ${merchant?.apiKey || 'sp_live_YOUR_KEY'}" \\
+  -H "x-api-key: ${liveApiKey}" \\
   -d '{
-    "appName": "MY_ECOMMERCE_APP",
-    "baseAmount": 999,
+    "appName": "SUMIOLAB",
+    "baseAmount": 299,
     "customerUserId": "usr_9981",
+    "customerEmail": "user@sumiolab.in",
     "callbackWebhookUrl": "${merchant?.webhookUrl || 'https://yourapp.com/api/webhook'}"
   }'`,
   };
 
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto text-xs">
-      <div>
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-          <Zap className="w-6 h-6 text-blue-600" />
-          Enterprise Payment Connection Wizard
-        </h1>
-        <p className="text-slate-500 mt-1">
-          Connect your SaaS products (SumioLab, SumioBilling, custom ERPs) with your receiving bank UPI account in 4 simple steps.
-        </p>
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Zap className="w-7 h-7 text-blue-600" />
+            Developer API &amp; Integration Hub
+          </h1>
+          <p className="text-slate-500 mt-1 font-medium text-xs">
+            Generate and manage API keys, configure webhooks, and integrate SumioPay into SumioLab or custom eCommerce apps.
+          </p>
+        </div>
+
+        <button
+          onClick={handleRegenerateKeys}
+          disabled={regeneratingKeys}
+          className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs flex items-center gap-2 transition disabled:opacity-50 shadow-sm"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${regeneratingKeys ? 'animate-spin' : ''}`} />
+          <span>{regeneratingKeys ? 'Rotating Keys...' : 'Rotate Live Credentials'}</span>
+        </button>
       </div>
 
-      {/* 4 Steps Checklist */}
+      {/* API & Webhook Credentials Management Card */}
+      <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2.5">
+            <Key className="w-5 h-5 text-blue-600" />
+            <div>
+              <h2 className="text-sm font-extrabold text-slate-900">Production &amp; Sandbox API Credentials</h2>
+              <p className="text-[11px] text-slate-500">
+                Authenticate REST requests and verify tamper-proof HMAC signatures from SumioPay.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Zero-Holding UPI Gateway Active
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Live API Key */}
+          <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                Live API Key (Public / Client-Side)
+              </label>
+              <span className="text-[10px] font-mono text-slate-400">Header: x-api-key</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={liveApiKey}
+                className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 select-all"
+              />
+              <button
+                type="button"
+                onClick={() => copyToClipboard(liveApiKey, 'liveKey')}
+                className="px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                {copiedItem === 'liveKey' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedItem === 'liveKey' ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Live Secret Key */}
+          <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                Live Secret Key (Server-Side Only)
+              </label>
+              <span className="text-[10px] font-mono text-amber-600 font-bold">Never expose in frontend</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type={showSecret ? 'text' : 'password'}
+                readOnly
+                value={liveSecret}
+                className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 select-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecret(!showSecret)}
+                className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
+                title={showSecret ? 'Hide Secret' : 'Show Secret'}
+              >
+                {showSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(liveSecret, 'liveSecret')}
+                className="px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                {copiedItem === 'liveSecret' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedItem === 'liveSecret' ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Sandbox Test Key */}
+          <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-200/70 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                Sandbox Test Mode Key
+              </label>
+              <span className="text-[10px] font-bold text-amber-700 uppercase">Simulated Sandbox</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={testApiKey}
+                className="flex-1 bg-white border border-amber-200 rounded-xl px-3 py-2 text-xs font-mono text-amber-900 select-all"
+              />
+              <button
+                type="button"
+                onClick={() => copyToClipboard(testApiKey, 'testKey')}
+                className="px-3 py-2 rounded-xl bg-white border border-amber-200 hover:bg-amber-100 text-amber-900 text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                {copiedItem === 'testKey' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedItem === 'testKey' ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Webhook HMAC Signing Secret */}
+          <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                Webhook HMAC-SHA256 Secret
+              </label>
+              <span className="text-[10px] font-mono text-slate-400">Header: x-sumiopay-signature</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type={showWebhookSecret ? 'text' : 'password'}
+                readOnly
+                value={webhookSecret}
+                className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 select-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
+                title={showWebhookSecret ? 'Hide Secret' : 'Show Secret'}
+              >
+                {showWebhookSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(webhookSecret, 'webhookSecret')}
+                className="px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                {copiedItem === 'webhookSecret' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedItem === 'webhookSecret' ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Webhook Endpoint URL Configuration */}
+        <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/80 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-blue-600" />
+              <span className="font-extrabold text-slate-900 text-xs">Merchant Webhook Endpoint URL</span>
+            </div>
+            <span className="text-[11px] text-slate-500">
+              SumioPay dispatches cryptographic POST alerts to this URL upon payment confirmation.
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <input
+              type="url"
+              value={webhookUrlInput}
+              onChange={(e) => setWebhookUrlInput(e.target.value)}
+              placeholder="e.g. https://sumiolab.in/api/webhooks/sumiopay"
+              className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSaveWebhook}
+                disabled={savingWebhook}
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-sm disabled:opacity-50"
+              >
+                {savedWebhook ? <Check className="w-3.5 h-3.5" /> : <SaveIcon />}
+                <span>{savingWebhook ? 'Saving...' : savedWebhook ? 'Saved!' : 'Save Endpoint'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleTestWebhookPing}
+                disabled={testingWebhook || !webhookUrlInput}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-100 font-bold text-xs flex items-center gap-1.5 transition shadow-sm disabled:opacity-50"
+              >
+                <Send className={`w-3.5 h-3.5 ${testingWebhook ? 'animate-pulse' : ''}`} />
+                <span>{testingWebhook ? 'Pinging...' : 'Send Test Ping'}</span>
+              </button>
+            </div>
+          </div>
+
+          {testWebhookResult && (
+            <div
+              className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+                testWebhookResult.success
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-red-50 border-red-200 text-red-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {testWebhookResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                )}
+                <span className="font-medium">{testWebhookResult.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTestWebhookResult(null)}
+                className="text-[11px] underline font-bold"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 4 Steps Architecture Flow */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-subtle space-y-2">
           <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[11px]">
             1
           </span>
           <h3 className="font-bold text-slate-900 text-sm">Receiving UPI VPA</h3>
-          <p className="text-[11px] text-slate-500 font-mono text-blue-600 font-bold">
-            {merchant?.upiId || 'Configured'}
+          <p className="text-[11px] text-slate-500 font-mono text-blue-600 font-bold break-all">
+            {merchant?.upiId || 'Configured in Settings'}
           </p>
         </div>
 
@@ -295,7 +706,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
           </span>
           <h3 className="font-bold text-slate-900 text-sm">Pair Android Phone</h3>
           <p className="text-[11px] text-slate-500">
-            Listener intercepts incoming bank credits in &lt;1.2s.
+            Listener APK intercepts bank SMS &amp; push credits in &lt;1.2s.
           </p>
         </div>
 
@@ -303,9 +714,9 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
           <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[11px]">
             3
           </span>
-          <h3 className="font-bold text-slate-900 text-sm">Drop In React SDK</h3>
+          <h3 className="font-bold text-slate-900 text-sm">Drop In Checkout SDK</h3>
           <p className="text-[11px] text-slate-500">
-            Render &lt;UpiCheckoutModal /&gt; on button click.
+            Render dynamic UPI QR or modal checkout on any button.
           </p>
         </div>
 
@@ -313,9 +724,9 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
           <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[11px]">
             4
           </span>
-          <h3 className="font-bold text-slate-900 text-sm">Verify HMAC Webhook</h3>
+          <h3 className="font-bold text-slate-900 text-sm">Auto-Verify &amp; Invoice</h3>
           <p className="text-[11px] text-slate-500">
-            Instant tamper-proof plan upgrade.
+            HMAC webhook activates account &amp; email bill is sent automatically.
           </p>
         </div>
       </div>
@@ -330,6 +741,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
 
           <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
             {[
+              { id: 'sumiolab', label: '⭐ SumioLab (Flagship)' },
               { id: 'link', label: 'Direct Payment Link (URL)' },
               { id: 'woocommerce', label: 'WooCommerce / Shopify' },
               { id: 'html', label: 'Universal HTML/JS' },
@@ -343,7 +755,9 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                 key={tech.id}
                 onClick={() => setPlatform(tech.id as any)}
                 className={`px-3 py-1.5 rounded-lg transition ${
-                  platform === tech.id ? 'bg-white text-slate-900 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-900'
+                  platform === tech.id
+                    ? 'bg-white text-slate-900 shadow-sm font-bold'
+                    : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
                 {tech.label}
@@ -369,7 +783,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                   type="number"
                   value={linkAmount}
                   onChange={(e) => setLinkAmount(Number(e.target.value))}
-                  placeholder="e.g. 499"
+                  placeholder="e.g. 299"
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900"
                 />
               </div>
@@ -380,8 +794,8 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                   type="text"
                   value={linkAppName}
                   onChange={(e) => setLinkAppName(e.target.value)}
-                  placeholder="e.g. Pro Plan or Order #101"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                  placeholder="e.g. SumioLab Pro"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
                 />
               </div>
 
@@ -472,15 +886,23 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
           </pre>
 
           <button
-            onClick={() => copy(codeExamples[platform])}
+            onClick={() => copyToClipboard(codeExamples[platform], 'codeSnippet')}
             className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm border border-slate-700"
           >
-            {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            {copiedKey ? 'Copied' : 'Copy Snippet'}
+            {copiedItem === 'codeSnippet' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copiedItem === 'codeSnippet' ? 'Copied' : 'Copy Snippet'}
           </button>
         </div>
 
-        <div className="pt-2 flex justify-end">
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-slate-500 font-medium">
+            💡 Need customized assistance? Email{' '}
+            <a href="mailto:contact@sumiotech.in" className="text-blue-600 font-bold underline">
+              contact@sumiotech.in
+            </a>{' '}
+            or call <span className="text-slate-800 font-bold">+91 9875182659</span>.
+          </div>
+
           <button
             onClick={() => setTestModalOpen(true)}
             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition shadow-sm flex items-center gap-2"
@@ -496,8 +918,8 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
         onClose={() => setTestModalOpen(false)}
         appName="SUMIOLAB"
         userId="enterprise_demo_usr"
-        planName="Enterprise Diagnostics Tier"
-        baseAmount={999}
+        planName="SumioLab Pro Tier"
+        baseAmount={299}
         onSuccess={(data) => {
           alert(`Test Payment Confirmed! Order: ${data.orderId}, Amount: ₹${data.amount}`);
           setTestModalOpen(false);
@@ -506,5 +928,12 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
     </div>
   );
 };
+
+// Inline helper icon for save button
+const SaveIcon: React.FC = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+  </svg>
+);
 
 export default ConnectPage;

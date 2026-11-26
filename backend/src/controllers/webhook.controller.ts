@@ -5,6 +5,7 @@ import { Merchant } from '../models/merchant.model';
 import { WebhookLog } from '../models/webhookLog.model';
 import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
+import { EmailService } from '../services/email.service';
 
 // Android APK Listener calls this when any bank/UPI notification is intercepted
 export const handleListenerPush = async (req: Request, res: Response): Promise<void> => {
@@ -125,7 +126,30 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
       $inc: { totalVolume: matchingOrder.exactAmount, totalTransactions: 1 },
     });
 
-    // 6. Trigger Webhook with HMAC-SHA256 signature to client's SaaS endpoint
+    // 6. Send Instant Payment Confirmation / Invoice Email
+    const customerOrMerchantEmail = matchingOrder.customerEmail || merchant.email;
+    if (customerOrMerchantEmail) {
+      EmailService.sendPaymentReceipt(
+        customerOrMerchantEmail,
+        matchingOrder.customerPhone || merchant.businessName,
+        {
+          orderId: matchingOrder.orderId,
+          amount: matchingOrder.baseAmount,
+          exactAmount: matchingOrder.exactAmount,
+          paiseOffset: matchingOrder.paiseOffset,
+          utr: matchingOrder.utrNumber || 'Direct Bank Credit',
+          merchantBusinessName: merchant.businessName,
+          appName: matchingOrder.appName,
+          paymentDate: matchingOrder.paidAt
+            ? matchingOrder.paidAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+            : undefined,
+        }
+      ).catch((emailErr) => {
+        console.error(`[EmailReceipt] Failed to send receipt for ${matchingOrder.orderId}:`, emailErr.message);
+      });
+    }
+
+    // 7. Trigger Webhook with HMAC-SHA256 signature to client's SaaS endpoint
     const targetUrl = matchingOrder.callbackWebhookUrl || merchant.webhookUrl;
     if (targetUrl) {
       dispatchMerchantWebhook(
