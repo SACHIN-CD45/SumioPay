@@ -18,6 +18,9 @@ import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -41,8 +44,12 @@ public class MainActivity extends Activity {
 
     private static final String TAG = "SumioPayActivity";
     private static final int SMS_PERMISSION_REQ_CODE = 1001;
+    private static final int CAMERA_PERMISSION_REQ_CODE = 1002;
+    private static final int FILE_CHOOSER_REQ_CODE = 1003;
 
     private WebView webView;
+    private SumioNativeBridge nativeBridge;
+    private ValueCallback<Uri[]> filePathCallback;
     private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -56,16 +63,85 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
 
         webView.setWebViewClient(new WebViewClient());
-        webView.addJavascriptInterface(new SumioNativeBridge(this), "SumioNativeBridge");
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(() -> request.grant(request.getResources()));
+            }
+
+            @Override
+            public boolean onShowFileChooser(
+                    WebView mWebView,
+                    ValueCallback<Uri[]> callback,
+                    FileChooserParams fileChooserParams) {
+                if (filePathCallback != null) {
+                    filePathCallback.onReceiveValue(null);
+                }
+                filePathCallback = callback;
+                try {
+                    Intent intent = fileChooserParams.createIntent();
+                    startActivityForResult(intent, FILE_CHOOSER_REQ_CODE);
+                } catch (Exception e) {
+                    filePathCallback = null;
+                    Toast.makeText(MainActivity.this, "Unable to open file picker", Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        nativeBridge = new SumioNativeBridge(this);
+        webView.addJavascriptInterface(nativeBridge, "SumioNativeBridge");
 
         setContentView(webView);
         webView.loadUrl("file:///android_asset/public/index.html");
 
+        handleDeepLinkIntent(getIntent());
         startHeartbeatLoop();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleDeepLinkIntent(intent);
+    }
+
+    private void handleDeepLinkIntent(Intent intent) {
+        if (intent == null) return;
+        Uri data = intent.getData();
+        if (data != null && "sumiopay".equalsIgnoreCase(data.getScheme()) && "pair".equalsIgnoreCase(data.getHost())) {
+            String token = data.getQueryParameter("token");
+            String server = data.getQueryParameter("server");
+            if (token != null && !token.trim().isEmpty()) {
+                String targetServer = (server != null && !server.trim().isEmpty())
+                        ? server.trim()
+                        : "https://apipay.sumiotech.in";
+                Toast.makeText(this, "Pairing QR detected! Connecting...", Toast.LENGTH_SHORT).show();
+                if (nativeBridge != null) {
+                    nativeBridge.pairDevice(targetServer, token.trim());
+                }
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILE_CHOOSER_REQ_CODE) {
+            if (filePathCallback != null) {
+                Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            }
+        }
     }
 
     @Override
@@ -126,6 +202,13 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "SMS Permission was denied.", Toast.LENGTH_SHORT).show();
             }
             notifyWebUiStateChange();
+        } else if (requestCode == CAMERA_PERMISSION_REQ_CODE) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted && webView != null) {
+                webView.post(() -> webView.evaluateJavascript("if (window.onCameraPermissionGranted) window.onCameraPermissionGranted();", null));
+            } else {
+                Toast.makeText(this, "Camera permission is required to scan the Pairing QR code.", Toast.LENGTH_LONG).show();
+            }
         }
     }
 
@@ -307,6 +390,19 @@ public class MainActivity extends Activity {
                     });
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void requestCameraAndStartScan() {
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript("if (window.onCameraPermissionGranted) window.onCameraPermissionGranted();", null));
+                }
+            } else {
+                activity.runOnUiThread(() ->
+                    activity.requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQ_CODE)
+                );
+            }
         }
 
         @JavascriptInterface

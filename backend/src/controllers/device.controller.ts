@@ -32,8 +32,22 @@ export const generatePairingToken = async (req: Request, res: Response): Promise
 
     await device.save();
 
+    const envPublicApi = (process.env.API_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+    const proto = String(req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+    const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+    const configUrl = (config.BASE_URL || '').replace(/\/+$/, '');
+    const resolvedServerUrl =
+      envPublicApi ||
+      (configUrl && !configUrl.includes('localhost') && !configUrl.includes('127.0.0.1')
+        ? configUrl
+        : host && !host.includes('localhost') && !host.includes('127.0.0.1')
+        ? `${proto}://${host}`
+        : configUrl || 'https://apipay.sumiotech.in');
+
+    const pairingUri = `sumiopay://pair?token=${encodeURIComponent(pairingToken)}&server=${encodeURIComponent(resolvedServerUrl)}`;
+
     const pairingPayload = {
-      serverUrl: config.BASE_URL,
+      serverUrl: resolvedServerUrl,
       pairingToken,
       merchantId,
       expiresAt: tokenExpiry.toISOString(),
@@ -44,6 +58,8 @@ export const generatePairingToken = async (req: Request, res: Response): Promise
       data: {
         deviceId: device._id,
         pairingToken,
+        serverUrl: resolvedServerUrl,
+        pairingUri,
         pairingPayloadJson: JSON.stringify(pairingPayload),
         expiresAt: tokenExpiry,
       },

@@ -4,6 +4,7 @@ import Order from '../models/order.model.js';
 import Merchant from '../models/merchant.model.js';
 import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator.js';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner.js';
+import { selectUpiAndAdvanceRotation } from '../services/upiRouter.service.js';
 import { ApiKeyRequest } from '../middleware/apiKey.middleware.js';
 import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { config } from '../config/index.js';
@@ -34,21 +35,28 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
     // 1. Allocate unique paise offset for this merchant
     const { exactAmount, paiseOffset } = await allocateUniquePaise(merchant._id, numBase);
 
-    // 2. Generate unique Order ID
+    // 2. Select active / primary / rotated destination UPI ID for this merchant
+    const selectedUpi = await selectUpiAndAdvanceRotation(merchant);
+
+    // 3. Generate unique Order ID
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
     const orderId = `ORD-${dateStr}-${randomSuffix}`;
 
-    // 3. Build UPI Intent deep link
+    // 4. Build UPI Intent deep link
     const upiIntentUrl = buildUpiIntentUrl(
-      merchant.upiId,
-      merchant.upiName,
+      selectedUpi.upiId,
+      selectedUpi.upiName,
       exactAmount,
       orderId
     );
 
-    // 4. Set 15-minute expiration
+    // 5. Set 15-minute expiration
     const expiresAt = new Date(Date.now() + config.orderTtlMinutes * 60 * 1000);
+
+    const safeMeta = metadata && typeof metadata === 'object' ? { ...metadata } : {};
+    safeMeta.assignedUpiId = selectedUpi.upiId;
+    safeMeta.assignedUpiAccountId = selectedUpi.accountId;
 
     const order = new Order({
       orderId,
@@ -65,7 +73,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       upiIntentUrl,
       expiresAt,
       callbackWebhookUrl: callbackWebhookUrl || merchant.webhookUrl || '',
-      metadata: metadata && typeof metadata === 'object' ? metadata : {},
+      metadata: safeMeta,
     });
 
     await order.save();
@@ -82,8 +90,8 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
         paiseOffset: order.paiseOffset,
         exactAmount: order.exactAmount,
         currency: 'INR',
-        upiId: merchant.upiId,
-        merchantName: merchant.upiName,
+        upiId: selectedUpi.upiId,
+        merchantName: selectedUpi.upiName,
         upiIntentUrl: order.upiIntentUrl,
         hostedCheckoutUrl,
         metadata: order.metadata || {},

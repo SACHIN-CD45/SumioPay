@@ -333,12 +333,12 @@ export const DevicesPage: React.FC = () => {
               Pair Companion Android Phone
             </h3>
             <p className="text-xs text-slate-500">
-              Copy the Pairing Token below, paste it into the <strong>SumioPay Listener app</strong> on your phone, and tap <em>&quot;Complete Device Pairing&quot;</em>.
+              Open <strong>SumioPay Listener</strong> on your phone and tap <strong>Scan Pairing QR Code</strong> — or scan with your phone camera / paste the token below.
             </p>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 inline-block shadow-subtle">
               <QRCodeSVG
-                value={pairingData?.pairingPayloadJson || pairingData?.pairingToken || ''}
+                value={pairingData?.pairingUri || pairingData?.pairingPayloadJson || pairingData?.pairingToken || ''}
                 size={180}
                 level="M"
               />

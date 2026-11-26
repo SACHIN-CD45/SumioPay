@@ -115,7 +115,10 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       upiIntentUrl: initiation.upiIntentUrl || '',
       expiresAt: initiation.expiresAt,
       callbackWebhookUrl: callbackWebhookUrl || merchant.webhookUrl || '',
-      metadata: metadata && typeof metadata === 'object' ? metadata : {},
+      metadata: {
+        ...(metadata && typeof metadata === 'object' ? metadata : {}),
+        ...(initiation.metadata || {}),
+      },
     });
 
     await order.save();
@@ -134,7 +137,7 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
         exactAmountInPaise: initiation.exactAmountInPaise,
         currency: 'INR',
         isTest: order.isTest || false,
-        upiId: merchant.upiId,
+        upiId: initiation.metadata?.assignedUpiId || merchant.upiId,
         merchantName: merchant.upiName || merchant.businessName,
         upiIntentUrl: order.upiIntentUrl,
         checkoutUrl: initiation.checkoutUrl || hostedCheckoutUrl,

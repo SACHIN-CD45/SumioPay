@@ -127,12 +127,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Merchant Info */}
+        {/* Merchant Info (Clickable shortcut to Profile & UPI Accounts) */}
         {merchant && (
-          <div className="hidden md:flex flex-col text-right">
+          <button
+            type="button"
+            onClick={() => navigate('/profile')}
+            title="Manage Merchant Profile & UPI Accounts"
+            className="hidden md:flex flex-col text-right px-2.5 py-1 rounded-xl hover:bg-slate-100 transition"
+          >
             <span className="text-xs font-bold text-slate-800">{merchant.businessName}</span>
-            <span className="text-[10px] font-mono text-slate-500">{merchant.upiId}</span>
-          </div>
+            <span className="text-[10px] font-mono text-emerald-700 font-semibold">{merchant.upiId}</span>
+          </button>
         )}
 
         {/* Home / Website Link */}

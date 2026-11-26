@@ -8,6 +8,7 @@ import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
 import { EmailService } from '../services/email.service';
 import { activatePlatformSubscriptionFromOrder } from '../services/subscriptionActivation.service';
+import { recordUpiAccountCredit } from '../services/upiRouter.service';
 
 // Android APK Listener calls this when any bank/UPI notification is intercepted
 export const handleListenerPush = async (req: Request, res: Response): Promise<void> => {
@@ -137,6 +138,11 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
       await Merchant.findByIdAndUpdate(merchantId, {
         $inc: { totalVolume: matchingOrder.exactAmount, totalTransactions: 1 },
       });
+      await recordUpiAccountCredit(
+        merchantId,
+        (matchingOrder.metadata as any)?.assignedUpiId,
+        matchingOrder.exactAmount
+      ).catch(() => {});
     }
 
     // 6. Send Instant Payment Confirmation / Invoice Email
@@ -379,6 +385,11 @@ export const reconcileUnmappedPayment = async (req: Request, res: Response): Pro
           await Merchant.findByIdAndUpdate(merchantId, {
             $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
           });
+          await recordUpiAccountCredit(
+            merchantId,
+            (order.metadata as any)?.assignedUpiId,
+            order.exactAmount
+          ).catch(() => {});
         }
 
         const merchant = await Merchant.findById(merchantId);

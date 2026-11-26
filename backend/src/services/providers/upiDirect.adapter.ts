@@ -3,6 +3,7 @@ import { allocateUniquePaise, buildUpiIntentUrl } from '../../utils/paiseAllocat
 import { parseBankNotification } from '../../utils/bankNotificationParser';
 import { Order } from '../../models/order.model';
 import { config } from '../../config';
+import { selectUpiAndAdvanceRotation } from '../upiRouter.service';
 
 export class UpiDirectAdapter implements IPaymentProvider {
   name = 'UPI_DIRECT';
@@ -18,10 +19,11 @@ export class UpiDirectAdapter implements IPaymentProvider {
     const baseRupees = params.baseAmountInPaise / 100;
     const { exactAmount, paiseOffset } = await allocateUniquePaise(params.merchant._id, baseRupees);
     const exactAmountInPaise = Math.round(exactAmount * 100);
+    const selectedUpi = await selectUpiAndAdvanceRotation(params.merchant);
 
     const upiIntentUrl = buildUpiIntentUrl(
-      params.merchant.upiId,
-      params.merchant.upiName || params.merchant.businessName,
+      selectedUpi.upiId,
+      selectedUpi.upiName || params.merchant.businessName,
       exactAmount,
       params.orderId
     );
@@ -35,11 +37,13 @@ export class UpiDirectAdapter implements IPaymentProvider {
       exactAmountInPaise,
       currency: 'INR',
       upiIntentUrl,
-      providerReference: `UPI_${params.merchant.upiId}`,
+      providerReference: `UPI_${selectedUpi.upiId}`,
       expiresAt,
       metadata: {
         paiseOffsetInPaise: Math.round(paiseOffset * 100),
-        merchantVpa: params.merchant.upiId,
+        merchantVpa: selectedUpi.upiId,
+        assignedUpiId: selectedUpi.upiId,
+        assignedUpiAccountId: selectedUpi.accountId,
       },
     };
   }

@@ -203,6 +203,184 @@
     }
   };
 
+  // --- Built-in QR Code Scanner (Camera Stream + Screenshot Decode Fallback) ---
+  let qrStream = null;
+  let qrScanRaf = null;
+  let qrScanningActive = false;
+
+  function applyScannedQrText(rawText) {
+    const raw = (rawText || '').trim();
+    if (!raw) return false;
+
+    let token = '';
+    let server = '';
+
+    // Format 1: Deep link sumiopay://pair?token=pair_...&server=https://...
+    if (raw.toLowerCase().indexOf('sumiopay://pair') === 0) {
+      try {
+        const qIdx = raw.indexOf('?');
+        const params = new URLSearchParams(qIdx >= 0 ? raw.slice(qIdx + 1) : '');
+        token = (params.get('token') || '').trim();
+        server = (params.get('server') || '').trim();
+      } catch (e) {}
+    }
+
+    // Format 2: JSON payload { serverUrl, pairingToken }
+    if (!token && raw.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(raw);
+        token = (parsed.pairingToken || parsed.token || '').trim();
+        server = (parsed.serverUrl || '').trim();
+      } catch (e) {}
+    }
+
+    // Format 3: Raw pairing token pair_...
+    if (!token && raw.indexOf('pair_') === 0) {
+      token = raw;
+    }
+
+    if (!token) {
+      const statusEl = document.getElementById('qrScannerStatus');
+      if (statusEl) statusEl.innerText = 'Scanned QR does not contain a SumioPay pairing token.';
+      return false;
+    }
+
+    if (server) {
+      document.getElementById('serverUrl').value = server;
+    }
+    document.getElementById('pairingToken').value = token;
+
+    window.stopQrScanner();
+    window.pairDevice();
+    return true;
+  }
+
+  window.startQrScanner = function() {
+    const bridge = getBridge();
+    if (bridge && bridge.requestCameraAndStartScan) {
+      bridge.requestCameraAndStartScan();
+    } else {
+      window.onCameraPermissionGranted();
+    }
+  };
+
+  window.onCameraPermissionGranted = async function() {
+    const overlay = document.getElementById('qrScannerOverlay');
+    const video = document.getElementById('qrVideo');
+    const statusEl = document.getElementById('qrScannerStatus');
+    if (!overlay || !video) return;
+
+    overlay.classList.remove('hidden');
+    if (statusEl) statusEl.innerText = 'Point camera inside blue frame...';
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (statusEl) statusEl.innerText = 'Live camera unavailable here. Use "Upload Pairing QR Screenshot" below.';
+      return;
+    }
+
+    try {
+      try {
+        qrStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+      } catch (innerErr) {
+        qrStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+
+      video.srcObject = qrStream;
+      await video.play();
+      qrScanningActive = true;
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const detector =
+        typeof window.BarcodeDetector === 'function'
+          ? new window.BarcodeDetector({ formats: ['qr_code'] })
+          : null;
+
+      const tick = async function() {
+        if (!qrScanningActive) return;
+        if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+          if (detector) {
+            try {
+              const codes = await detector.detect(video);
+              if (codes && codes.length > 0 && codes[0].rawValue) {
+                if (applyScannedQrText(codes[0].rawValue)) return;
+              }
+            } catch (e) {}
+          }
+
+          if (typeof window.jsQR === 'function' && ctx) {
+            const w = Math.min(720, video.videoWidth);
+            const h = Math.round((video.videoHeight / video.videoWidth) * w);
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(video, 0, 0, w, h);
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const code = window.jsQR(imgData.data, w, h, { inversionAttempts: 'attemptBoth' });
+            if (code && code.data) {
+              if (applyScannedQrText(code.data)) return;
+            }
+          }
+        }
+        qrScanRaf = requestAnimationFrame(tick);
+      };
+
+      qrScanRaf = requestAnimationFrame(tick);
+    } catch (err) {
+      if (statusEl) {
+        statusEl.innerText = 'Camera blocked or busy. Use "Upload Pairing QR Screenshot" below or paste token.';
+      }
+    }
+  };
+
+  window.stopQrScanner = function() {
+    qrScanningActive = false;
+    if (qrScanRaf) {
+      cancelAnimationFrame(qrScanRaf);
+      qrScanRaf = null;
+    }
+    if (qrStream) {
+      qrStream.getTracks().forEach(function(t) { t.stop(); });
+      qrStream = null;
+    }
+    const overlay = document.getElementById('qrScannerOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  };
+
+  window.handleQrImageUpload = function(input) {
+    const file = input && input.files && input.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('qrScannerStatus');
+    if (statusEl) statusEl.innerText = 'Decoding QR screenshot...';
+
+    const reader = new FileReader();
+    reader.onload = function() {
+      const img = new Image();
+      img.onload = function() {
+        const scale = Math.min(1, 1000 / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const imgData = ctx.getImageData(0, 0, w, h);
+        if (typeof window.jsQR === 'function') {
+          const code = window.jsQR(imgData.data, w, h, { inversionAttempts: 'attemptBoth' });
+          if (code && code.data && applyScannedQrText(code.data)) {
+            return;
+          }
+        }
+        if (statusEl) statusEl.innerText = 'Could not detect pairing QR in this image.';
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   window.simulateTestPayment = function() {
     const bridge = getBridge();
     if (bridge && bridge.simulateTestAlert) {

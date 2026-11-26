@@ -100,7 +100,19 @@
         <h2 class="card-title">2. Merchant Server Pairing</h2>
         <span class="step-tag">Sync</span>
       </div>
-      <p class="card-subtitle">Link this phone using a pairing token from SumioPay Console &rarr; Listener Phones</p>
+      <p class="card-subtitle">Scan pairing QR from SumioPay Console &rarr; Listener Phones or paste token</p>
+
+      <button type="button" id="btnScanQr" class="btn btn-primary btn-full" onclick="startQrScanner()" style="margin-bottom: 14px; gap: 8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+          <path d="M14 14h3v3h-3z"></path>
+          <path d="M17 21h4v-4"></path>
+          <path d="M21 14v.01"></path>
+        </svg>
+        <span>Scan Pairing QR Code</span>
+      </button>
 
       <div class="form-group">
         <label for="serverUrl">Backend API URL</label>
@@ -160,6 +172,29 @@
     </footer>
   </div>
 
+  <!-- Live In-App QR Scanner Modal -->
+  <div id="qrScannerOverlay" class="scanner-overlay hidden">
+    <div class="scanner-modal">
+      <div class="scanner-header">
+        <div>
+          <h3>Scan Pairing QR Code</h3>
+          <p>Point camera at the QR on /devices</p>
+        </div>
+        <button type="button" class="btn btn-xs btn-outline" onclick="stopQrScanner()">Close</button>
+      </div>
+      <div class="scanner-viewport">
+        <video id="qrVideo" playsinline autoplay muted></video>
+        <div class="scanner-frame"></div>
+      </div>
+      <p id="qrScannerStatus" class="scanner-status">Starting camera...</p>
+      <label class="btn btn-secondary btn-full" style="margin-top: 8px; gap: 6px; cursor: pointer;">
+        <span>Upload Pairing QR Screenshot Instead</span>
+        <input type="file" id="qrImageUpload" accept="image/*" style="display:none" onchange="handleQrImageUpload(this)" />
+      </label>
+    </div>
+  </div>
+
+  <script src="jsqr.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -13,14 +13,35 @@ export type PlanTier =
   | 'BUSINESS'
   | 'ENTERPRISE';
 
+export type UpiRoutingMode = 'PRIMARY_ONLY' | 'ROUND_ROBIN' | 'FAILOVER';
+
+export interface IUpiAccount {
+  id: string;
+  label: string;
+  upiId: string;
+  upiName: string;
+  bankName?: string;
+  isActive: boolean;
+  isPrimary: boolean;
+  dailyLimitInr: number;
+  todayVolumeInr: number;
+  todayVolumeDate: string;
+  totalVolumeInr: number;
+  totalTransactions: number;
+  createdAt: Date;
+}
+
 export interface IMerchant extends Document {
   name: string;
   email: string;
   passwordHash: string;
   businessName: string;
   phone?: string;
-  upiId: string; // e.g. sumiotech@okaxis, 9876543210@paytm
-  upiName: string; // Merchant Display Name in UPI
+  upiId: string; // Active Primary UPI e.g. sumiotech@okaxis
+  upiName: string; // Active Merchant Display Name in UPI
+  upiAccounts: IUpiAccount[];
+  upiRoutingMode: UpiRoutingMode;
+  upiRotationIndex: number;
   apiKey: string; // sp_live_xxxx
   apiSecret: string; // sp_sec_xxxx
   webhookUrl?: string; // Merchant's callback endpoint
@@ -42,6 +63,29 @@ const MerchantSchema = new Schema<IMerchant>(
     phone: { type: String, trim: true },
     upiId: { type: String, required: true, trim: true },
     upiName: { type: String, required: true, trim: true },
+    upiAccounts: [
+      {
+        id: { type: String, required: true },
+        label: { type: String, default: 'Primary UPI Account', trim: true },
+        upiId: { type: String, required: true, trim: true },
+        upiName: { type: String, required: true, trim: true },
+        bankName: { type: String, default: '', trim: true },
+        isActive: { type: Boolean, default: true },
+        isPrimary: { type: Boolean, default: false },
+        dailyLimitInr: { type: Number, default: 0 },
+        todayVolumeInr: { type: Number, default: 0 },
+        todayVolumeDate: { type: String, default: '' },
+        totalVolumeInr: { type: Number, default: 0 },
+        totalTransactions: { type: Number, default: 0 },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    upiRoutingMode: {
+      type: String,
+      enum: ['PRIMARY_ONLY', 'ROUND_ROBIN', 'FAILOVER'],
+      default: 'PRIMARY_ONLY',
+    },
+    upiRotationIndex: { type: Number, default: 0 },
     apiKey: {
       type: String,
       unique: true,

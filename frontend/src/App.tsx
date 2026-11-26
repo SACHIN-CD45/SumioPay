@@ -18,6 +18,7 @@ import { ReconciliationPage } from './pages/merchant/ReconciliationPage';
 import { ProjectsPage } from './pages/merchant/ProjectsPage';
 import { TeamPage } from './pages/merchant/TeamPage';
 import { BillingPage } from './pages/merchant/BillingPage';
+import { ProfilePage } from './pages/merchant/ProfilePage';
 import { RefundsPage } from './pages/merchant/RefundsPage';
 import { ReportsPage } from './pages/merchant/ReportsPage';
 import { WebhooksPage } from './pages/merchant/WebhooksPage';
@@ -160,6 +161,7 @@ export const App: React.FC = () => {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/billing" element={<BillingPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/refunds" element={<RefundsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/webhooks" element={<WebhooksPage />} />

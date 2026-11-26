@@ -66,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     {
       title: 'ORGANIZATION & SETTINGS',
       items: [
+        { label: 'Profile & UPI Bank', to: '/profile', icon: ShieldCheck, badge: 'UPI', badgeColor: 'bg-emerald-100 text-emerald-700' },
         { label: 'Project Workspaces', to: '/projects', icon: FolderGit2 },
         { label: 'Team & RBAC', to: '/team', icon: Users },
         { label: 'Billing & Plans', to: '/billing', icon: Receipt },

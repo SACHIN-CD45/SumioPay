@@ -28,6 +28,13 @@ import {
   resolvePlanDetails,
   resolvePlatformCollectorMerchant,
 } from '../services/subscriptionActivation.service';
+import {
+  getIstDateKey,
+  inferBankFromUpiHandle,
+  isValidUpiVpa,
+  parseUpiQrString,
+  syncMerchantUpiState,
+} from '../services/upiRouter.service';
 
 export const sendRegistrationOtp = async (req: Request, res: Response) => {
   try {
@@ -137,6 +144,24 @@ export const registerMerchant = async (req: Request, res: Response) => {
       phone: (phone || '').trim(),
       upiId: upiId.trim(),
       upiName: (upiName || businessName).trim(),
+      upiAccounts: [
+        {
+          id: 'upi_primary',
+          label: 'Primary Bank UPI',
+          upiId: upiId.trim(),
+          upiName: (upiName || businessName).trim(),
+          bankName: inferBankFromUpiHandle(upiId),
+          isActive: true,
+          isPrimary: true,
+          dailyLimitInr: 0,
+          todayVolumeInr: 0,
+          todayVolumeDate: getIstDateKey(),
+          totalVolumeInr: 0,
+          totalTransactions: 0,
+          createdAt: new Date(),
+        },
+      ],
+      upiRoutingMode: 'PRIMARY_ONLY',
       apiKey: `sp_live_${crypto.randomBytes(16).toString('hex')}`,
       apiSecret: `sp_sec_${crypto.randomBytes(24).toString('hex')}`,
       webhookSecret: crypto.randomBytes(20).toString('hex'),
@@ -361,6 +386,12 @@ export const resetPasswordWithOtp = async (req: Request, res: Response) => {
 export const getMerchantProfile = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const merchant = req.merchant!;
+    const hadAccounts = Array.isArray(merchant.upiAccounts) && merchant.upiAccounts.length > 0;
+    const syncedAccounts = syncMerchantUpiState(merchant);
+    if (!hadAccounts && syncedAccounts.length > 0) {
+      await merchant.save().catch(() => {});
+    }
+
     res.json({
       success: true,
       data: {
@@ -371,6 +402,8 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
         businessName: merchant.businessName,
         upiId: merchant.upiId,
         upiName: merchant.upiName,
+        upiAccounts: syncedAccounts,
+        upiRoutingMode: merchant.upiRoutingMode || 'PRIMARY_ONLY',
         apiKey: merchant.apiKey,
         apiSecret: merchant.apiSecret,
         webhookUrl: merchant.webhookUrl,
@@ -389,20 +422,282 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
 export const updateMerchantProfile = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const merchant = req.merchant!;
-    const { businessName, upiId, upiName, webhookUrl, phone } = req.body;
+    const { name, businessName, upiId, upiName, webhookUrl, phone, upiRoutingMode } = req.body;
 
-    if (businessName) merchant.businessName = businessName.trim();
-    if (upiId) merchant.upiId = upiId.trim();
-    if (upiName) merchant.upiName = upiName.trim();
+    if (name && name.trim()) merchant.name = name.trim();
+    if (businessName && businessName.trim()) merchant.businessName = businessName.trim();
     if (webhookUrl !== undefined) merchant.webhookUrl = (webhookUrl || '').trim();
     if (phone !== undefined) merchant.phone = (phone || '').trim();
+    if (upiRoutingMode && ['PRIMARY_ONLY', 'ROUND_ROBIN', 'FAILOVER'].includes(upiRoutingMode)) {
+      merchant.upiRoutingMode = upiRoutingMode;
+    }
 
+    const accounts = syncMerchantUpiState(merchant);
+    const primary = accounts.find((a) => a.isPrimary) || accounts[0];
+
+    if (upiId && upiId.trim()) {
+      const cleanVpa = upiId.trim();
+      if (!isValidUpiVpa(cleanVpa)) {
+        return res.status(400).json({ success: false, message: 'Enter a valid UPI ID (e.g. name@okaxis)' });
+      }
+      merchant.upiId = cleanVpa;
+      if (primary) {
+        primary.upiId = cleanVpa;
+        primary.bankName = inferBankFromUpiHandle(cleanVpa);
+      }
+    }
+    if (upiName && upiName.trim()) {
+      merchant.upiName = upiName.trim();
+      if (primary) {
+        primary.upiName = upiName.trim();
+      }
+    }
+
+    merchant.markModified('upiAccounts');
     await merchant.save();
 
     res.json({
       success: true,
-      message: 'Settings updated successfully',
+      message: 'Merchant profile & UPI settings saved',
       data: merchant,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const addUpiAccount = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const {
+      label = 'Bank UPI Account',
+      upiId = '',
+      upiName = '',
+      bankName = '',
+      qrPayload = '',
+      dailyLimitInr = 0,
+      makePrimary = false,
+    } = req.body;
+
+    let finalUpiId = String(upiId).trim();
+    let finalUpiName = String(upiName).trim();
+    let finalBankName = String(bankName).trim();
+
+    if (qrPayload) {
+      const parsed = parseUpiQrString(String(qrPayload));
+      if (!parsed) {
+        return res.status(400).json({
+          success: false,
+          message: 'Uploaded QR does not contain a valid UPI payment ID (upi://pay?pa=...)',
+        });
+      }
+      finalUpiId = finalUpiId || parsed.upiId;
+      finalUpiName = finalUpiName || parsed.upiName;
+      finalBankName = finalBankName || parsed.bankName;
+    }
+
+    if (!isValidUpiVpa(finalUpiId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid UPI ID format. Example: shopname@okhdfcbank or 9876543210@paytm',
+      });
+    }
+
+    const accounts = syncMerchantUpiState(merchant);
+    const duplicate = accounts.find((a) => a.upiId.toLowerCase() === finalUpiId.toLowerCase());
+    if (duplicate) {
+      return res.status(409).json({
+        success: false,
+        message: `UPI ID ${finalUpiId} is already added in your profile`,
+      });
+    }
+
+    const setAsPrimary = Boolean(makePrimary) || accounts.length === 0;
+    if (setAsPrimary) {
+      accounts.forEach((a) => {
+        a.isPrimary = false;
+      });
+    }
+
+    const newAccount = {
+      id: `upi_${crypto.randomBytes(5).toString('hex')}`,
+      label: String(label).trim() || finalBankName || inferBankFromUpiHandle(finalUpiId),
+      upiId: finalUpiId,
+      upiName: finalUpiName || merchant.businessName,
+      bankName: finalBankName || inferBankFromUpiHandle(finalUpiId),
+      isActive: true,
+      isPrimary: setAsPrimary,
+      dailyLimitInr: Math.max(0, Number(dailyLimitInr) || 0),
+      todayVolumeInr: 0,
+      todayVolumeDate: getIstDateKey(),
+      totalVolumeInr: 0,
+      totalTransactions: 0,
+      createdAt: new Date(),
+    };
+
+    accounts.push(newAccount);
+    if (setAsPrimary) {
+      merchant.upiId = newAccount.upiId;
+      merchant.upiName = newAccount.upiName;
+    }
+    merchant.upiAccounts = accounts as any;
+    merchant.markModified('upiAccounts');
+    await merchant.save();
+
+    res.status(201).json({
+      success: true,
+      message: `UPI account ${newAccount.upiId} added${setAsPrimary ? ' & activated as Primary' : ''}`,
+      data: {
+        account: newAccount,
+        upiAccounts: merchant.upiAccounts,
+        upiId: merchant.upiId,
+        upiName: merchant.upiName,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const updateUpiAccount = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const { accountId } = req.params;
+    const { label, upiId, upiName, bankName, isPrimary, isActive, dailyLimitInr } = req.body;
+
+    const accounts = syncMerchantUpiState(merchant);
+    const target = accounts.find((a) => a.id === accountId);
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'UPI account not found' });
+    }
+
+    if (upiId !== undefined) {
+      const cleanVpa = String(upiId).trim();
+      if (!isValidUpiVpa(cleanVpa)) {
+        return res.status(400).json({ success: false, message: 'Invalid UPI ID format' });
+      }
+      target.upiId = cleanVpa;
+      target.bankName = bankName || inferBankFromUpiHandle(cleanVpa);
+    }
+    if (label !== undefined && String(label).trim()) target.label = String(label).trim();
+    if (upiName !== undefined && String(upiName).trim()) target.upiName = String(upiName).trim();
+    if (bankName !== undefined && String(bankName).trim()) target.bankName = String(bankName).trim();
+    if (dailyLimitInr !== undefined) target.dailyLimitInr = Math.max(0, Number(dailyLimitInr) || 0);
+
+    if (isActive !== undefined) {
+      const willBeActive = Boolean(isActive);
+      const otherActiveCount = accounts.filter((a) => a.id !== accountId && a.isActive).length;
+      if (!willBeActive && otherActiveCount === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'At least one UPI ID must remain active to accept payments',
+        });
+      }
+      target.isActive = willBeActive;
+      if (!willBeActive && target.isPrimary) {
+        target.isPrimary = false;
+        const fallback = accounts.find((a) => a.id !== accountId && a.isActive);
+        if (fallback) fallback.isPrimary = true;
+      }
+    }
+
+    if (isPrimary === true) {
+      accounts.forEach((a) => {
+        a.isPrimary = a.id === accountId;
+      });
+      target.isActive = true;
+    }
+
+    const activePrimary = accounts.find((a) => a.isPrimary) || accounts.find((a) => a.isActive) || accounts[0];
+    if (activePrimary) {
+      merchant.upiId = activePrimary.upiId;
+      merchant.upiName = activePrimary.upiName;
+    }
+    merchant.upiAccounts = accounts as any;
+    merchant.markModified('upiAccounts');
+    await merchant.save();
+
+    res.json({
+      success: true,
+      message: isPrimary ? `${target.upiId} activated as Primary UPI` : 'UPI account updated',
+      data: {
+        upiAccounts: merchant.upiAccounts,
+        upiId: merchant.upiId,
+        upiName: merchant.upiName,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const deleteUpiAccount = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const { accountId } = req.params;
+
+    const accounts = syncMerchantUpiState(merchant);
+    if (accounts.length <= 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot remove the last UPI account. Add another UPI first before removing this one.',
+      });
+    }
+
+    const idx = accounts.findIndex((a) => a.id === accountId);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, message: 'UPI account not found' });
+    }
+
+    const wasPrimary = accounts[idx].isPrimary;
+    accounts.splice(idx, 1);
+
+    if (wasPrimary && accounts.length > 0) {
+      const nextPrimary = accounts.find((a) => a.isActive) || accounts[0];
+      nextPrimary.isPrimary = true;
+      nextPrimary.isActive = true;
+    }
+
+    const primary = accounts.find((a) => a.isPrimary) || accounts[0];
+    if (primary) {
+      merchant.upiId = primary.upiId;
+      merchant.upiName = primary.upiName;
+    }
+
+    merchant.upiAccounts = accounts as any;
+    merchant.markModified('upiAccounts');
+    await merchant.save();
+
+    res.json({
+      success: true,
+      message: 'UPI account removed',
+      data: {
+        upiAccounts: merchant.upiAccounts,
+        upiId: merchant.upiId,
+        upiName: merchant.upiName,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const updateUpiRoutingMode = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const { upiRoutingMode } = req.body;
+    if (!['PRIMARY_ONLY', 'ROUND_ROBIN', 'FAILOVER'].includes(upiRoutingMode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid upiRoutingMode. Use PRIMARY_ONLY, ROUND_ROBIN, or FAILOVER.',
+      });
+    }
+    merchant.upiRoutingMode = upiRoutingMode;
+    await merchant.save();
+    res.json({
+      success: true,
+      message: `UPI Routing switched to ${upiRoutingMode}`,
+      data: { upiRoutingMode: merchant.upiRoutingMode },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

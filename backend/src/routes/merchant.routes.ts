@@ -7,6 +7,10 @@ import {
   loginMerchant,
   getMerchantProfile,
   updateMerchantProfile,
+  addUpiAccount,
+  updateUpiAccount,
+  deleteUpiAccount,
+  updateUpiRoutingMode,
   regenerateApiKeys,
   getDashboardStats,
   listTeamMembers,
@@ -43,6 +47,10 @@ router.post('/logout', logoutMerchant);
 router.post('/logout-all', requireMerchantAuth, logoutAllDevices);
 router.get('/profile', requireMerchantAuth, getMerchantProfile);
 router.put('/profile', requireMerchantAuth, updateMerchantProfile);
+router.post('/upi-accounts', requireMerchantAuth, addUpiAccount);
+router.patch('/upi-accounts/:accountId', requireMerchantAuth, updateUpiAccount);
+router.delete('/upi-accounts/:accountId', requireMerchantAuth, deleteUpiAccount);
+router.patch('/upi-routing', requireMerchantAuth, updateUpiRoutingMode);
 router.post('/regenerate-api-keys', requireMerchantAuth, regenerateApiKeys);
 router.get('/dashboard-stats', requireMerchantAuth, getDashboardStats);
 
