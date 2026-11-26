@@ -737,49 +737,70 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
     if (maintenanceMode !== undefined) settings.maintenanceMode = maintenanceMode;
     if (maintenanceMessage !== undefined) settings.maintenanceMessage = maintenanceMessage;
     if (allowNewMerchantRegistrations !== undefined) settings.allowNewMerchantRegistrations = allowNewMerchantRegistrations;
-    if (totalPlatformGMVFormatted !== undefined) settings.totalPlatformGMVFormatted = totalPlatformGMVFormatted;
-    if (totalBusinessesCount !== undefined) settings.totalBusinessesCount = totalBusinessesCount;
-    if (slaGuaranteePercent !== undefined) settings.slaGuaranteePercent = slaGuaranteePercent;
-    if (enterpriseContactEmail !== undefined) settings.enterpriseContactEmail = enterpriseContactEmail;
-    if (supportPhone !== undefined) settings.supportPhone = supportPhone;
-    if (featureFlags !== undefined) settings.featureFlags = { ...settings.featureFlags, ...featureFlags };
-    if (pricingTiers !== undefined) settings.pricingTiers = { ...settings.pricingTiers, ...pricingTiers };
-    if (subscriptionPlans !== undefined) {
-      const currentCatalog = getSubscriptionPlanCatalog(settings);
+    if (totalPlatformGMVFormatted !== undefined) settings.totalPlatformGMVFormatted = String(totalPlatformGMVFormatted);
+    if (totalBusinessesCount !== undefined && !isNaN(Number(totalBusinessesCount))) {
+      settings.totalBusinessesCount = Number(totalBusinessesCount);
+    }
+    if (slaGuaranteePercent !== undefined && !isNaN(Number(slaGuaranteePercent))) {
+      settings.slaGuaranteePercent = Number(slaGuaranteePercent);
+    }
+    if (enterpriseContactEmail !== undefined) settings.enterpriseContactEmail = String(enterpriseContactEmail);
+    if (supportPhone !== undefined) settings.supportPhone = String(supportPhone);
+    if (featureFlags && typeof featureFlags === 'object') {
+      settings.featureFlags = { ...(previousState.featureFlags || {}), ...featureFlags };
+    }
+    if (pricingTiers && typeof pricingTiers === 'object') {
+      const prevTiers = previousState.pricingTiers || {};
+      settings.pricingTiers = {
+        STARTER: { ...(prevTiers.STARTER || {}), ...(pricingTiers.STARTER || {}) },
+        GROWTH: { ...(prevTiers.GROWTH || {}), ...(pricingTiers.GROWTH || {}) },
+        BUSINESS: { ...(prevTiers.BUSINESS || {}), ...(pricingTiers.BUSINESS || {}) },
+        ENTERPRISE: { ...(prevTiers.ENTERPRISE || {}), ...(pricingTiers.ENTERPRISE || {}) },
+      };
+    }
+    if (subscriptionPlans && typeof subscriptionPlans === 'object') {
+      const currentCatalog = getSubscriptionPlanCatalog(previousState);
       settings.subscriptionPlans = {
         ...currentCatalog,
         ...subscriptionPlans,
-        trialDays: Math.max(0, Number(subscriptionPlans.trialDays ?? currentCatalog.trialDays)),
-        monthlyPrice: Math.max(1, Number(subscriptionPlans.monthlyPrice ?? currentCatalog.monthlyPrice)),
-        monthlyDurationDays: Math.max(1, Number(subscriptionPlans.monthlyDurationDays ?? currentCatalog.monthlyDurationDays)),
-        halfYearlyPrice: Math.max(1, Number(subscriptionPlans.halfYearlyPrice ?? currentCatalog.halfYearlyPrice)),
-        halfYearlyDurationDays: Math.max(1, Number(subscriptionPlans.halfYearlyDurationDays ?? currentCatalog.halfYearlyDurationDays)),
-        customPrice: Math.max(0, Number(subscriptionPlans.customPrice ?? currentCatalog.customPrice)),
+        trialDays: Math.max(0, Number(subscriptionPlans.trialDays ?? currentCatalog.trialDays) || 0),
+        monthlyPrice: Math.max(1, Number(subscriptionPlans.monthlyPrice ?? currentCatalog.monthlyPrice) || 399),
+        monthlyDurationDays: Math.max(1, Number(subscriptionPlans.monthlyDurationDays ?? currentCatalog.monthlyDurationDays) || 30),
+        monthlyDeviceLimit: Math.max(1, Number(subscriptionPlans.monthlyDeviceLimit ?? currentCatalog.monthlyDeviceLimit) || 2),
+        halfYearlyPrice: Math.max(1, Number(subscriptionPlans.halfYearlyPrice ?? currentCatalog.halfYearlyPrice) || 1999),
+        halfYearlyDurationDays: Math.max(1, Number(subscriptionPlans.halfYearlyDurationDays ?? currentCatalog.halfYearlyDurationDays) || 180),
+        halfYearlyDeviceLimit: Math.max(1, Number(subscriptionPlans.halfYearlyDeviceLimit ?? currentCatalog.halfYearlyDeviceLimit) || 5),
+        customPrice: Math.max(0, Number(subscriptionPlans.customPrice ?? currentCatalog.customPrice) || 0),
       };
     }
-    if (platformBilling !== undefined) {
+    if (platformBilling && typeof platformBilling === 'object') {
       settings.platformBilling = {
         collectorMerchantEmail:
           platformBilling.collectorMerchantEmail !== undefined
             ? String(platformBilling.collectorMerchantEmail).toLowerCase().trim()
-            : (settings.platformBilling?.collectorMerchantEmail || ''),
+            : (previousState.platformBilling?.collectorMerchantEmail || ''),
         collectorApiKey:
           platformBilling.collectorApiKey !== undefined
             ? String(platformBilling.collectorApiKey).trim()
-            : (settings.platformBilling?.collectorApiKey || ''),
+            : (previousState.platformBilling?.collectorApiKey || ''),
         isEnabled:
           platformBilling.isEnabled !== undefined
             ? Boolean(platformBilling.isEnabled)
-            : settings.platformBilling?.isEnabled !== false,
+            : previousState.platformBilling?.isEnabled !== false,
       };
     }
 
     settings.updatedBy = adminEmail;
     await settings.save();
 
-    const collector = await resolvePlatformCollectorMerchant(settings);
+    const [collector, availableMerchants] = await Promise.all([
+      resolvePlatformCollectorMerchant(settings),
+      Merchant.find({ isActive: true })
+        .select('businessName name email upiId upiName createdAt')
+        .sort({ createdAt: -1 }),
+    ]);
 
-    // Log privileged audit event
+    // Log privileged audit event (non-blocking if logging fails)
     await AuditLog.create({
       actorType: 'SUPERADMIN',
       actorEmail: adminEmail,
@@ -790,6 +811,8 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
       newState: settings.toObject(),
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
+    }).catch((auditErr: any) => {
+      console.error('[SuperAdmin AuditLog Warning]', auditErr?.message);
     });
 
     res.status(200).json({
@@ -798,6 +821,11 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
       data: {
         ...settings.toObject(),
         subscriptionPlans: getSubscriptionPlanCatalog(settings),
+        platformBilling: {
+          collectorMerchantEmail: settings.platformBilling?.collectorMerchantEmail || '',
+          collectorApiKey: settings.platformBilling?.collectorApiKey || '',
+          isEnabled: settings.platformBilling?.isEnabled !== false,
+        },
         collectorStatus: {
           enabled: collector.enabled,
           configured: collector.configured,
@@ -810,6 +838,7 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
           onlineDevicesCount: collector.onlineDevicesCount,
           totalDevicesCount: collector.totalDevicesCount,
         },
+        availableMerchants,
       },
     });
   } catch (err: any) {

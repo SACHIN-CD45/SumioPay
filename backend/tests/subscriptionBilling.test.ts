@@ -8,6 +8,7 @@ import {
   activatePlatformSubscriptionFromOrder,
   PLATFORM_SUBSCRIPTION_METADATA_TYPE,
 } from '../src/services/subscriptionActivation.service';
+import { AuditLog } from '../src/models/auditLog.model';
 
 describe('SumioPay SaaS Subscription Plans & Self-Billing Logic', () => {
   test('returns default 3-day trial, ₹399 monthly, ₹1999 6-month, and custom all-features catalog', () => {
@@ -117,5 +118,23 @@ describe('SumioPay SaaS Subscription Plans & Self-Billing Logic', () => {
       },
     });
     assert.equal(unpaidSub.activated, false);
+  });
+
+  test('AuditLog schema accepts SUPERADMIN and MERCHANT actorType values', async () => {
+    const superAdminAudit = new AuditLog({
+      actorType: 'SUPERADMIN',
+      actorEmail: 'admin@sumiotech.in',
+      action: 'PLATFORM_SETTINGS_UPDATED',
+      resourceType: 'PLATFORM',
+    });
+    await superAdminAudit.validate();
+
+    const merchantAudit = new AuditLog({
+      actorType: 'MERCHANT',
+      actorEmail: 'merchant@sumiotech.in',
+      action: 'PAYMENT_MANUALLY_RECONCILED',
+      resourceType: 'ORDER',
+    });
+    await merchantAudit.validate();
   });
 });

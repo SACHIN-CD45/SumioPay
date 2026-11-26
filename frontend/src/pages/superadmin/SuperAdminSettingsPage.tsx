@@ -18,17 +18,20 @@ export const SuperAdminSettingsPage: React.FC = () => {
   const [platformSettings, setPlatformSettings] = useState<any>(null);
   const [savingSettings, setSavingSettings] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   const fetchSettings = async () => {
     setLoading(true);
+    setSaveError(null);
     try {
       const res = await adminApi.get('/settings');
       if (res.data.success) {
         setPlatformSettings(res.data.data);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[SuperAdmin Settings]', err);
+      setSaveError(err?.response?.data?.message || err?.message || 'Failed to load settings');
     } finally {
       setLoading(false);
     }
@@ -43,16 +46,45 @@ export const SuperAdminSettingsPage: React.FC = () => {
     if (!platformSettings) return;
     setSavingSettings(true);
     setSavedSuccess(false);
+    setSaveError(null);
 
     try {
-      const res = await adminApi.patch('/settings', platformSettings);
+      // Send only writable platform settings fields (exclude read-only arrays like availableMerchants/collectorStatus)
+      const payload = {
+        announcementText: platformSettings.announcementText,
+        announcementLink: platformSettings.announcementLink,
+        isAnnouncementActive: platformSettings.isAnnouncementActive,
+        maintenanceMode: platformSettings.maintenanceMode,
+        maintenanceMessage: platformSettings.maintenanceMessage,
+        allowNewMerchantRegistrations: platformSettings.allowNewMerchantRegistrations,
+        totalPlatformGMVFormatted: platformSettings.totalPlatformGMVFormatted,
+        totalBusinessesCount: platformSettings.totalBusinessesCount,
+        slaGuaranteePercent: platformSettings.slaGuaranteePercent,
+        enterpriseContactEmail: platformSettings.enterpriseContactEmail,
+        supportPhone: platformSettings.supportPhone,
+        featureFlags: platformSettings.featureFlags,
+        pricingTiers: platformSettings.pricingTiers,
+        subscriptionPlans: platformSettings.subscriptionPlans,
+        platformBilling: platformSettings.platformBilling,
+      };
+
+      const res = await adminApi.patch('/settings', payload);
       if (res.data.success) {
-        setPlatformSettings(res.data.data);
+        setPlatformSettings((prev: any) => ({
+          ...res.data.data,
+          availableMerchants: res.data.data.availableMerchants || prev?.availableMerchants || [],
+        }));
         setSavedSuccess(true);
-        setTimeout(() => setSavedSuccess(false), 4000);
+        setTimeout(() => setSavedSuccess(false), 5000);
       }
-    } catch (err) {
-      alert('Failed to save platform settings');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const msg =
+        status === 401 || status === 403
+          ? 'SuperAdmin session expired. Please sign in to /superadmin again.'
+          : err?.response?.data?.message || err?.message || 'Failed to save platform settings';
+      setSaveError(msg);
+      alert(msg);
     } finally {
       setSavingSettings(false);
     }
@@ -95,6 +127,13 @@ export const SuperAdminSettingsPage: React.FC = () => {
         <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4" />
           <span>Platform settings deployed successfully and propagated to public cache.</span>
+        </div>
+      )}
+
+      {saveError && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2">
+          <AlertOctagon className="w-4 h-4 shrink-0" />
+          <span>{saveError}</span>
         </div>
       )}
 
@@ -787,6 +826,17 @@ export const SuperAdminSettingsPage: React.FC = () => {
               </div>
             </div>
           </details>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            type="submit"
+            disabled={savingSettings}
+            className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-extrabold text-xs flex items-center gap-2 transition shadow-lg shadow-amber-500/20"
+          >
+            <Save className="w-4 h-4" />
+            <span>{savingSettings ? 'Saving Settings...' : 'Deploy Platform Changes'}</span>
+          </button>
         </div>
       </form>
     </div>
