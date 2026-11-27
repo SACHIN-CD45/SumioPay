@@ -13,6 +13,7 @@ interface NavbarProps {
   onlineDevicesCount?: number;
   onToggleMobileMenu?: () => void;
   isMobileMenuOpen?: boolean;
+  isSubscriptionExpired?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,6 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onlineDevicesCount = 0,
   onToggleMobileMenu,
   isMobileMenuOpen = false,
+  isSubscriptionExpired = false,
 }) => {
   const navigate = useNavigate();
   const [portalMode, setPortalMode] = useState<'LIVE' | 'TEST'>(
@@ -46,6 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       onLogout();
     } else {
       localStorage.removeItem('sumiopay_token');
+      localStorage.removeItem('sumiopay_refresh_token');
       localStorage.removeItem('sumiopay_merchant');
       navigate('/login');
     }
@@ -64,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
         <div
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate(isSubscriptionExpired ? '/billing?expired=true' : '/dashboard')}
           className="cursor-pointer flex items-center gap-2.5"
         >
           <img src="/sumiopay-icon.png" alt="SumioPay" className="w-9 h-9 rounded-xl shadow-sm object-contain" />
@@ -81,58 +84,71 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
-        {/* Mode Switcher Toggle (Live vs Test Mode) */}
-        <div className="flex items-center p-0.5 bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold">
+        {isSubscriptionExpired ? (
           <button
             type="button"
-            onClick={() => handleToggleMode('LIVE')}
-            className={`px-2.5 py-1 rounded-lg transition ${
-              portalMode === 'LIVE'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
+            onClick={() => navigate('/billing?expired=true')}
+            className="px-3 py-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-extrabold flex items-center gap-1.5 hover:bg-rose-100 transition"
           >
-            Live
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>Plan Expired &bull; Activate Now</span>
           </button>
-          <button
-            type="button"
-            onClick={() => handleToggleMode('TEST')}
-            className={`px-2.5 py-1 rounded-lg transition ${
-              portalMode === 'TEST'
-                ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Test Mode
-          </button>
-        </div>
+        ) : (
+          <>
+            {/* Mode Switcher Toggle (Live vs Test Mode) */}
+            <div className="flex items-center p-0.5 bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => handleToggleMode('LIVE')}
+                className={`px-2.5 py-1 rounded-lg transition ${
+                  portalMode === 'LIVE'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Live
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleMode('TEST')}
+                className={`px-2.5 py-1 rounded-lg transition ${
+                  portalMode === 'TEST'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Test Mode
+              </button>
+            </div>
 
-        {/* Device Status Pill */}
-        <div
-          onClick={() => navigate('/devices')}
-          className="cursor-pointer px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 flex items-center gap-2 text-xs transition hover:border-slate-300"
-        >
-          <Smartphone className="w-3.5 h-3.5 text-slate-500" />
-          <span className="text-slate-600 font-medium hidden sm:inline">Listener:</span>
-          {onlineDevicesCount > 0 ? (
-            <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-[11px]">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              {onlineDevicesCount} Online
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-amber-700 font-bold text-[11px]">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              Pair Phone
-            </span>
-          )}
-        </div>
+            {/* Device Status Pill */}
+            <div
+              onClick={() => navigate('/devices')}
+              className="cursor-pointer px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 flex items-center gap-2 text-xs transition hover:border-slate-300"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-slate-500" />
+              <span className="text-slate-600 font-medium hidden sm:inline">Listener:</span>
+              {onlineDevicesCount > 0 ? (
+                <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-[11px]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  {onlineDevicesCount} Online
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-amber-700 font-bold text-[11px]">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  Pair Phone
+                </span>
+              )}
+            </div>
+          </>
+        )}
 
-        {/* Merchant Info (Clickable shortcut to Profile & UPI Accounts) */}
+        {/* Merchant Info (Clickable shortcut to Profile & UPI Accounts, or Billing when expired) */}
         {merchant && (
           <button
             type="button"
-            onClick={() => navigate('/profile')}
-            title="Manage Merchant Profile & UPI Accounts"
+            onClick={() => navigate(isSubscriptionExpired ? '/billing?expired=true' : '/profile')}
+            title={isSubscriptionExpired ? 'Activate Subscription Plan' : 'Manage Merchant Profile & UPI Accounts'}
             className="hidden md:flex flex-col text-right px-2.5 py-1 rounded-xl hover:bg-slate-100 transition"
           >
             <span className="text-xs font-bold text-slate-800">{merchant.businessName}</span>

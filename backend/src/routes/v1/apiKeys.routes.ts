@@ -2,10 +2,12 @@ import { Router, Response } from 'express';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { requireMerchantAuth, AuthenticatedRequest } from '../../middleware/auth.middleware';
+import { requireActiveSubscription } from '../../middleware/subscription.middleware';
 import { ApiKey } from '../../models/apiKey.model';
 import { AuditLog } from '../../models/auditLog.model';
 
 const router = Router();
+router.use(requireMerchantAuth, requireActiveSubscription);
 
 // GET /api/v1/api-keys - List merchant API keys
 router.get('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Response) => {

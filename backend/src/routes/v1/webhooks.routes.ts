@@ -1,12 +1,14 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { requireMerchantAuth, AuthenticatedRequest } from '../../middleware/auth.middleware';
+import { requireActiveSubscription } from '../../middleware/subscription.middleware';
 import { dispatchMerchantWebhook } from '../../utils/hmacSigner';
 import { validateSafeWebhookUrl } from '../../utils/securityGuards';
 import { WebhookLog } from '../../models/webhookLog.model';
 import { AuditLog } from '../../models/auditLog.model';
 
 const router = Router();
+router.use(requireMerchantAuth, requireActiveSubscription);
 
 // GET /api/v1/webhooks — Get current webhook configuration
 router.get('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {

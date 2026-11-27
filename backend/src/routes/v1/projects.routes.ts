@@ -2,11 +2,13 @@ import { Router, Response } from 'express';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { requireMerchantAuth, AuthenticatedRequest } from '../../middleware/auth.middleware';
+import { requireActiveSubscription } from '../../middleware/subscription.middleware';
 import { Project } from '../../models/project.model';
 import { AuditLog } from '../../models/auditLog.model';
 import { validateSafeWebhookUrl } from '../../utils/securityGuards';
 
 const router = Router();
+router.use(requireMerchantAuth, requireActiveSubscription);
 
 // GET /api/v1/projects - List all projects for authenticated merchant
 router.get('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Response) => {

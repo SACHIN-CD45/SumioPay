@@ -18,11 +18,13 @@ import {
   Receipt,
   FileText,
   X,
+  Lock,
 } from 'lucide-react';
 
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
+  isSubscriptionExpired?: boolean;
 }
 
 interface NavSection {
@@ -36,7 +38,7 @@ interface NavSection {
   }[];
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, isSubscriptionExpired = false }) => {
   const navSections: NavSection[] = [
     {
       title: 'FINANCE & PAYMENTS',
@@ -80,8 +82,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       <div className="space-y-4">
         <div className="px-3 flex items-center justify-between">
           <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Merchant Console</span>
+            <span className={`w-2 h-2 rounded-full ${isSubscriptionExpired ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></span>
+            <span>{isSubscriptionExpired ? 'Account Locked' : 'Merchant Console'}</span>
           </div>
           {onClose && (
             <button
@@ -94,6 +96,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
           )}
         </div>
 
+        {isSubscriptionExpired && (
+          <div className="mx-1 p-3 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-800 space-y-1">
+            <div className="font-bold flex items-center gap-1.5 text-rose-900">
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>Plan Expired</span>
+            </div>
+            <p className="leading-snug text-rose-700">
+              Your 3-day free trial or plan has ended. Activate a plan under <strong>Billing &amp; Plans</strong> to unlock access.
+            </p>
+          </div>
+        )}
+
         <nav className="space-y-4">
           {navSections.map((section) => (
             <div key={section.title} className="space-y-1">
@@ -103,14 +117,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
               <div className="space-y-0.5">
                 {section.items.map((item) => {
                   const Icon = item.icon;
+                  const isLockedItem = isSubscriptionExpired && item.to !== '/billing';
+                  const targetTo = isLockedItem ? '/billing?expired=true' : item.to;
                   return (
                     <NavLink
                       key={item.to}
-                      to={item.to}
+                      to={targetTo}
                       onClick={onClose}
                       className={({ isActive }) =>
                         `flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition ${
-                          isActive
+                          isLockedItem
+                            ? 'text-slate-400 bg-slate-50/70 opacity-65 cursor-not-allowed hover:bg-rose-50/60 hover:text-rose-700'
+                            : isActive
                             ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                         }`
@@ -119,20 +137,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                       {({ isActive }) => (
                         <>
                           <div className="flex items-center gap-2.5">
-                            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <Icon className={`w-4 h-4 shrink-0 ${isLockedItem ? 'text-slate-300' : isActive ? 'text-blue-600' : 'text-slate-400'}`} />
                             <span>{item.label}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {item.badge && (
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
-                                  item.badgeColor || 'bg-slate-100 text-slate-600'
-                                }`}
-                              >
-                                {item.badge}
-                              </span>
+                            {isLockedItem ? (
+                              <Lock className="w-3 h-3 text-rose-400" />
+                            ) : (
+                              <>
+                                {item.badge && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
+                                      item.badgeColor || 'bg-slate-100 text-slate-600'
+                                    }`}
+                                  >
+                                    {item.badge}
+                                  </span>
+                                )}
+                                {isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-600" />}
+                              </>
                             )}
-                            {isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-600" />}
                           </div>
                         </>
                       )}

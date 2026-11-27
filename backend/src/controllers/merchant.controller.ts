@@ -24,6 +24,7 @@ import {
   PLATFORM_SUBSCRIPTION_METADATA_TYPE,
   activatePlatformSubscriptionFromOrder,
   computeTrialPeriodEnd,
+  evaluateMerchantSubscription,
   getSubscriptionPlanCatalog,
   resolvePlanDetails,
   resolvePlatformCollectorMerchant,
@@ -474,6 +475,8 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
       await merchant.save().catch(() => {});
     }
 
+    const entitlement = await evaluateMerchantSubscription(merchant);
+
     res.json({
       success: true,
       data: {
@@ -490,11 +493,12 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
         upiName: merchant.upiName,
         upiAccounts: syncedAccounts,
         upiRoutingMode: merchant.upiRoutingMode || 'PRIMARY_ONLY',
-        apiKey: merchant.apiKey,
-        apiSecret: merchant.apiSecret,
+        apiKey: entitlement.isExpired ? '' : merchant.apiKey,
+        apiSecret: entitlement.isExpired ? '' : merchant.apiSecret,
         webhookUrl: merchant.webhookUrl,
-        webhookSecret: merchant.webhookSecret,
-        planTier: merchant.planTier,
+        webhookSecret: entitlement.isExpired ? '' : merchant.webhookSecret,
+        planTier: entitlement.planTier || merchant.planTier,
+        subscriptionStatus: entitlement,
         totalVolume: merchant.totalVolume,
         totalTransactions: merchant.totalTransactions,
         createdAt: merchant.createdAt,
@@ -1002,20 +1006,22 @@ function buildSubscriptionBillDetails(
 // Subscription Management & Dogfood Self-Billing via SumioPay
 export const getSubscription = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const merchantId = req.merchant!._id;
+    const merchant = req.merchant!;
+    const merchantId = merchant._id;
     const settings = await SystemSetting.findOne();
     const catalog = getSubscriptionPlanCatalog(settings);
     const collector = await resolvePlatformCollectorMerchant(settings);
+    const entitlement = await evaluateMerchantSubscription(merchant);
 
     let subscription = await Subscription.findOne({ merchantId });
     if (!subscription) {
-      const now = new Date();
+      const startDate = merchant.createdAt ? new Date(merchant.createdAt) : new Date();
       subscription = await Subscription.create({
         merchantId,
         planTier: 'TRIAL',
         status: 'TRIAL',
-        currentPeriodStart: now,
-        currentPeriodEnd: computeTrialPeriodEnd(catalog.trialDays, now),
+        currentPeriodStart: startDate,
+        currentPeriodEnd: computeTrialPeriodEnd(catalog.trialDays, startDate),
         monthlyPriceInPaise: 0,
       });
     }
@@ -1027,11 +1033,6 @@ export const getSubscription = async (req: AuthenticatedRequest, res: Response) 
       expiresAt: { $gt: new Date() },
     }).sort({ createdAt: -1 });
 
-    const nowMs = Date.now();
-    const endMs = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).getTime() : nowMs;
-    const daysRemaining = Math.max(0, Math.ceil((endMs - nowMs) / (24 * 60 * 60 * 1000)));
-    const isExpired = endMs <= nowMs;
-
     const collectorMerchant = collector.merchant;
     const displayName =
       collectorMerchant?.websiteName || collector.upiName || collector.businessName || 'SumioTech';
@@ -1040,8 +1041,12 @@ export const getSubscription = async (req: AuthenticatedRequest, res: Response) 
       success: true,
       data: {
         ...subscription.toObject(),
-        daysRemaining,
-        isExpired,
+        status: entitlement.status,
+        planTier: entitlement.planTier,
+        daysRemaining: entitlement.daysRemaining,
+        isExpired: entitlement.isExpired,
+        isEntitled: entitlement.isEntitled,
+        isCollector: entitlement.isCollector,
         plans: catalog,
         selfBillingReady: Boolean(collector.configured && collector.upiId),
         selfBillingReason: collector.reason || null,

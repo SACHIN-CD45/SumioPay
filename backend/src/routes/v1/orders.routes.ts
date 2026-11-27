@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ApiKeyRequest, requireApiKeyOrMerchantAuth, requireServerApiAuth } from '../../middleware/apiKey.middleware';
 import { requireIdempotency } from '../../middleware/idempotency.middleware';
+import { requireActiveSubscription } from '../../middleware/subscription.middleware';
 import { paymentOrchestrator } from '../../services/providers/paymentOrchestrator.service';
 import { StateMachineService } from '../../services/stateMachine.service';
 import { dispatchMerchantWebhook } from '../../utils/hmacSigner';
@@ -22,7 +23,7 @@ import crypto from 'crypto';
 const router = Router();
 
 // GET /api/v1/payments/orders or /api/v1/payments — List payments (Server Auth Required)
-router.get('/', requireApiKeyOrMerchantAuth, requireServerApiAuth('orders:read'), async (req: Request, res: Response): Promise<void> => {
+router.get('/', requireApiKeyOrMerchantAuth, requireActiveSubscription, requireServerApiAuth('orders:read'), async (req: Request, res: Response): Promise<void> => {
   try {
     const merchant = (req as any).merchant;
     const page = parseInt(req.query.page as string) || 1;
@@ -72,7 +73,7 @@ router.get('/', requireApiKeyOrMerchantAuth, requireServerApiAuth('orders:read')
 });
 
 // POST /api/v1/payments/orders — Create Payment Order
-router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (req: Request, res: Response): Promise<void> => {
+router.post('/orders', requireApiKeyOrMerchantAuth, requireActiveSubscription, requireIdempotency, async (req: Request, res: Response): Promise<void> => {
   try {
     const apiReq = req as ApiKeyRequest;
     const merchant = apiReq.merchant!;
@@ -357,7 +358,7 @@ router.get('/orders/:id/status', async (req: Request, res: Response): Promise<vo
 });
 
 // POST /api/v1/payments/orders/:id/cancel — Cancel pending order (Server Auth Required)
-router.post('/orders/:id/cancel', requireApiKeyOrMerchantAuth, requireServerApiAuth('orders:create'), async (req: Request, res: Response): Promise<void> => {
+router.post('/orders/:id/cancel', requireApiKeyOrMerchantAuth, requireActiveSubscription, requireServerApiAuth('orders:create'), async (req: Request, res: Response): Promise<void> => {
   try {
     const merchant = (req as any).merchant;
     const order = await Order.findOne({ orderId: req.params.id, merchantId: merchant._id });
@@ -380,7 +381,7 @@ router.post('/orders/:id/cancel', requireApiKeyOrMerchantAuth, requireServerApiA
 });
 
 // POST /api/v1/payments/orders/:id/refund — Initiate/record refund on settled order (Server Auth Required)
-router.post('/orders/:id/refund', requireApiKeyOrMerchantAuth, requireServerApiAuth('refunds:create'), async (req: Request, res: Response): Promise<void> => {
+router.post('/orders/:id/refund', requireApiKeyOrMerchantAuth, requireActiveSubscription, requireServerApiAuth('refunds:create'), async (req: Request, res: Response): Promise<void> => {
   try {
     const merchant = (req as any).merchant;
     const { amountInPaise, reason, providerReference, refundUtr } = req.body;

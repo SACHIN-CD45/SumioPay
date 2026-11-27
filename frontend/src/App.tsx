@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { LandingPage } from './pages/public/LandingPage';
 import { PricingPage } from './pages/public/PricingPage';
 import { PrivacyPolicyPage } from './pages/public/PrivacyPolicyPage';
@@ -44,7 +44,9 @@ import { api } from './lib/api';
 // Merchant Layout with Light Theme Navbar & Sidebar
 const MerchantLayout: React.FC = () => {
   const token = localStorage.getItem('sumiopay_token');
+  const location = useLocation();
   const [merchant, setMerchant] = useState<any>(null);
+  const [subscription, setSubscription] = useState<any>(null);
   const [onlineCount, setOnlineCount] = useState<number>(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [portalMode, setPortalMode] = useState<'LIVE' | 'TEST'>(
@@ -59,33 +61,60 @@ const MerchantLayout: React.FC = () => {
     return () => window.removeEventListener('sumiopay_mode_changed', handleMode);
   }, []);
 
-  useEffect(() => {
+  const fetchMeta = useCallback(async () => {
     if (!token) return;
+    try {
+      const [profRes, subRes] = await Promise.all([
+        api.get('/merchant/profile'),
+        api.get('/merchant/subscription'),
+      ]);
+      if (profRes.data.success) setMerchant(profRes.data.data);
+      const subData = subRes.data.success ? subRes.data.data : null;
+      if (subData) {
+        setSubscription(subData);
+      }
 
-    const fetchMeta = async () => {
-      try {
-        const [profRes, devRes] = await Promise.all([
-          api.get('/merchant/profile'),
-          api.get('/device/my-devices'),
-        ]);
-        if (profRes.data.success) setMerchant(profRes.data.data);
-        if (devRes.data.success) {
+      if (!subData?.isExpired) {
+        const devRes = await api.get('/device/my-devices').catch(() => null);
+        if (devRes?.data?.success) {
           const online = devRes.data.data.filter((d: any) => d.status === 'ONLINE').length;
           setOnlineCount(online);
         }
-      } catch (e) {
-        // Token expired or invalid
+      } else {
+        setOnlineCount(0);
       }
-    };
+    } catch (e) {
+      // Token expired or invalid
+    }
+  }, [token]);
 
+  useEffect(() => {
+    if (!token) return;
     fetchMeta();
     const interval = setInterval(fetchMeta, 12000);
-    return () => clearInterval(interval);
-  }, [token]);
+
+    const handleSubUpdated = () => {
+      fetchMeta();
+    };
+    const handleSubExpired = () => {
+      setSubscription((prev: any) => ({ ...(prev || {}), isExpired: true, daysRemaining: 0 }));
+    };
+
+    window.addEventListener('sumiopay_subscription_updated', handleSubUpdated);
+    window.addEventListener('sumiopay_subscription_expired', handleSubExpired);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('sumiopay_subscription_updated', handleSubUpdated);
+      window.removeEventListener('sumiopay_subscription_expired', handleSubExpired);
+    };
+  }, [token, fetchMeta]);
 
   if (!token) {
     return <Navigate to="/login" replace />;
   }
+
+  const isSubscriptionExpired = Boolean(subscription?.isExpired);
+  const mustRedirectToBilling = isSubscriptionExpired && location.pathname !== '/billing';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900">
@@ -94,32 +123,47 @@ const MerchantLayout: React.FC = () => {
         onlineDevicesCount={onlineCount}
         isMobileMenuOpen={isMobileMenuOpen}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        isSubscriptionExpired={isSubscriptionExpired}
       />
 
-      {portalMode === 'TEST' && (
-        <div className="bg-amber-500 text-slate-950 text-xs font-bold px-4 py-2 flex items-center justify-between shadow-sm z-20">
-          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
-            <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse"></span>
+      {isSubscriptionExpired ? (
+        <div className="bg-rose-600 text-white text-xs font-bold px-4 py-2.5 shadow-sm z-20">
+          <div className="flex items-center justify-between gap-2 max-w-7xl mx-auto w-full">
             <span>
-              DEVELOPER TEST MODE ACTIVE — Real bank accounts are not debited. Test UPI intents, simulated payments, and webhooks freely.
+              SUBSCRIPTION REQUIRED — Your {subscription?.planTier === 'TRIAL' ? '3-day free trial' : 'plan'} has expired. All dashboard modules and payment APIs are locked until you activate a plan.
             </span>
-            <button
-              onClick={() => {
-                localStorage.setItem('sumiopay_mode', 'LIVE');
-                setPortalMode('LIVE');
-                window.dispatchEvent(new Event('sumiopay_mode_changed'));
-              }}
-              className="ml-auto underline text-slate-950 hover:text-slate-800 font-extrabold text-[11px] shrink-0"
-            >
-              Switch to Live Mode &rarr;
-            </button>
           </div>
         </div>
+      ) : (
+        portalMode === 'TEST' && (
+          <div className="bg-amber-500 text-slate-950 text-xs font-bold px-4 py-2 flex items-center justify-between shadow-sm z-20">
+            <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+              <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse"></span>
+              <span>
+                DEVELOPER TEST MODE ACTIVE — Real bank accounts are not debited. Test UPI intents, simulated payments, and webhooks freely.
+              </span>
+              <button
+                onClick={() => {
+                  localStorage.setItem('sumiopay_mode', 'LIVE');
+                  setPortalMode('LIVE');
+                  window.dispatchEvent(new Event('sumiopay_mode_changed'));
+                }}
+                className="ml-auto underline text-slate-950 hover:text-slate-800 font-extrabold text-[11px] shrink-0"
+              >
+                Switch to Live Mode &rarr;
+              </button>
+            </div>
+          </div>
+        )
       )}
       <div className="flex flex-1 overflow-hidden relative">
-        <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+        <Sidebar
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
+          isSubscriptionExpired={isSubscriptionExpired}
+        />
         <main className="flex-1 overflow-y-auto bg-slate-50/60">
-          <Outlet />
+          {mustRedirectToBilling ? <Navigate to="/billing?expired=true" replace /> : <Outlet />}
         </main>
       </div>
     </div>

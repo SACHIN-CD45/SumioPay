@@ -2,7 +2,9 @@ import { Router, Request, Response } from 'express';
 import { createOrder, getOrderStatus } from '../controllers/order.controller';
 import { handleListenerPush } from '../controllers/webhook.controller';
 import { Device } from '../models/device.model';
+import { Merchant } from '../models/merchant.model';
 import { requireApiKeyOrMerchantAuth } from '../middleware/apiKey.middleware';
+import { requireActiveSubscription } from '../middleware/subscription.middleware';
 
 const router = Router();
 
@@ -12,13 +14,14 @@ const router = Router();
  */
 
 // POST /api/central-payment/create-order
-router.post('/create-order', requireApiKeyOrMerchantAuth, createOrder);
+router.post('/create-order', requireApiKeyOrMerchantAuth, requireActiveSubscription, createOrder);
 
 // GET /api/central-payment/status/:orderId
 router.get('/status/:orderId', getOrderStatus);
 
 // POST /api/central-payment/verify-webhook
 // Strictly requires a paired, active device token matching the merchant's Android listener
+// plus an active 3-day trial or paid subscription
 router.post('/verify-webhook', async (req: Request, res: Response): Promise<void> => {
   const token =
     (req.headers['x-device-token'] as string) ||
@@ -36,8 +39,18 @@ router.post('/verify-webhook', async (req: Request, res: Response): Promise<void
     return;
   }
 
+  const merchant = await Merchant.findById(device.merchantId);
+  if (!merchant || !merchant.isActive) {
+    res.status(403).json({ success: false, message: 'Associated merchant account is inactive.' });
+    return;
+  }
+
   (req as any).device = device;
-  return handleListenerPush(req, res);
+  (req as any).merchant = merchant;
+
+  return requireActiveSubscription(req, res, () => {
+    void handleListenerPush(req, res);
+  });
 });
 
 export default router;

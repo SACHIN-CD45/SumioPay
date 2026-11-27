@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { requireMerchantAuth, AuthenticatedRequest } from '../../middleware/auth.middleware';
+import { requireActiveSubscription } from '../../middleware/subscription.middleware';
 import { ReconciliationService } from '../../services/reconciliation.service';
 import { ReconciliationBatch } from '../../models/reconciliation.model';
 import { UnmappedPayment } from '../../models/unmappedPayment.model';
 
 const router = Router();
+router.use(requireMerchantAuth, requireActiveSubscription);
 
 // Upload bank statement batch for auto-matching (Accepts JSON entries or raw CSV text)
 router.post('/upload-statement', requireMerchantAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {

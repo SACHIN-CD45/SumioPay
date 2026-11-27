@@ -114,6 +114,16 @@ api.interceptors.response.use(
       }
     }
 
+    if (
+      error.response?.status === 402 &&
+      (error.response?.data?.code === 'SUBSCRIPTION_EXPIRED' ||
+        error.response?.data?.error?.code === 'SUBSCRIPTION_EXPIRED')
+    ) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('sumiopay_subscription_expired'));
+      }
+    }
+
     return Promise.reject(error);
   }
 );

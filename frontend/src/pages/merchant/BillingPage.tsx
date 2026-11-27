@@ -108,6 +108,7 @@ export const BillingPage: React.FC = () => {
             setPaidUtr(d.utrNumber || 'Verified Bank Credit');
             confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
             await fetchSubscription();
+            window.dispatchEvent(new Event('sumiopay_subscription_updated'));
           } else if (d.status === 'EXPIRED') {
             setCheckoutStatus('EXPIRED');
           }
@@ -240,6 +241,44 @@ export const BillingPage: React.FC = () => {
           )
         )}
       </div>
+
+      {/* Mandatory Trial / Subscription Expired Lock Banner */}
+      {(isExpired || searchParams.get('expired') === 'true') && (
+        <div className="p-5 rounded-2xl bg-rose-50 border-2 border-rose-300 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-rose-700">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>Workspace &amp; Payment APIs Locked</span>
+            </div>
+            <h3 className="text-base font-black text-rose-950">
+              Your {currentTier === 'TRIAL' ? `${plansConfig.trialDays}-Day Free Trial` : 'Subscription Plan'} Has Expired
+            </h3>
+            <p className="text-xs text-rose-800 leading-relaxed max-w-2xl">
+              To protect merchant billing integrity, dashboard analytics, orders ledger, device pairing, and live payment APIs remain paused until you activate a subscription plan below. Your access unlocks automatically within 2 seconds after UPI confirmation.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => handleStartCheckout('MONTHLY')}
+              disabled={initiatingPlan === 'MONTHLY'}
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm transition"
+            >
+              {initiatingPlan === 'MONTHLY'
+                ? 'Generating QR...'
+                : `Activate 1 Month (₹${plansConfig.monthlyPrice})`}
+            </button>
+            <button
+              onClick={() => handleStartCheckout('HALF_YEARLY')}
+              disabled={initiatingPlan === 'HALF_YEARLY'}
+              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition"
+            >
+              {initiatingPlan === 'HALF_YEARLY'
+                ? 'Generating QR...'
+                : `Activate 6 Months (₹${plansConfig.halfYearlyPrice})`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Error Alert */}
       {errorBanner && (

@@ -9,6 +9,7 @@ import {
 } from '../controllers/order.controller';
 import { requireApiKeyOrMerchantAuth } from '../middleware/apiKey.middleware';
 import { requireMerchantAuth } from '../middleware/auth.middleware';
+import { requireActiveSubscription } from '../middleware/subscription.middleware';
 
 const router = Router();
 
@@ -23,8 +24,8 @@ const utrSubmitLimiter = rateLimit({
   },
 });
 
-// Create payment order (supports both Merchant Dashboard JWT & API Key / Secret headers)
-router.post('/create', requireApiKeyOrMerchantAuth, createOrder);
+// Create payment order (supports both Merchant Dashboard JWT & API Key / Secret headers; blocks when expired)
+router.post('/create', requireApiKeyOrMerchantAuth, requireActiveSubscription, createOrder);
 
 // Poll order status (public endpoint with CORS allowed for frontend modals)
 router.get('/status/:orderId', getOrderStatus);
@@ -33,9 +34,9 @@ router.get('/status/:orderId', getOrderStatus);
 router.post('/submit-utr/:orderId', utrSubmitLimiter, submitCustomerUtr);
 
 // Merchant ledger
-router.get('/my-orders', requireMerchantAuth, getMerchantOrders);
+router.get('/my-orders', requireMerchantAuth, requireActiveSubscription, getMerchantOrders);
 
 // Sandbox simulator for instant developer testing (strictly merchant portal JWT, Test orders only)
-router.post('/sandbox-simulate-payment/:orderId', requireMerchantAuth, simulatePayment);
+router.post('/sandbox-simulate-payment/:orderId', requireMerchantAuth, requireActiveSubscription, simulatePayment);
 
 export default router;

@@ -5,6 +5,7 @@ import {
   resolvePlanDetails,
   computeTrialPeriodEnd,
   computeExtendedPeriodEnd,
+  evaluateSubscriptionEntitlement,
   activatePlatformSubscriptionFromOrder,
   PLATFORM_SUBSCRIPTION_METADATA_TYPE,
 } from '../src/services/subscriptionActivation.service';
@@ -136,5 +137,67 @@ describe('SumioPay SaaS Subscription Plans & Self-Billing Logic', () => {
       resourceType: 'ORDER',
     });
     await merchantAudit.validate();
+  });
+
+  test('enforces strict lockout when 3-day free trial or paid plan expires (except Platform Collector)', () => {
+    const now = new Date('2026-11-30T00:00:00.000Z');
+
+    // 1. Active 3-day free trial (1 day remaining)
+    const activeTrial = evaluateSubscriptionEntitlement({
+      status: 'TRIAL',
+      planTier: 'TRIAL',
+      currentPeriodEnd: '2026-12-01T00:00:00.000Z',
+      isCollector: false,
+      now,
+    });
+    assert.equal(activeTrial.isEntitled, true);
+    assert.equal(activeTrial.isExpired, false);
+    assert.equal(activeTrial.daysRemaining, 1);
+
+    // 2. Expired 3-day free trial -> LOCKED
+    const expiredTrial = evaluateSubscriptionEntitlement({
+      status: 'TRIAL',
+      planTier: 'TRIAL',
+      currentPeriodEnd: '2026-11-29T00:00:00.000Z',
+      isCollector: false,
+      now,
+    });
+    assert.equal(expiredTrial.isEntitled, false);
+    assert.equal(expiredTrial.isExpired, true);
+    assert.equal(expiredTrial.daysRemaining, 0);
+
+    // 3. Expired paid plan or CANCELLED / PAST_DUE -> LOCKED
+    const cancelledSub = evaluateSubscriptionEntitlement({
+      status: 'CANCELLED',
+      planTier: 'MONTHLY',
+      currentPeriodEnd: '2026-12-10T00:00:00.000Z',
+      isCollector: false,
+      now,
+    });
+    assert.equal(cancelledSub.isEntitled, false);
+    assert.equal(cancelledSub.isExpired, true);
+
+    // 4. Paid ACTIVE subscription -> UNLOCKED
+    const activePaid = evaluateSubscriptionEntitlement({
+      status: 'ACTIVE',
+      planTier: 'MONTHLY',
+      currentPeriodEnd: '2026-12-30T00:00:00.000Z',
+      isCollector: false,
+      now,
+    });
+    assert.equal(activePaid.isEntitled, true);
+    assert.equal(activePaid.isExpired, false);
+
+    // 5. Platform Collector merchant exempt so self-billing renewal always works
+    const collector = evaluateSubscriptionEntitlement({
+      status: 'TRIAL',
+      planTier: 'CUSTOM',
+      currentPeriodEnd: '2025-01-01T00:00:00.000Z',
+      isCollector: true,
+      now,
+    });
+    assert.equal(collector.isEntitled, true);
+    assert.equal(collector.isExpired, false);
+    assert.equal(collector.isCollector, true);
   });
 });

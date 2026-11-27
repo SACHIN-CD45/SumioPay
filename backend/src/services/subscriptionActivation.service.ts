@@ -349,3 +349,137 @@ export async function activatePlatformSubscriptionFromOrder(order: Partial<IOrde
 
   return { activated: true, alreadyProcessed: false, subscription };
 }
+
+export interface MerchantEntitlementResult {
+  isEntitled: boolean;
+  isExpired: boolean;
+  isCollector: boolean;
+  planTier: string;
+  status: string;
+  daysRemaining: number;
+  currentPeriodEnd: Date | null;
+  reason?: string;
+}
+
+/**
+ * Pure entitlement evaluator for unit tests and runtime checks.
+ * Active TRIAL or ACTIVE plans with future currentPeriodEnd are entitled;
+ * Platform Self-Billing Collector is always exempt so renewal payments can be verified.
+ */
+export function evaluateSubscriptionEntitlement(params: {
+  status?: string | null;
+  planTier?: string | null;
+  currentPeriodEnd?: Date | string | null;
+  isCollector?: boolean;
+  now?: Date;
+}): MerchantEntitlementResult {
+  const now = params.now || new Date();
+  const status = String(params.status || 'TRIAL').toUpperCase();
+  const planTier = String(params.planTier || 'TRIAL').toUpperCase();
+  const endDate = params.currentPeriodEnd ? new Date(params.currentPeriodEnd) : null;
+  const validEnd = Boolean(endDate && !isNaN(endDate.getTime()));
+
+  if (params.isCollector) {
+    return {
+      isEntitled: true,
+      isExpired: false,
+      isCollector: true,
+      planTier,
+      status: 'ACTIVE',
+      daysRemaining: 999,
+      currentPeriodEnd: validEnd ? endDate : null,
+    };
+  }
+
+  if (status === 'CANCELLED' || status === 'PAST_DUE') {
+    return {
+      isEntitled: false,
+      isExpired: true,
+      isCollector: false,
+      planTier,
+      status,
+      daysRemaining: 0,
+      currentPeriodEnd: validEnd ? endDate : null,
+      reason: `Subscription status is ${status}.`,
+    };
+  }
+
+  const endMs = validEnd && endDate ? endDate.getTime() : 0;
+  const nowMs = now.getTime();
+  if (!validEnd || endMs <= nowMs) {
+    return {
+      isEntitled: false,
+      isExpired: true,
+      isCollector: false,
+      planTier,
+      status,
+      daysRemaining: 0,
+      currentPeriodEnd: validEnd ? endDate : null,
+      reason:
+        status === 'TRIAL'
+          ? '3-day free trial period has ended.'
+          : 'Subscription period has expired.',
+    };
+  }
+
+  const daysRemaining = Math.max(1, Math.ceil((endMs - nowMs) / (24 * 60 * 60 * 1000)));
+  return {
+    isEntitled: true,
+    isExpired: false,
+    isCollector: false,
+    planTier,
+    status,
+    daysRemaining,
+    currentPeriodEnd: endDate,
+  };
+}
+
+/**
+ * Evaluates live entitlement for a merchant against SystemSetting + Subscription collection.
+ */
+export async function evaluateMerchantSubscription(
+  merchant: Partial<IMerchant> & { _id: any; email?: string; apiKey?: string; createdAt?: Date }
+): Promise<MerchantEntitlementResult> {
+  const settings = await SystemSetting.findOne().select('subscriptionPlans platformBilling');
+  const billing = settings?.platformBilling;
+  const collectorEmail = (billing?.collectorMerchantEmail || '').toLowerCase().trim();
+  const collectorKey = (billing?.collectorApiKey || '').trim();
+  const merchantEmail = (merchant.email || '').toLowerCase().trim();
+  const merchantKey = (merchant.apiKey || '').trim();
+
+  const isCollector =
+    billing?.isEnabled !== false &&
+    Boolean(
+      (collectorEmail && merchantEmail && collectorEmail === merchantEmail) ||
+        (collectorKey && merchantKey && collectorKey === merchantKey)
+    );
+
+  if (isCollector) {
+    return evaluateSubscriptionEntitlement({
+      status: 'ACTIVE',
+      planTier: merchant.planTier || 'CUSTOM',
+      isCollector: true,
+    });
+  }
+
+  let subscription = await Subscription.findOne({ merchantId: merchant._id });
+  if (!subscription) {
+    const catalog = getSubscriptionPlanCatalog(settings);
+    const startDate = merchant.createdAt ? new Date(merchant.createdAt) : new Date();
+    subscription = await Subscription.create({
+      merchantId: merchant._id,
+      planTier: 'TRIAL',
+      status: 'TRIAL',
+      currentPeriodStart: startDate,
+      currentPeriodEnd: computeTrialPeriodEnd(catalog.trialDays, startDate),
+      monthlyPriceInPaise: 0,
+    });
+  }
+
+  return evaluateSubscriptionEntitlement({
+    status: subscription.status,
+    planTier: subscription.planTier,
+    currentPeriodEnd: subscription.currentPeriodEnd,
+    isCollector: false,
+  });
+}
