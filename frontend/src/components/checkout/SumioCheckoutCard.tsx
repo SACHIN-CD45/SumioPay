@@ -131,12 +131,35 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
       ? order.paiseOffset
       : Math.max(0, Number((order.exactAmount - order.baseAmount).toFixed(2)));
 
+  const rawDiscount = bill?.discountAmount || 0;
+  const displaySubtotal =
+    bill?.subtotal !== undefined
+      ? bill.subtotal
+      : rawDiscount > 0
+      ? Math.max(
+          0,
+          Number(
+            (
+              order.baseAmount +
+              rawDiscount -
+              (bill?.taxAmount || 0) -
+              (bill?.platformFee || 0)
+            ).toFixed(2)
+          )
+        )
+      : order.baseAmount;
+
   const displayReturnUrl = order.returnUrl || bill?.returnUrl || order.metadata?.returnUrl || '';
   const initialLetter = websiteName.trim().charAt(0).toUpperCase() || 'S';
 
   const upiValue =
     order.upiIntentUrl ||
     `upi://pay?pa=${encodeURIComponent(order.upiId)}&pn=${encodeURIComponent(websiteName)}&am=${order.exactAmount.toFixed(2)}&cu=INR&tr=${encodeURIComponent(order.orderId)}`;
+  const upiQuery = upiValue.includes('?') ? upiValue.split('?')[1] : '';
+
+  const isMobileBrowser =
+    typeof navigator !== 'undefined' &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
   const handleCopyUpi = () => {
     if (!order.upiId) return;
@@ -155,11 +178,18 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
       });
       return;
     }
+    if (isMobileBrowser) {
+      setVpaStatus({
+        ok: true,
+        text: `UPI handle ${cleaned} verified. Opening UPI app to pay exact ₹${order.exactAmount.toFixed(2)}...`,
+      });
+      window.location.href = upiValue;
+      return;
+    }
     setVpaStatus({
       ok: true,
-      text: `UPI handle ${cleaned} validated. Launching UPI app to pay exact ₹${order.exactAmount.toFixed(2)}...`,
+      text: `UPI ID ${cleaned} verified. Scan the QR code above using your UPI app on mobile to pay exact ₹${order.exactAmount.toFixed(2)}, or enter your 12-digit UTR after paying.`,
     });
-    window.location.href = upiValue;
   };
 
   const handleVerifyUtrSubmit = async (e: React.FormEvent) => {
@@ -228,17 +258,19 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
             background: `linear-gradient(155deg, ${brandColor} 0%, ${brandDark} 100%)`,
           }}
         >
-          {/* Decorative Commerce Vector Graphic */}
+          {/* Decorative Commerce Bags & Discount Vector Graphic */}
           <svg
-            viewBox="0 0 220 140"
-            className="pointer-events-none select-none absolute -bottom-2 -right-4 w-48 opacity-15"
+            viewBox="0 0 240 150"
+            className="pointer-events-none select-none absolute -bottom-2 left-2 w-48 opacity-20"
             aria-hidden="true"
           >
-            <rect x="30" y="34" width="66" height="82" rx="10" fill="white" />
-            <path d="M46 34c0-14 34-14 34 0" stroke="white" strokeWidth="8" fill="none" />
-            <rect x="108" y="18" width="76" height="98" rx="12" fill="white" />
-            <path d="M128 18c0-16 36-16 36 0" stroke="white" strokeWidth="8" fill="none" />
-            <circle cx="146" cy="64" r="14" fill="currentColor" className="text-slate-900/40" />
+            <rect x="22" y="42" width="68" height="84" rx="12" fill="white" />
+            <path d="M40 42c0-15 32-15 32 0" stroke="white" strokeWidth="7" fill="none" />
+            <circle cx="56" cy="82" r="18" fill="white" fillOpacity="0.28" />
+            <text x="56" y="88" textAnchor="middle" fill="white" fontSize="18" fontWeight="900">%</text>
+            <rect x="104" y="24" width="76" height="98" rx="12" fill="white" fillOpacity="0.85" />
+            <path d="M124 24c0-17 36-17 36 0" stroke="white" strokeWidth="7" fill="none" />
+            <rect x="176" y="72" width="44" height="52" rx="8" fill="white" fillOpacity="0.65" />
           </svg>
 
           <div className="space-y-5 relative z-10">
@@ -301,30 +333,21 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                   </div>
                 )}
 
-                {bill?.subtotal !== undefined ? (
-                  <div className="flex items-center justify-between text-slate-600">
-                    <span>Subtotal</span>
-                    <span className="font-mono font-semibold text-slate-800">
-                      ₹{formatMoney(bill.subtotal)}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between text-slate-600">
-                    <span>{planName || 'Order Amount'}</span>
-                    <span className="font-mono font-semibold text-slate-800">
-                      ₹{formatMoney(order.baseAmount)}
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>{bill?.subtotal !== undefined || rawDiscount > 0 ? 'Bill Subtotal' : (planName || 'Order Amount')}</span>
+                  <span className="font-mono font-semibold text-slate-800">
+                    ₹{formatMoney(displaySubtotal)}
+                  </span>
+                </div>
 
-                {(bill?.couponCode || (bill?.discountAmount !== undefined && bill.discountAmount > 0)) && (
+                {(bill?.couponCode || rawDiscount > 0) && (
                   <div className="flex items-center justify-between text-emerald-700 font-semibold">
                     <span className="inline-flex items-center gap-1">
                       <Tag className="w-3 h-3" />
                       Coupon {bill?.couponCode ? `(${bill.couponCode})` : 'Applied'}
                     </span>
                     <span className="font-mono">
-                      -₹{formatMoney(bill?.discountAmount || 0)}
+                      -₹{formatMoney(rawDiscount)}
                     </span>
                   </div>
                 )}
@@ -351,6 +374,13 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                   <div className="flex items-center justify-between text-amber-700">
                     <span>Unique Verify Offset</span>
                     <span className="font-mono font-semibold">+₹{paiseOffset.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {rawDiscount > 0 && (
+                  <div className="pt-1.5 mt-1 border-t border-emerald-100 flex items-center justify-between text-[10px] font-bold text-emerald-700 bg-emerald-50/80 px-2.5 py-1 rounded-lg">
+                    <span>Total Coupon Savings</span>
+                    <span className="font-mono">You save ₹{formatMoney(rawDiscount)}</span>
                   </div>
                 )}
               </div>
@@ -542,14 +572,20 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
               {/* Active Payment View */}
               <div className="sm:col-span-8 p-5 space-y-4 flex flex-col justify-between">
                 <div className="space-y-4">
-                  {/* UPI QR Box (Always highlighted in Recommended or UPI_ID) */}
-                  {activeRail !== 'VERIFY_UTR' && (
+                  {/* UPI QR Box in Recommended, or Direct App Launcher Tiles in UPI Apps */}
+                  {activeRail === 'RECOMMENDED' && (
                     <div className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-extrabold text-slate-800">UPI QR</span>
-                        <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                          Pay exact ₹{formatMoney(order.exactAmount)}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                            Pay exact ₹{formatMoney(order.exactAmount)}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                            <Clock className="w-2.5 h-2.5 text-slate-400" />
+                            <span>{timeFormatted}</span>
+                          </span>
+                        </div>
                       </div>
 
                       <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -603,6 +639,47 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                             </button>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeRail === 'UPI_ID' && (
+                    <div className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-slate-800">
+                          1-Tap UPI App Launch (Mobile)
+                        </span>
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          0% UPI Fee
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: 'Google Pay', href: upiQuery ? `tez://upi/pay?${upiQuery}` : upiValue, badge: 'GPay' },
+                          { label: 'PhonePe', href: upiQuery ? `phonepe://pay?${upiQuery}` : upiValue, badge: 'PhonePe' },
+                          { label: 'Paytm', href: upiQuery ? `paytmmp://pay?${upiQuery}` : upiValue, badge: 'Paytm' },
+                          { label: 'Any UPI App', href: upiValue, badge: 'BHIM / CRED' },
+                        ].map((app) => (
+                          <a
+                            key={app.label}
+                            href={app.href}
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 text-xs font-bold text-slate-800 transition"
+                          >
+                            <span>{app.label}</span>
+                            <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                          </a>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between pt-1 text-[11px] text-slate-600">
+                        <span>Destination VPA:</span>
+                        <button
+                          type="button"
+                          onClick={handleCopyUpi}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-slate-200 font-mono text-slate-800 hover:bg-slate-100"
+                        >
+                          {copiedUpi ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                          <span>{copiedUpi ? 'Copied!' : order.upiId}</span>
+                        </button>
                       </div>
                     </div>
                   )}

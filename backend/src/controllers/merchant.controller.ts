@@ -867,6 +867,37 @@ export const deleteTeamMember = async (req: AuthenticatedRequest, res: Response)
   }
 };
 
+function buildSubscriptionBillDetails(
+  monthlyPrice: number,
+  planTier: string,
+  basePriceInr: number,
+  label: string
+) {
+  const sixMonthStandard = monthlyPrice * 6;
+  const hasSixMonthSavings = planTier === 'HALF_YEARLY' && sixMonthStandard > basePriceInr;
+  if (hasSixMonthSavings) {
+    const discount = Math.round((sixMonthStandard - basePriceInr) * 100) / 100;
+    return {
+      items: [
+        {
+          label: `${label} (6 × ₹${monthlyPrice})`,
+          quantity: 1,
+          amount: sixMonthStandard,
+        },
+      ],
+      subtotal: sixMonthStandard,
+      couponCode: 'SAVE6M',
+      discountAmount: discount,
+      note: `Pay ₹${basePriceInr.toFixed(2)} now via Direct UPI — your SumioPay workspace activates automatically in <1.2s with 0% surcharge.`,
+    };
+  }
+  return {
+    items: [{ label, quantity: 1, amount: basePriceInr }],
+    subtotal: basePriceInr,
+    note: `Pay ₹${basePriceInr.toFixed(2)} now via Direct UPI — your SumioPay workspace activates automatically in <1.2s with 0% surcharge.`,
+  };
+}
+
 // Subscription Management & Dogfood Self-Billing via SumioPay
 export const getSubscription = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -900,6 +931,10 @@ export const getSubscription = async (req: AuthenticatedRequest, res: Response) 
     const daysRemaining = Math.max(0, Math.ceil((endMs - nowMs) / (24 * 60 * 60 * 1000)));
     const isExpired = endMs <= nowMs;
 
+    const collectorMerchant = collector.merchant;
+    const displayName =
+      collectorMerchant?.websiteName || collector.upiName || collector.businessName || 'SumioTech';
+
     res.json({
       success: true,
       data: {
@@ -909,7 +944,7 @@ export const getSubscription = async (req: AuthenticatedRequest, res: Response) 
         plans: catalog,
         selfBillingReady: Boolean(collector.configured && collector.upiId),
         selfBillingReason: collector.reason || null,
-        collectorBusinessName: collector.upiName || collector.businessName || 'SumioTech',
+        collectorBusinessName: displayName,
         collectorOnlineDevices: collector.onlineDevicesCount,
         enterpriseContactEmail: settings?.enterpriseContactEmail || 'contact@sumiotech.in',
         supportPhone: settings?.supportPhone || '+91 9875182659',
@@ -921,7 +956,19 @@ export const getSubscription = async (req: AuthenticatedRequest, res: Response) 
               exactAmount: pendingOrder.exactAmount,
               upiIntentUrl: pendingOrder.upiIntentUrl,
               upiId: collector.upiId || '',
-              merchantName: collector.upiName || collector.businessName || 'SumioTech',
+              merchantName: displayName,
+              websiteName: displayName,
+              websiteLogoUrl: sanitizeSafeUrl(collectorMerchant?.websiteLogoUrl),
+              brandColor: sanitizeBrandColor(collectorMerchant?.brandColor || '#4F3DF5'),
+              trustedBusiness: true,
+              kycVerified: true,
+              trustLabel: 'SumioPay Trusted Business',
+              billDetails: buildSubscriptionBillDetails(
+                catalog.monthlyPrice,
+                pendingOrder.metadata?.planTier || 'MONTHLY',
+                pendingOrder.baseAmount,
+                pendingOrder.metadata?.planLabel || 'Subscription Plan'
+              ),
               expiresAt: pendingOrder.expiresAt,
               planTier: pendingOrder.metadata?.planTier || 'MONTHLY',
               planLabel: pendingOrder.metadata?.planLabel || 'Subscription Plan',
@@ -1021,7 +1068,8 @@ export const initiateSubscriptionCheckout = async (req: AuthenticatedRequest, re
     const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
     const orderId = `SUB-${dateStr}-${randomSuffix}`;
 
-    const displayName = collector.upiName || collector.businessName || 'SumioTech';
+    const displayName =
+      collector.merchant.websiteName || collector.upiName || collector.businessName || 'SumioTech';
     const upiIntentUrl = buildUpiIntentUrl(
       collector.upiId,
       displayName,
@@ -1029,6 +1077,12 @@ export const initiateSubscriptionCheckout = async (req: AuthenticatedRequest, re
       orderId
     );
     const expiresAt = new Date(Date.now() + config.orderTtlMinutes * 60 * 1000);
+    const billDetails = buildSubscriptionBillDetails(
+      catalog.monthlyPrice,
+      resolved.planTier,
+      resolved.priceInr,
+      resolved.label
+    );
 
     const order = new Order({
       orderId,
@@ -1054,6 +1108,10 @@ export const initiateSubscriptionCheckout = async (req: AuthenticatedRequest, re
         planLabel: resolved.label,
         durationDays: resolved.durationDays,
         basePriceInr: resolved.priceInr,
+        websiteName: displayName,
+        websiteLogoUrl: sanitizeSafeUrl(collector.merchant.websiteLogoUrl),
+        brandColor: sanitizeBrandColor(collector.merchant.brandColor || '#4F3DF5'),
+        billDetails,
       },
     });
 
@@ -1069,6 +1127,13 @@ export const initiateSubscriptionCheckout = async (req: AuthenticatedRequest, re
         currency: 'INR',
         upiId: collector.upiId,
         merchantName: displayName,
+        websiteName: displayName,
+        websiteLogoUrl: sanitizeSafeUrl(collector.merchant.websiteLogoUrl),
+        brandColor: sanitizeBrandColor(collector.merchant.brandColor || '#4F3DF5'),
+        trustedBusiness: true,
+        kycVerified: true,
+        trustLabel: 'SumioPay Trusted Business',
+        billDetails,
         upiIntentUrl: order.upiIntentUrl,
         expiresAt: order.expiresAt,
         collectorOnlineDevices: collector.onlineDevicesCount,

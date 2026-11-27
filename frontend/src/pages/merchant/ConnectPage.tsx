@@ -1186,6 +1186,13 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
         userId="enterprise_demo_usr"
         planName="SumioLab Pro Tier"
         baseAmount={299}
+        billDetails={{
+          items: [{ label: 'SumioLab Pro License', quantity: 1, amount: 399 }],
+          subtotal: 399,
+          couponCode: 'LAUNCH100',
+          discountAmount: 100,
+          note: 'Live merchant checkout modal showing your website branding, applied coupon savings, and 0% UPI settlement.',
+        }}
         apiUrl={API_BASE}
         apiKey={liveApiKey}
         onSuccess={(data) => {

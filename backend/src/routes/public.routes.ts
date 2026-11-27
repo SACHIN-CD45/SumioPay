@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import QRCode from 'qrcode';
 import { SystemSetting } from '../models/systemSetting.model';
 import { Merchant } from '../models/merchant.model';
 import { Order } from '../models/order.model';
@@ -11,6 +12,31 @@ import {
 } from '../services/subscriptionActivation.service';
 
 const router = Router();
+
+// First-party Vector SVG QR endpoint scoped strictly to UPI payment intents (avoids leaking VPA/amount to 3rd parties)
+router.get('/qr', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawData = typeof req.query.data === 'string' ? req.query.data.trim() : '';
+    if (!rawData || rawData.length > 512 || !/^upi:\/\/pay\?/i.test(rawData)) {
+      res.status(400).json({ success: false, message: 'Invalid or unsupported UPI QR payload' });
+      return;
+    }
+
+    const svg = await QRCode.toString(rawData, {
+      type: 'svg',
+      width: 220,
+      margin: 0,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0F172A', light: '#FFFFFF' },
+    });
+
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(svg);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to render QR' });
+  }
+});
 
 // Public APK Download (Direct link or phone camera QR scan)
 router.get('/download-apk', downloadApk);

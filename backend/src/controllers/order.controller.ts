@@ -6,7 +6,7 @@ import Organization from '../models/organization.model.js';
 import UnmappedPayment from '../models/unmappedPayment.model.js';
 import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator.js';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner.js';
-import { selectUpiAndAdvanceRotation } from '../services/upiRouter.service.js';
+import { recordUpiAccountCredit, selectUpiAndAdvanceRotation } from '../services/upiRouter.service.js';
 import { activatePlatformSubscriptionFromOrder } from '../services/subscriptionActivation.service.js';
 import {
   buildCheckoutBranding,
@@ -301,13 +301,7 @@ export const simulatePayment = async (req: AuthenticatedRequest, res: Response) 
     order.rawNotificationMessage = `[Sandbox Test] Received Rs.${order.exactAmount} on UPI ref ${fakeUtr}`;
     await order.save();
 
-    // Increment merchant totals only for live transactions
-    if (!order.isTest) {
-      await Merchant.findByIdAndUpdate(merchant._id, {
-        $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
-      });
-    }
-
+    // Sandbox test payments never increment real live GMV counters
     // Send Payment Confirmation / Invoice Email
     const recipientEmail = order.customerEmail || merchant.email;
     if (recipientEmail) {
@@ -436,6 +430,11 @@ export const submitCustomerUtr = async (req: Request, res: Response) => {
         await Merchant.findByIdAndUpdate(merchant._id, {
           $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
         });
+        await recordUpiAccountCredit(
+          merchant._id,
+          (order.metadata as any)?.assignedUpiId,
+          order.exactAmount
+        ).catch(() => {});
       }
 
       await activatePlatformSubscriptionFromOrder(order).catch(() => {});
@@ -458,6 +457,8 @@ export const submitCustomerUtr = async (req: Request, res: Response) => {
             amountInPaise: Math.round(order.exactAmount * 100),
             utr: order.utrNumber,
             utrNumber: order.utrNumber,
+            senderName: order.senderName || '',
+            bankAppName: order.bankAppName || '',
             status: 'PAID',
             metadata: order.metadata || {},
             paidAt: order.paidAt,

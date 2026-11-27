@@ -267,7 +267,16 @@ export const PricingPage: React.FC = () => {
         appName="SUMIOLAB"
         userId="usr_pricing_demo"
         planName="Monthly Pro Preview"
+        websiteName="SumioTech Cloud"
+        brandColor="#4F3DF5"
         baseAmount={monthlyPrice}
+        billDetails={{
+          items: [{ label: 'SumioPay Pro Monthly Plan', quantity: 1, amount: monthlyPrice + 100 }],
+          subtotal: monthlyPrice + 100,
+          couponCode: 'SUMIO100',
+          discountAmount: 100,
+          note: `Preview how customers see your brand, coupon discount, and SumioPay Trusted Business badge at checkout.`,
+        }}
         demoMode={true}
       />
     </div>

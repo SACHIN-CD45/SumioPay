@@ -547,11 +547,13 @@ export const DashboardPage: React.FC = () => {
               </div>
               <button
                 onClick={() =>
-                  copyToClipboard(`<script src="https://apipay.sumiotech.in/checkout.js"></script>
+                  copyToClipboard(`<script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>
 
 <button 
   onclick="SumioPay.checkout({
     apiKey: '${merchant?.apiKey || 'sp_live_YOUR_KEY'}',
+    websiteName: '${merchant?.websiteName || merchant?.businessName || 'MyStore'}',
+    brandColor: '${merchant?.brandColor || '#4F3DF5'}',
     amount: 499,
     appName: '${merchant?.businessName || 'MyStore'}',
     onSuccess: function(order) {
@@ -559,7 +561,7 @@ export const DashboardPage: React.FC = () => {
       window.location.href = '/order-success?orderId=' + order.orderId;
     }
   })"
-  style="background:#2563EB;color:#fff;padding:12px 24px;border-radius:12px;font-weight:bold;cursor:pointer;border:none;">
+  style="background:#4F3DF5;color:#fff;padding:12px 24px;border-radius:12px;font-weight:bold;cursor:pointer;border:none;">
   Pay via Direct UPI (0% Fee)
 </button>`)
                 }
@@ -572,12 +574,14 @@ export const DashboardPage: React.FC = () => {
 
             <pre className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-emerald-300 overflow-x-auto leading-relaxed">
 {`<!-- 1. Include SumioPay Universal Drop-In SDK in your website header -->
-<script src="https://apipay.sumiotech.in/checkout.js"></script>
+<script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>
 
 <!-- 2. Drop this button anywhere on your product or cart checkout page -->
 <button 
   onclick="SumioPay.checkout({
     apiKey: '${merchant?.apiKey || 'sp_live_YOUR_KEY'}',
+    websiteName: '${merchant?.websiteName || merchant?.businessName || 'MyStore'}',
+    brandColor: '${merchant?.brandColor || '#4F3DF5'}',
     amount: 499,
     appName: '${merchant?.businessName || 'MyStore'}',
     userId: 'cust_84920',
@@ -586,7 +590,7 @@ export const DashboardPage: React.FC = () => {
       window.location.href = '/order-success?orderId=' + order.orderId;
     }
   })"
-  style="background:#2563EB;color:#fff;padding:12px 24px;border-radius:12px;font-weight:bold;cursor:pointer;border:none;">
+  style="background:#4F3DF5;color:#fff;padding:12px 24px;border-radius:12px;font-weight:bold;cursor:pointer;border:none;">
   Pay via Direct UPI (0% Fee)
 </button>`}
             </pre>
@@ -932,7 +936,17 @@ Body:
         appName="SUMIOLAB"
         userId="usr_test_demo"
         planName="SumioLab Annual Pro Tier"
+        websiteName={merchant?.websiteName || merchant?.businessName}
+        websiteLogoUrl={merchant?.websiteLogoUrl}
+        brandColor={merchant?.brandColor}
         baseAmount={499}
+        billDetails={{
+          items: [{ label: 'SumioLab Annual Pro Tier', quantity: 1, amount: 599 }],
+          subtotal: 599,
+          couponCode: 'PRO100',
+          discountAmount: 100,
+          note: 'Live merchant test checkout displaying your website identity, coupon discount, and Trusted Business badge.',
+        }}
         apiUrl={API_BASE}
         apiKey={merchant?.apiKey}
         onSuccess={(data) => {

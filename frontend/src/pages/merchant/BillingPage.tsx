@@ -1,18 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
-import { api } from '../../lib/api';
+import { api, publicApi } from '../../lib/api';
+import { SumioCheckoutCard, CheckoutBillDetails } from '../../components/checkout/SumioCheckoutCard';
 import {
   CreditCard,
   Check,
-  CheckCircle2,
   Clock,
-  Copy,
-  ExternalLink,
   Loader2,
   ShieldCheck,
-  Smartphone,
   Sparkles,
   AlertTriangle,
   X,
@@ -29,8 +25,16 @@ interface CheckoutOrder {
   currency?: string;
   upiId: string;
   merchantName: string;
+  websiteName?: string;
+  websiteLogoUrl?: string;
+  brandColor?: string;
+  trustedBusiness?: boolean;
+  kycVerified?: boolean;
+  trustLabel?: string;
+  billDetails?: CheckoutBillDetails | null;
   upiIntentUrl: string;
   expiresAt: string;
+  paidAt?: string;
   collectorOnlineDevices?: number;
   plan?: {
     planKey: string;
@@ -38,6 +42,7 @@ interface CheckoutOrder {
     label: string;
     durationDays: number;
   };
+  planLabel?: string;
 }
 
 export const BillingPage: React.FC = () => {
@@ -51,7 +56,6 @@ export const BillingPage: React.FC = () => {
   const [checkoutOrder, setCheckoutOrder] = useState<CheckoutOrder | null>(null);
   const [checkoutStatus, setCheckoutStatus] = useState<'PENDING' | 'PAID' | 'EXPIRED'>('PENDING');
   const [paidUtr, setPaidUtr] = useState<string>('');
-  const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
 
   // Custom Enterprise Contact Modal
@@ -162,11 +166,27 @@ export const BillingPage: React.FC = () => {
     setPaidUtr('');
   };
 
-  const handleCopyUpi = () => {
-    if (!checkoutOrder?.upiId) return;
-    navigator.clipboard.writeText(checkoutOrder.upiId);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2000);
+  const handleSubmitSubscriptionUtr = async (utrNumber: string) => {
+    if (!checkoutOrder) return { success: false, message: 'No active checkout order' };
+    try {
+      const res = await publicApi.post(`/order/submit-utr/${checkoutOrder.orderId}`, { utrNumber });
+      if (res.data?.matchedImmediately && res.data?.data) {
+        setCheckoutStatus('PAID');
+        setPaidUtr(res.data.data.utrNumber || utrNumber);
+        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+        await fetchSubscription();
+      }
+      return {
+        success: Boolean(res.data?.success),
+        matchedImmediately: Boolean(res.data?.matchedImmediately),
+        message: res.data?.message,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.response?.data?.message || 'Unable to verify UTR right now.',
+      };
+    }
   };
 
   const plansConfig = subscription?.plans || {
@@ -657,129 +677,36 @@ export const BillingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Real SumioPay Self-Billing QR Payment Modal */}
+      {/* Real SumioPay Self-Billing Branded Checkout Modal */}
       {checkoutOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 bg-slate-950 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-bold">
-                  Pay {checkoutOrder.merchantName} via SumioPay UPI
-                </span>
-              </div>
-              <button
-                onClick={() => setCheckoutOrder(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5 text-center">
-              {checkoutStatus === 'PAID' ? (
-                <div className="py-4 space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 flex items-center justify-center">
-                    <CheckCircle2 className="w-10 h-10 text-emerald-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-extrabold text-slate-900">
-                      Subscription Activated!
-                    </h3>
-                    <p className="text-xs text-slate-600 mt-1">
-                      Payment of <strong>₹{Number(checkoutOrder.exactAmount).toFixed(2)}</strong> confirmed.
-                      Your plan is live immediately.
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-700 space-y-1">
-                    <div>Order: {checkoutOrder.orderId}</div>
-                    <div>UTR: {paidUtr}</div>
-                  </div>
-                  <button
-                    onClick={() => setCheckoutOrder(null)}
-                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition"
-                  >
-                    Done &amp; Return to Billing
-                  </button>
-                </div>
-              ) : checkoutStatus === 'EXPIRED' ? (
-                <div className="py-4 space-y-4">
-                  <div className="w-14 h-14 mx-auto rounded-full bg-rose-100 flex items-center justify-center">
-                    <Clock className="w-8 h-8 text-rose-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">QR Session Expired</h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Please generate a fresh QR code with a new paise code before paying.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setCheckoutOrder(null)}
-                    className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs"
-                  >
-                    Close &amp; Retry
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-1">
-                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      {checkoutOrder.plan?.label || 'SumioPay Subscription'}
-                    </div>
-                    <div className="text-3xl font-black text-slate-950 font-mono">
-                      ₹{Number(checkoutOrder.exactAmount).toFixed(2)}
-                    </div>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
-                      Pay EXACT amount including ₹0.{String(Math.round((checkoutOrder.paiseOffset || 0) * 100)).padStart(2, '0')} paise for auto-verify
-                    </div>
-                  </div>
-
-                  {/* Real QR Code */}
-                  <div className="inline-block p-4 rounded-2xl bg-white border-2 border-slate-200 shadow-xs">
-                    <QRCodeSVG
-                      value={checkoutOrder.upiIntentUrl}
-                      size={190}
-                      level="M"
-                      includeMargin={false}
-                    />
-                  </div>
-
-                  {/* UPI Details + Deep Link */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                      <span className="font-mono text-slate-700 truncate">{checkoutOrder.upiId}</span>
-                      <button
-                        onClick={handleCopyUpi}
-                        className="inline-flex items-center gap-1 text-blue-600 font-bold shrink-0 ml-2"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{copiedUpi ? 'Copied' : 'Copy UPI'}</span>
-                      </button>
-                    </div>
-
-                    <a
-                      href={checkoutOrder.upiIntentUrl}
-                      className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition"
-                    >
-                      <Smartphone className="w-4 h-4" />
-                      <span>Open GPay / PhonePe / Paytm App</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-
-                  {/* Live Waiting Status */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                    <div className="flex items-center gap-2 text-blue-700 font-semibold">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Waiting for UPI credit confirmation...</span>
-                    </div>
-                    <span className="font-mono font-bold text-slate-700">
-                      {formatTimer(secondsLeft)}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-4xl my-auto">
+            <SumioCheckoutCard
+              order={{
+                orderId: checkoutOrder.orderId,
+                appName: 'SUMIOPAY',
+                baseAmount: checkoutOrder.baseAmount,
+                paiseOffset: checkoutOrder.paiseOffset,
+                exactAmount: checkoutOrder.exactAmount,
+                upiId: checkoutOrder.upiId,
+                merchantName: checkoutOrder.merchantName,
+                websiteName: checkoutOrder.websiteName || checkoutOrder.merchantName || 'SumioPay',
+                websiteLogoUrl: checkoutOrder.websiteLogoUrl,
+                brandColor: checkoutOrder.brandColor || '#4F3DF5',
+                trustedBusiness: checkoutOrder.trustedBusiness ?? true,
+                kycVerified: checkoutOrder.kycVerified ?? true,
+                trustLabel: checkoutOrder.trustLabel || 'SumioPay Trusted Business',
+                billDetails: checkoutOrder.billDetails || null,
+                upiIntentUrl: checkoutOrder.upiIntentUrl,
+                status: checkoutStatus,
+                utrNumber: paidUtr,
+                paidAt: checkoutOrder.paidAt,
+              }}
+              planName={checkoutOrder.plan?.label || checkoutOrder.planLabel || 'SumioPay Subscription'}
+              timeFormatted={formatTimer(secondsLeft)}
+              onClose={() => setCheckoutOrder(null)}
+              onSubmitUtr={handleSubmitSubscriptionUtr}
+            />
           </div>
         </div>
       )}

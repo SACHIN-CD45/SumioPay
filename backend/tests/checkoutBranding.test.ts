@@ -32,6 +32,7 @@ describe('Checkout Website Branding & Bill/Coupon Summary Helpers', () => {
       couponCode: 'host20',
       discountAmount: 681.16,
       taxAmount: 0,
+      platformFee: 0,
       note: 'To begin your subscription, ₹2,817.84 will be charged now.',
       returnUrl: 'https://example.com/checkout/complete',
     });
@@ -41,6 +42,18 @@ describe('Checkout Website Branding & Bill/Coupon Summary Helpers', () => {
     assert.equal(bill.couponCode, 'HOST20');
     assert.equal(bill.discountAmount, 681.16);
     assert.equal(resolveCheckoutBaseRupees(undefined, bill), 2817.84);
+  });
+
+  it('adds convenience fees and taxes cleanly to integer paise subtotal minus coupon', () => {
+    const bill = normalizeBillDetails({
+      subtotal: 1000,
+      couponCode: 'WELCOME100',
+      discountAmount: 100,
+      taxAmount: 18,
+      platformFee: 5,
+    });
+    assert.ok(bill);
+    assert.equal(resolveCheckoutBaseRupees(undefined, bill), 923);
   });
 
   it('prefers explicit positive baseAmount while rejecting non-positive totals', () => {

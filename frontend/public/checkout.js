@@ -1,6 +1,6 @@
 /**
- * SumioPay Universal Drop-In Checkout SDK (v2.7 Enterprise)
- * Supports Razorpay-style Branded Checkout Modal, Coupon/Bill Summary, and Trusted Business Badge.
+ * SumioPay Universal Drop-In Checkout SDK (v2.8 Enterprise)
+ * Razorpay/Hostinger-style Branded Checkout, Coupon/Bill Summary, First-Party SVG QR & UTR Verify.
  * Corporate: SumioTech • contact@sumiotech.in • +91 9875182659
  */
 (function(window) {
@@ -22,6 +22,14 @@
       : '#4F3DF5';
   }
 
+  function darkenHex(hex) {
+    var clean = sanitizeHex(hex);
+    var r = Math.max(0, parseInt(clean.slice(1, 3), 16) - 24);
+    var g = Math.max(0, parseInt(clean.slice(3, 5), 16) - 24);
+    var b = Math.max(0, parseInt(clean.slice(5, 7), 16) - 20);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
   function sanitizeUrl(url) {
     if (typeof url !== 'string') return '';
     var trimmed = url.trim();
@@ -38,6 +46,10 @@
       maximumFractionDigits: 2,
     });
   }
+
+  var isMobileBrowser =
+    typeof navigator !== 'undefined' &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
   var scriptOrigin = '';
   try {
@@ -134,6 +146,7 @@
             websiteName: options.websiteName || undefined,
             websiteLogoUrl: options.websiteLogoUrl || undefined,
             brandColor: options.brandColor || undefined,
+            returnUrl: options.returnUrl || undefined,
             billDetails: billDetails || undefined,
             metadata: metadata,
             isTest: isTest,
@@ -148,6 +161,7 @@
         }
 
         var order = result.data;
+        var baseAmount = Number(order.baseAmount || amount || 0);
         var resolvedAmount = typeof order.exactAmount === 'number'
           ? order.exactAmount
           : (typeof order.exactAmountInPaise === 'number' ? order.exactAmountInPaise / 100 : Number(amount));
@@ -155,15 +169,26 @@
         var siteName = order.websiteName || options.websiteName || order.merchantName || planName || appName;
         var logoUrl = sanitizeUrl(order.websiteLogoUrl || options.websiteLogoUrl);
         var brandHex = sanitizeHex(order.brandColor || options.brandColor);
+        var brandDark = darkenHex(brandHex);
         var bill = order.billDetails || billDetails || {};
+        var returnUrl = sanitizeUrl(order.returnUrl || bill.returnUrl || options.returnUrl);
         var paiseOffset = typeof order.paiseOffset === 'number'
           ? order.paiseOffset
-          : Math.max(0, Number((resolvedAmount - Number(order.baseAmount || amount || resolvedAmount)).toFixed(2)));
-        var qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=' + encodeURIComponent(order.upiIntentUrl);
+          : Math.max(0, Number((resolvedAmount - (baseAmount || resolvedAmount)).toFixed(2)));
+        var qrImgUrl = apiBase + '/public/qr?data=' + encodeURIComponent(order.upiIntentUrl);
 
         var avatarHtml = logoUrl
           ? '<img src="' + escapeHtml(logoUrl) + '" alt="" style="width:44px;height:44px;border-radius:12px;background:#fff;padding:4px;object-fit:contain;box-shadow:0 4px 12px rgba(0,0,0,0.15);" />'
           : '<div style="width:44px;height:44px;border-radius:12px;background:#fff;color:#0F172A;font-weight:900;font-size:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' + escapeHtml(siteName.charAt(0).toUpperCase() || 'S') + '</div>';
+
+        var rawDiscount = Number(bill.discountAmount || 0);
+        var taxAmount = Number(bill.taxAmount || 0);
+        var platformFee = Number(bill.platformFee || 0);
+        var displaySubtotal = bill.subtotal !== undefined
+          ? Number(bill.subtotal)
+          : (rawDiscount > 0
+              ? Math.max(0, Number(((baseAmount || resolvedAmount) + rawDiscount - taxAmount - platformFee).toFixed(2)))
+              : (baseAmount || resolvedAmount));
 
         var breakdownRows = '';
         if (Array.isArray(bill.items)) {
@@ -173,29 +198,44 @@
             breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(it.label) + (q > 1 ? ' × ' + q : '') + '</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(Number(it.amount) * q) + '</span></div>';
           }
         }
-        if (bill.subtotal !== undefined) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>Subtotal</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(bill.subtotal) + '</span></div>';
-        } else {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(planName || 'Order Amount') + '</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(order.baseAmount || resolvedAmount) + '</span></div>';
+        var subtotalLabel = (bill.subtotal !== undefined || rawDiscount > 0) ? 'Bill Subtotal' : (planName || 'Order Amount');
+        breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(subtotalLabel) + '</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(displaySubtotal) + '</span></div>';
+
+        if (bill.couponCode || rawDiscount > 0) {
+          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#047857;font-weight:700;margin-bottom:4px;"><span>Coupon ' + (bill.couponCode ? '(' + escapeHtml(bill.couponCode) + ')' : 'Applied') + '</span><span style="font-family:monospace;">-₹' + formatInr(rawDiscount) + '</span></div>';
         }
-        if (bill.couponCode || (bill.discountAmount !== undefined && Number(bill.discountAmount) > 0)) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#047857;font-weight:700;margin-bottom:4px;"><span>Coupon ' + (bill.couponCode ? '(' + escapeHtml(bill.couponCode) + ')' : 'Applied') + '</span><span style="font-family:monospace;">-₹' + formatInr(bill.discountAmount || 0) + '</span></div>';
+        if (taxAmount > 0) {
+          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(bill.taxLabel || 'GST / Taxes') + '</span><span style="font-family:monospace;font-weight:600;">+₹' + formatInr(taxAmount) + '</span></div>';
         }
-        if (bill.taxAmount !== undefined && Number(bill.taxAmount) > 0) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(bill.taxLabel || 'GST / Taxes') + '</span><span style="font-family:monospace;font-weight:600;">+₹' + formatInr(bill.taxAmount) + '</span></div>';
+        if (platformFee > 0) {
+          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>Convenience Fee</span><span style="font-family:monospace;font-weight:600;">+₹' + formatInr(platformFee) + '</span></div>';
         }
         if (paiseOffset > 0) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#B45309;"><span>Unique Verify Offset</span><span style="font-family:monospace;font-weight:600;">+₹' + paiseOffset.toFixed(2) + '</span></div>';
+          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#B45309;margin-bottom:4px;"><span>Unique Verify Offset</span><span style="font-family:monospace;font-weight:600;">+₹' + paiseOffset.toFixed(2) + '</span></div>';
+        }
+        if (rawDiscount > 0) {
+          breakdownRows += '<div style="margin-top:6px;padding:5px 8px;border-radius:8px;background:#ECFDF5;color:#047857;font-size:10px;font-weight:800;display:flex;justify-content:space-between;"><span>Total Coupon Savings</span><span style="font-family:monospace;">You save ₹' + formatInr(rawDiscount) + '</span></div>';
         }
 
         var noteText = bill.note || ('Paying ' + siteName + ' directly via SumioPay Zero-MDR UPI Gateway. Order #' + order.orderId + '.');
         var trustBadgeText = order.kycVerified ? 'SumioPay KYC Verified Business' : 'SumioPay Trusted Business';
+        var testBanner = order.isTest
+          ? '<div style="background:#FBBF24;color:#0F172A;font-size:11px;font-weight:800;text-align:center;padding:6px 12px;">SANDBOX TEST MODE — No Real Money Is Charged</div>'
+          : '';
 
         shell.innerHTML =
           '<style>@keyframes sumiopay-pulse{0%,100%{opacity:1}50%{opacity:0.3}}@media(max-width:740px){.sp-split{grid-template-columns:1fr!important}.sp-inner{grid-template-columns:1fr!important}}</style>' +
+          testBanner +
           '<div class="sp-split" style="display:grid;grid-template-columns:5fr 7fr;">' +
-          '  <div style="background:linear-gradient(155deg,' + brandHex + ' 0%,#2E1F9E 100%);color:#fff;padding:26px;display:flex;flex-direction:column;justify-content:space-between;gap:20px;">' +
-          '    <div>' +
+          '  <div style="background:linear-gradient(155deg,' + brandHex + ' 0%,' + brandDark + ' 100%);color:#fff;padding:26px;display:flex;flex-direction:column;justify-content:space-between;gap:20px;position:relative;overflow:hidden;">' +
+          '    <svg viewBox="0 0 240 150" style="pointer-events:none;user-select:none;position:absolute;bottom:-6px;left:8px;width:185px;opacity:0.18;" aria-hidden="true">' +
+          '      <rect x="22" y="42" width="68" height="84" rx="12" fill="white" />' +
+          '      <path d="M40 42c0-15 32-15 32 0" stroke="white" stroke-width="7" fill="none" />' +
+          '      <text x="56" y="88" text-anchor="middle" fill="white" font-size="18" font-weight="900">%</text>' +
+          '      <rect x="104" y="24" width="76" height="98" rx="12" fill="white" fill-opacity="0.85" />' +
+          '      <path d="M124 24c0-17 36-17 36 0" stroke="white" stroke-width="7" fill="none" />' +
+          '    </svg>' +
+          '    <div style="position:relative;z-index:1;">' +
           '      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:18px;">' +
                    avatarHtml +
           '        <div>' +
@@ -210,7 +250,7 @@
           '      </div>' +
           '      <div style="background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.22);border-radius:14px;padding:12px 14px;font-size:12px;line-height:1.45;color:rgba(255,255,255,0.95);">' + escapeHtml(noteText) + '</div>' +
           '    </div>' +
-          '    <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.9);font-weight:700;">' +
+          '    <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.9);font-weight:700;">' +
           '      <span>&#128274; Secured by <strong>SumioPay</strong></span>' +
           '      <span style="font-family:monospace;background:rgba(255,255,255,0.16);padding:3px 8px;border-radius:999px;">0% MDR</span>' +
           '    </div>' +
@@ -288,8 +328,12 @@
                 });
             } else if (/^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9]{2,}$/.test(val)) {
               vpaMsgEl.style.color = '#047857';
-              vpaMsgEl.innerText = 'Valid UPI ID! Opening UPI app to pay exact ₹' + formatInr(resolvedAmount) + '...';
-              window.location.href = order.upiIntentUrl;
+              if (isMobileBrowser) {
+                vpaMsgEl.innerText = 'Valid UPI ID! Opening UPI app to pay exact ₹' + formatInr(resolvedAmount) + '...';
+                window.location.href = order.upiIntentUrl;
+              } else {
+                vpaMsgEl.innerText = 'UPI ID ' + val + ' validated. Scan the QR code above on mobile to pay exact ₹' + formatInr(resolvedAmount) + ', or enter your 12-digit UTR once paid.';
+              }
             } else {
               vpaMsgEl.style.color = '#DC2626';
               vpaMsgEl.innerText = 'Enter a valid UPI ID (e.g. name@okhdfcbank) or 12-digit numeric UTR.';
@@ -318,6 +362,9 @@
                 clearInterval(pollTimer);
                 clearInterval(countdownTimer);
                 var utr = sData.data.utrNumber || sData.data.utr || 'Verified';
+                var returnBtnHtml = returnUrl
+                  ? '<a href="' + escapeHtml(returnUrl) + '" style="display:inline-block;margin-top:14px;padding:10px 20px;background:#0F172A;color:#fff;font-weight:800;font-size:12px;border-radius:10px;text-decoration:none;">Continue to ' + escapeHtml(siteName) + '</a>'
+                  : '';
                 var bodyEl = document.getElementById('sp-payment-body');
                 if (bodyEl) {
                   bodyEl.innerHTML =
@@ -326,6 +373,7 @@
                     '  <h3 style="font-size:20px;font-weight:900;color:#0F172A;margin:0 0 6px;">Payment Confirmed!</h3>' +
                     '  <div style="font-size:12px;color:#64748B;font-family:monospace;margin-bottom:14px;">Bank UTR: ' + escapeHtml(utr) + '</div>' +
                     '  <div style="font-size:12px;color:#047857;font-weight:700;background:#ECFDF5;padding:10px;border-radius:10px;">Verified for ' + escapeHtml(siteName) + '</div>' +
+                       returnBtnHtml +
                     '</div>';
                 }
                 setTimeout(function() {
@@ -335,12 +383,16 @@
               } else if (sData.success && sData.data && (sData.data.status === 'EXPIRED' || sData.data.status === 'CANCELLED')) {
                 clearInterval(pollTimer);
                 clearInterval(countdownTimer);
+                var expBtnHtml = returnUrl
+                  ? '<a href="' + escapeHtml(returnUrl) + '" style="display:inline-block;margin-top:12px;padding:9px 18px;background:#0F172A;color:#fff;font-weight:800;font-size:12px;border-radius:10px;text-decoration:none;">Return to ' + escapeHtml(siteName) + '</a>'
+                  : '';
                 var bodyEl = document.getElementById('sp-payment-body');
                 if (bodyEl) {
                   bodyEl.innerHTML =
                     '<div style="text-align:center;padding:32px 16px;">' +
                     '  <div style="font-size:16px;font-weight:800;color:#DC2626;margin-bottom:6px;">Payment Session ' + escapeHtml(sData.data.status) + '</div>' +
                     '  <p style="font-size:12px;color:#64748B;">Please close and initiate a new checkout.</p>' +
+                       expBtnHtml +
                     '</div>';
                 }
               }
