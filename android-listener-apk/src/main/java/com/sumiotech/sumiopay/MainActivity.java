@@ -63,8 +63,7 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
-        settings.setAllowFileAccessFromFileURLs(false);
-        settings.setAllowUniversalAccessFromFileURLs(false);
+        hardenLegacyFileAccess(settings);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
@@ -107,6 +106,12 @@ public class MainActivity extends Activity {
 
         handleDeepLinkIntent(getIntent());
         startHeartbeatLoop();
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void hardenLegacyFileAccess(WebSettings settings) {
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
     }
 
     @Override

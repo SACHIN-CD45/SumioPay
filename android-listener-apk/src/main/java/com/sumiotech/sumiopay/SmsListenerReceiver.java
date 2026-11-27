@@ -3,6 +3,7 @@ package com.sumiotech.sumiopay;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.telephony.SmsMessage;
 import android.util.Log;
@@ -18,6 +19,7 @@ public class SmsListenerReceiver extends BroadcastReceiver {
     private static final String TAG = "SumioPaySms";
 
     @Override
+    @SuppressWarnings("deprecation")
     public void onReceive(Context context, Intent intent) {
         if (intent == null || intent.getAction() == null) return;
 
@@ -35,7 +37,7 @@ public class SmsListenerReceiver extends BroadcastReceiver {
 
                 for (Object pdu : pdus) {
                     SmsMessage sms;
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         sms = SmsMessage.createFromPdu((byte[]) pdu, format);
                     } else {
                         sms = SmsMessage.createFromPdu((byte[]) pdu);

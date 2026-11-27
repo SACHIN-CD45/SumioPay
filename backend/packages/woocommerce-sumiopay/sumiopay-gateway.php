@@ -22,6 +22,18 @@ function sumiopay_woocommerce_gateway_init() {
     }
 
     class WC_Gateway_SumioPay extends WC_Payment_Gateway {
+        /** @var string */
+        private $api_key = '';
+        /** @var string */
+        private $api_secret = '';
+        /** @var string */
+        private $website_name = '';
+        /** @var string */
+        private $brand_color = '#4F3DF5';
+        /** @var string */
+        private $webhook_secret = '';
+        /** @var string */
+        private $api_endpoint = 'https://apipay.sumiotech.in';
 
         public function __construct() {
             $this->id                 = 'sumiopay';

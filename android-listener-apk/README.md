@@ -13,7 +13,7 @@ This native Android application intercepts incoming UPI payment push alerts and 
 ---
 
 ### Setup & Installation
-1. Open this directory in **Android Studio** (or compile via Gradle: `./gradlew assembleRelease`).
+1. Build or update the APK directly with the zero-dependency compiler script (`./build-apk.sh` or `npm run build:apk` using Android SDK Build-Tools 34).
 2. Install the generated `.apk` on any Android smartphone receiving payments on your merchant UPI ID.
 3. Open the app on the phone:
    - Tap **1. Grant Notification Access** and toggle ON **SumioPay Listener**.
