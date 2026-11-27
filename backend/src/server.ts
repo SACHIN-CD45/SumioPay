@@ -6,6 +6,8 @@ import { config } from './config';
 import { SuperAdmin } from './models/superadmin.model';
 import { Merchant } from './models/merchant.model';
 import { Order } from './models/order.model';
+import { processPendingWebhookRetries } from './utils/hmacSigner';
+import { runOfflineDeviceAlertSweep } from './services/reliability.service';
 
 const bootstrap = async () => {
   try {
@@ -86,6 +88,35 @@ const bootstrap = async () => {
       console.log(`🔗 API Base: http://localhost:${config.PORT}/api`);
       console.log(`🩺 Health: http://localhost:${config.PORT}/health`);
       console.log(`====================================================`);
+
+      // Background Zero-Drop Reliability Workers (Webhook Exponential Retry + Listener Offline Alerts)
+      let runningWebhookSweep = false;
+      const webhookTimer = setInterval(async () => {
+        if (runningWebhookSweep) return;
+        runningWebhookSweep = true;
+        try {
+          await processPendingWebhookRetries();
+        } catch (err: any) {
+          console.error('[WebhookRetryWorker]', err?.message);
+        } finally {
+          runningWebhookSweep = false;
+        }
+      }, 15_000);
+      webhookTimer.unref?.();
+
+      let runningOfflineSweep = false;
+      const offlineTimer = setInterval(async () => {
+        if (runningOfflineSweep) return;
+        runningOfflineSweep = true;
+        try {
+          await runOfflineDeviceAlertSweep();
+        } catch (err: any) {
+          console.error('[OfflineDeviceSweep]', err?.message);
+        } finally {
+          runningOfflineSweep = false;
+        }
+      }, 60_000);
+      offlineTimer.unref?.();
     });
   } catch (err: any) {
     console.error('[SumioPay] Bootstrap error:', err);

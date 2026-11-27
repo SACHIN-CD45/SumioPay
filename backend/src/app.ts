@@ -22,6 +22,8 @@ import v1ReconciliationRoutes from './routes/v1/reconciliation.routes';
 import v1ProjectsRoutes from './routes/v1/projects.routes';
 import v1ApiKeysRoutes from './routes/v1/apiKeys.routes';
 import v1WebhooksRoutes from './routes/v1/webhooks.routes';
+import { v1EntitlementsRouter, merchantSaasPlansRouter } from './routes/v1/entitlements.routes';
+import { paymentLinksRouter } from './routes/paymentLinks.routes';
 
 export const createApp = (): express.Application => {
   const app = express();
@@ -67,8 +69,11 @@ export const createApp = (): express.Application => {
     '/health',
     '/superadmin',
     '/pay',
+    '/p',
     '/login',
     '/dashboard',
+    '/links',
+    '/saas-plans',
     '/orders',
     '/devices',
     '/connect',
@@ -169,9 +174,12 @@ export const createApp = (): express.Application => {
   app.use('/api/v1/projects', v1ProjectsRoutes);
   app.use('/api/v1/api-keys', v1ApiKeysRoutes);
   app.use('/api/v1/webhooks', v1WebhooksRoutes);
+  app.use('/api/v1/entitlements', v1EntitlementsRouter);
 
   // Core Merchant & Management Routes
   app.use('/api/merchant', merchantRoutes);
+  app.use('/api/payment-links', paymentLinksRouter);
+  app.use('/api/saas-plans', merchantSaasPlansRouter);
   app.use('/api/order', orderRoutes);
   app.use('/api/device', deviceRoutes);
   app.use('/api/webhook', webhookRoutes);

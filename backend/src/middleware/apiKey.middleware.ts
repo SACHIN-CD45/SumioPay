@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { Merchant, IMerchant } from '../models/merchant.model';
 import { ApiKey } from '../models/apiKey.model';
 import { config } from '../config';
-import { timingSafeEqualStr } from '../utils/securityGuards';
+import { timingSafeEqualStr, getClientIp, isIpAllowlisted } from '../utils/securityGuards';
 
 export type ApiAuthMethod = 'JWT' | 'API_KEY_SECRET' | 'API_KEY_ONLY' | 'SCOPED_KEY';
 
@@ -140,6 +140,25 @@ export const requireApiKeyOrMerchantAuth = async (
         },
       });
       return;
+    }
+
+    // Enforce IP allowlisting for server-to-server authenticated calls when configured by the merchant
+    if (
+      (authMethod === 'API_KEY_SECRET' || authMethod === 'SCOPED_KEY') &&
+      Array.isArray(merchant.allowedIps) &&
+      merchant.allowedIps.length > 0
+    ) {
+      const callerIp = getClientIp(req.headers as Record<string, any>, req.ip);
+      if (!isIpAllowlisted(callerIp, merchant.allowedIps)) {
+        res.status(403).json({
+          success: false,
+          error: {
+            code: 'IP_NOT_ALLOWLISTED',
+            message: `Server IP (${callerIp}) is not authorized for this merchant's API allowlist.`,
+          },
+        });
+        return;
+      }
     }
 
     req.merchant = merchant;

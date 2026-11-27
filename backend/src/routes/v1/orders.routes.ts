@@ -5,6 +5,7 @@ import { requireActiveSubscription } from '../../middleware/subscription.middlew
 import { paymentOrchestrator } from '../../services/providers/paymentOrchestrator.service';
 import { StateMachineService } from '../../services/stateMachine.service';
 import { dispatchMerchantWebhook } from '../../utils/hmacSigner';
+import { checkMerchantListenerAvailability } from '../../services/reliability.service';
 import { Order } from '../../models/order.model';
 import { Organization } from '../../models/organization.model';
 import { Project } from '../../models/project.model';
@@ -146,6 +147,21 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireActiveSubscription, r
       return;
     }
 
+    const resolvedIsTest = Boolean(req.body.isTest || req.headers['x-test-mode'] === 'true' || (req as any).isTestKey);
+
+    const listenerGate = await checkMerchantListenerAvailability(merchant, resolvedIsTest);
+    if (!listenerGate.allowed) {
+      res.status(503).json({
+        success: false,
+        error: {
+          code: 'NO_ONLINE_LISTENER',
+          message: listenerGate.reason,
+        },
+        message: listenerGate.reason,
+      });
+      return;
+    }
+
     const orderId = `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
     const adapter = paymentOrchestrator.getProvider(provider);
 
@@ -158,7 +174,7 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireActiveSubscription, r
       metadata,
     });
 
-    const isTest = Boolean(req.body.isTest || req.headers['x-test-mode'] === 'true' || (req as any).isTestKey);
+    const isTest = resolvedIsTest;
 
     const safeMeta: Record<string, any> = {
       ...(metadata && typeof metadata === 'object' ? metadata : {}),
@@ -254,7 +270,7 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
   try {
     const order = await Order.findOne({ orderId: req.params.id }).populate(
       'merchantId',
-      'businessName name upiId upiName websiteName websiteUrl websiteLogoUrl brandColor isActive email'
+      'businessName name upiId upiName websiteName websiteUrl websiteLogoUrl brandColor gstin isActive email'
     );
     if (!order) {
       res.status(404).json({ success: false, message: 'Payment order not found' });
@@ -300,6 +316,7 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
         currency: 'INR',
         isTest: order.isTest || false,
         merchantName: branding.websiteName,
+        merchantGstin: merchantObj.gstin || '',
         websiteName: branding.websiteName,
         websiteUrl: branding.websiteUrl,
         websiteLogoUrl: branding.websiteLogoUrl,

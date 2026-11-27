@@ -11,7 +11,9 @@ import {
   XCircle,
   AlertTriangle,
   Link2,
+  Printer,
 } from 'lucide-react';
+import { openPrintableReceipt } from '../../lib/receiptPrint';
 
 export const OrdersPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'orders' | 'unmapped'>('orders');
@@ -531,12 +533,25 @@ export const OrdersPage: React.FC = () => {
               </div>
             )}
 
-            <button
-              onClick={() => setSelectedOrder(null)}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2 pt-1">
+              {selectedOrder.status === 'PAID' && (
+                <button
+                  type="button"
+                  onClick={() => openPrintableReceipt(selectedOrder)}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print / Save Tax Receipt PDF</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -537,4 +537,48 @@ export class EmailService {
     });
     return this.send(email, subject, html);
   }
+
+  /**
+   * 6. Send Listener Device Offline Alert to Merchant
+   */
+  public static async sendDeviceOfflineAlert(
+    email: string,
+    name: string,
+    businessName: string,
+    details: {
+      offlineMinutes: number;
+      totalDevices: number;
+      pauseCheckoutWhenOffline: boolean;
+    }
+  ): Promise<boolean> {
+    const subject = `Alert: SumioPay Listener Phone Offline (${businessName})`;
+    const body = `
+      <h2 style="margin-top: 0; color: #B91C1C; font-size: 20px;">Android Listener Offline Alert</h2>
+      <p>Hello <strong>${escapeHtml(name || businessName || 'Merchant')}</strong>,</p>
+      <p>All <strong>${details.totalDevices}</strong> paired SumioPay Android Listener device(s) for <strong>${escapeHtml(businessName)}</strong> have not sent a heartbeat ping for more than <strong>${details.offlineMinutes} minute(s)</strong>.</p>
+
+      <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 12px; padding: 16px; margin: 20px 0; font-size: 13px; color: #7F1D1D;">
+        <strong>What to check on your phone right away:</strong>
+        <ul style="margin: 8px 0 0 18px; padding: 0;">
+          <li>Verify mobile data / Wi-Fi is active and device is powered on.</li>
+          <li>Confirm <strong>Battery Optimization</strong> is set to <em>Unrestricted</em> for SumioPay Listener.</li>
+          <li>Open SumioPay Listener once to verify the foreground notification badge is active.</li>
+        </ul>
+      </div>
+
+      <div class="info-box">
+        ${
+          details.pauseCheckoutWhenOffline
+            ? '<strong>Checkout Shield Active:</strong> New live UPI checkouts are temporarily paused to prevent customers from paying while your listener phone is offline.'
+            : '<strong>Tip:</strong> You can enable <em>Pause Checkout When Offline</em> under Devices in your console so customers cannot pay while your phone is unreachable.'
+        }
+      </div>
+
+      <div style="text-align: center; margin-top: 24px;">
+        <a href="${COMPANY.websiteUrl}/devices" class="btn-action">Open Listener Devices &rarr;</a>
+      </div>
+    `;
+
+    return this.send(email, subject, renderEmailLayout('Listener Device Offline Alert', body));
+  }
 }

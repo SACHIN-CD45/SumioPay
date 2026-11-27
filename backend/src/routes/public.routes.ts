@@ -6,6 +6,7 @@ import { SystemSetting } from '../models/systemSetting.model';
 import { Merchant } from '../models/merchant.model';
 import { Order } from '../models/order.model';
 import { downloadApk } from '../controllers/device.controller';
+import { publicPaymentLinksRouter } from './paymentLinks.routes';
 import {
   getSubscriptionPlanCatalog,
   resolvePlatformCollectorMerchant,
@@ -128,5 +129,7 @@ router.get('/platform-config', async (_req: Request, res: Response): Promise<voi
     });
   }
 });
+
+router.use(publicPaymentLinksRouter);
 
 export default router;

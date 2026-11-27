@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import { FileText, Download, Calendar, Filter, FileSpreadsheet } from 'lucide-react';
 
@@ -18,11 +18,15 @@ export const ReportsPage: React.FC = () => {
         setReportData(res.data.data);
       }
     } catch (err: any) {
-      alert(err.message);
+      console.error(err);
     } finally {
       setExporting(false);
     }
   };
+
+  useEffect(() => {
+    handleFetchReport();
+  }, []);
 
   const handleDownloadCsv = () => {
     const token = localStorage.getItem('sumiopay_token');
@@ -128,6 +132,63 @@ export const ReportsPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {reportData.funnel && (
+            <div className="space-y-4 border-t border-slate-100 pt-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-slate-900">Checkout Conversion Funnel &amp; UPI Handle Performance</h3>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200">
+                  {reportData.funnel.conversionRatePercent}% Success Rate
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
+                  <span className="text-slate-500">Orders Initiated</span>
+                  <div className="text-lg font-black text-slate-900 mt-0.5">{reportData.funnel.totalInitiated}</div>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/70">
+                  <span className="text-emerald-700">Paid &amp; Settled</span>
+                  <div className="text-lg font-black text-emerald-900 mt-0.5">{reportData.funnel.paidCount}</div>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200/70">
+                  <span className="text-amber-700">Pending</span>
+                  <div className="text-lg font-black text-amber-900 mt-0.5">{reportData.funnel.pendingCount}</div>
+                </div>
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200/70">
+                  <span className="text-rose-700">Expired / Drop-off</span>
+                  <div className="text-lg font-black text-rose-900 mt-0.5">{reportData.funnel.expiredCount}</div>
+                </div>
+              </div>
+
+              {Array.isArray(reportData.funnel.upiPerformance) && reportData.funnel.upiPerformance.length > 0 && (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-4 font-semibold">Assigned Bank UPI VPA</th>
+                        <th className="py-2.5 px-4 font-semibold">Checkouts</th>
+                        <th className="py-2.5 px-4 font-semibold">Paid</th>
+                        <th className="py-2.5 px-4 font-semibold">Conversion %</th>
+                        <th className="py-2.5 px-4 font-semibold">Settled Volume</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {reportData.funnel.upiPerformance.map((u: any) => (
+                        <tr key={u.upiId}>
+                          <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{u.upiId}</td>
+                          <td className="py-2.5 px-4">{u.initiated}</td>
+                          <td className="py-2.5 px-4 text-emerald-700 font-bold">{u.paid}</td>
+                          <td className="py-2.5 px-4 font-bold">{u.conversionPercent}%</td>
+                          <td className="py-2.5 px-4 font-mono font-bold">₹{Number(u.volumeInr || 0).toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">

@@ -34,7 +34,7 @@ export interface IOrder extends Document {
   paidAt?: Date;
   callbackWebhookUrl?: string;
   metadata?: Record<string, any>;
-  webhookDeliveryStatus: 'NOT_SENT' | 'DELIVERED' | 'FAILED';
+  webhookDeliveryStatus: 'NOT_SENT' | 'DELIVERED' | 'RETRYING' | 'FAILED';
   webhookResponseCode?: number;
   webhookRetries: number;
   createdAt: Date;
@@ -81,7 +81,7 @@ const OrderSchema = new Schema<IOrder>(
     metadata: { type: Schema.Types.Mixed, default: {} },
     webhookDeliveryStatus: {
       type: String,
-      enum: ['NOT_SENT', 'DELIVERED', 'FAILED'],
+      enum: ['NOT_SENT', 'DELIVERED', 'RETRYING', 'FAILED'],
       default: 'NOT_SENT',
     },
     webhookResponseCode: { type: Number },

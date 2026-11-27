@@ -10,6 +10,7 @@ import SecurityEvent from '../models/securityEvent.model.js';
 import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator.js';
 import { selectUpiAndAdvanceRotation } from '../services/upiRouter.service.js';
 import { finalizePaidOrderSideEffects } from '../services/paymentSettlement.service.js';
+import { checkMerchantListenerAvailability } from '../services/reliability.service.js';
 import {
   buildCheckoutBranding,
   normalizeBillDetails,
@@ -89,6 +90,21 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       });
     }
 
+    const resolvedIsTest = Boolean(isTest || req.headers['x-test-mode'] === 'true' || req.isTestKey);
+
+    // Offline Listener Shield: protect customer payments if merchant enabled auto-pause when phone is offline
+    const listenerGate = await checkMerchantListenerAvailability(merchant, resolvedIsTest);
+    if (!listenerGate.allowed) {
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: 'NO_ONLINE_LISTENER',
+          message: listenerGate.reason,
+        },
+        message: listenerGate.reason,
+      });
+    }
+
     // 1. Allocate unique paise offset for this merchant
     const { exactAmount, paiseOffset } = await allocateUniquePaise(merchant._id, numBase);
 
@@ -140,7 +156,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       baseAmount: numBase,
       paiseOffset,
       exactAmount,
-      isTest: Boolean(isTest || req.headers['x-test-mode'] === 'true' || req.isTestKey),
+      isTest: resolvedIsTest,
       status: 'PENDING',
       upiIntentUrl,
       expiresAt,
@@ -203,7 +219,7 @@ export const getOrderStatus = async (req: Request, res: Response) => {
 
     const order = await Order.findOne({ orderId }).populate(
       'merchantId',
-      'businessName name upiId upiName websiteName websiteUrl websiteLogoUrl brandColor isActive email'
+      'businessName name upiId upiName websiteName websiteUrl websiteLogoUrl brandColor gstin isActive email'
     );
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -249,6 +265,7 @@ export const getOrderStatus = async (req: Request, res: Response) => {
         upiIntentUrl: order.upiIntentUrl,
         isTest: order.isTest || false,
         merchantName: branding.websiteName,
+        merchantGstin: merchantObj.gstin || '',
         websiteName: branding.websiteName,
         websiteUrl: branding.websiteUrl,
         websiteLogoUrl: branding.websiteLogoUrl,

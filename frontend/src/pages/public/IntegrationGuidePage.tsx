@@ -356,11 +356,11 @@ async def sumiopay_webhook(request: Request):
     },
     {
       icon: Webhook,
-      title: '7. Webhooks, Test Pings & Retries',
+      title: '7. Webhooks, Exponential Retries & Telegram Pings',
       route: '/webhooks',
-      summary: 'Inspect HTTP response codes from your server, test ping, or replay failed events.',
+      summary: 'Inspect HTTP status codes, test ping, and rely on automatic exponential retries (15s to 30m).',
       details:
-        'Includes SSRF protection blocking internal IPs, plus timestamped HMAC-SHA256 signatures on every retry.',
+        'Includes SSRF protection blocking internal IPs, timestamped HMAC-SHA256 signatures, automatic retries when your server restarts, plus optional Telegram payment & offline-phone alerts under Profile.',
     },
     {
       icon: FolderGit2,
@@ -376,7 +376,23 @@ async def sumiopay_webhook(request: Request):
       route: '/billing',
       summary: '3-day free trial on signup, ₹399 Monthly Pro, ₹1,999 6-Month Growth, and Custom plans.',
       details:
-        'Merchants pay their subscription directly through SumioPay UPI with instant automatic plan activation and invoice UTR receipts.',
+        'Merchants pay their subscription directly through SumioPay UPI with instant automatic plan activation and downloadable Tax Receipt PDF.',
+    },
+    {
+      icon: CheckCircle2,
+      title: '10. No-Code Payment Links & 1-Line Pay Buttons',
+      route: '/links',
+      summary: 'Create shareable /p/:slug payment pages with coupons, customer fields, WhatsApp share & HTML button embeds.',
+      details:
+        'Ideal for clinics, coaching institutes, agencies & WhatsApp sellers — accepts fixed or open amounts with zero backend coding.',
+    },
+    {
+      icon: Layers,
+      title: '11. SaaS-in-a-Box Subscription & Entitlement API',
+      route: '/saas-plans',
+      summary: 'Let SumioPay manage trials, expiries & check APIs (/api/v1/entitlements/check) for any external SaaS.',
+      details:
+        'Create Monthly/Yearly plans once, collect UPI via Payment Links or Checkout API, and gate features in any MERN/PHP/Desktop app in 5 lines.',
     },
   ];
 

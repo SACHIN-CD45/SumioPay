@@ -7,7 +7,8 @@
 - **Commission / MDR:** 0% transaction fee forever (merchant pays only a flat SaaS subscription; ₹0.00 held in escrow)
 - **Settlement Timing:** Instant — 100% direct bank-to-bank via UPI (GPay, PhonePe, Paytm, BHIM, CRED, HDFC, ICICI, SBI, Axis)
 - **Pricing Plans:** 3-Day Free Trial (₹0), 1 Month Pro (₹399), 6 Months Growth (₹1,999), Custom Enterprise
-- **Integration Stack:** Drop-in JS Checkout (`checkout.js`), React `<UpiCheckoutModal />`, Node.js / PHP / Python REST APIs (`/api/v1/payments/orders`), Hosted Payment Links (`/pay/:orderId`), and WooCommerce Plugin
+- **Integration Stack:** Drop-in JS Checkout (`checkout.js`), No-Code Payment Links (`/p/:slug`) & 1-Line HTML Pay Buttons, SaaS-in-a-Box Subscription Entitlements API (`/api/v1/entitlements/check`), React `<UpiCheckoutModal />`, Node.js / PHP / Python REST APIs (`/api/v1/payments/orders`), Hosted Payment Links (`/pay/:orderId`), and WooCommerce Plugin
+- **Zero-Drop Reliability Engine:** Exponential Webhook Auto-Retries (15s–30m), Offline Android Listener Checkout Shield, Instant Telegram Credit Pings, Downloadable GST/UPI Tax Receipts, and Server API IP Allowlisting
 - **Important Legal Positioning:** SumioPay holds ₹0.00 of customer or merchant funds and is purely B2B software automation — not a commercial bank, RBI-licensed Payment Aggregator, nodal operator, or NPCI entity.
 
 ## Public Documentation & Links

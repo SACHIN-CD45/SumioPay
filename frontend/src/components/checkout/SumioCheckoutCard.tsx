@@ -13,7 +13,9 @@ import {
   Lock,
   Loader2,
   QrCode,
+  Download,
 } from 'lucide-react';
+import { openPrintableReceipt } from '../../lib/receiptPrint';
 
 export interface BillLineItem {
   label: string;
@@ -41,6 +43,7 @@ export interface CheckoutOrderPayload {
   exactAmount: number;
   upiId?: string;
   merchantName?: string;
+  merchantGstin?: string;
   websiteName?: string;
   websiteUrl?: string;
   websiteLogoUrl?: string;
@@ -402,22 +405,33 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                 </div>
               </div>
 
-              {displayReturnUrl ? (
-                <a
-                  href={displayReturnUrl}
-                  className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition"
-                >
-                  Continue to {websiteName}
-                </a>
-              ) : onClose ? (
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition"
+                  onClick={() => openPrintableReceipt(order)}
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold text-xs flex items-center gap-1.5 transition"
                 >
-                  Done / Continue
+                  <Download className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Download Tax Receipt</span>
                 </button>
-              ) : null}
+
+                {displayReturnUrl ? (
+                  <a
+                    href={displayReturnUrl}
+                    className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition"
+                  >
+                    Continue to {websiteName}
+                  </a>
+                ) : onClose ? (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition"
+                  >
+                    Done / Continue
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : order.status === 'EXPIRED' ? (
             <div className="p-8 flex-1 flex flex-col items-center justify-center text-center space-y-3">

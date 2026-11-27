@@ -218,3 +218,45 @@ export function escapeRegex(value: unknown): string {
   return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Normalizes IPv4, bracketed IPv6, and IPv4-mapped IPv6 addresses (`::ffff:1.2.3.4`).
+ */
+export function normalizeIp(rawIp: unknown): string {
+  let ip = String(rawIp ?? '').trim().replace(/^\[|\]$/g, '').toLowerCase();
+  if (!ip) return '';
+  if (ip.startsWith('::ffff:')) {
+    const suffix = ip.slice(7);
+    if (net.isIPv4(suffix)) return suffix;
+  }
+  if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(ip)) {
+    ip = ip.replace(/:\d+$/, '');
+  }
+  return ip;
+}
+
+/**
+ * Sanitizes a user-supplied list or comma/newline-separated string of valid IPv4/IPv6 addresses.
+ */
+export function sanitizeIpAllowlist(input: unknown): string[] {
+  const parts = Array.isArray(input)
+    ? input.map((v) => normalizeIp(v))
+    : String(input ?? '')
+        .split(/[\s,;]+/)
+        .map((v) => normalizeIp(v));
+  const valid = parts.filter((ip) => ip && net.isIP(ip) !== 0);
+  return Array.from(new Set(valid)).slice(0, 25);
+}
+
+/**
+ * Verifies whether a client IP satisfies a merchant's server API allowlist.
+ * Empty allowlist permits all server IPs.
+ */
+export function isIpAllowlisted(clientIpRaw: unknown, allowlist?: string[] | null): boolean {
+  if (!Array.isArray(allowlist) || allowlist.length === 0) return true;
+  const cleanList = allowlist.map((ip) => normalizeIp(ip)).filter(Boolean);
+  if (cleanList.length === 0) return true;
+  const candidate = normalizeIp(clientIpRaw);
+  if (!candidate) return false;
+  return cleanList.includes(candidate);
+}
+

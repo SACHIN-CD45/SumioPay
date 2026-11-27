@@ -52,6 +52,16 @@ export const ProfilePage: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [routingMode, setRoutingMode] = useState<'PRIMARY_ONLY' | 'ROUND_ROBIN' | 'FAILOVER'>('PRIMARY_ONLY');
+  const [gstin, setGstin] = useState('');
+  const [allowedIpsText, setAllowedIpsText] = useState('');
+  const [pauseCheckoutWhenOffline, setPauseCheckoutWhenOffline] = useState(false);
+  const [offlineAlertMinutes, setOfflineAlertMinutes] = useState(5);
+  const [webhookAutoRetryEnabled, setWebhookAutoRetryEnabled] = useState(true);
+  const [telegramAlertsEnabled, setTelegramAlertsEnabled] = useState(false);
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [telegramTestStatus, setTelegramTestStatus] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Add New UPI / Upload Bank QR Modal
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -83,6 +93,15 @@ export const ProfilePage: React.FC = () => {
         setPhone(d.phone || '');
         setWebhookUrl(d.webhookUrl || '');
         setRoutingMode(d.upiRoutingMode || 'PRIMARY_ONLY');
+        setGstin(d.gstin || '');
+        setAllowedIpsText(Array.isArray(d.allowedIps) ? d.allowedIps.join(', ') : '');
+        const rel = d.reliabilitySettings || {};
+        setPauseCheckoutWhenOffline(Boolean(rel.pauseCheckoutWhenOffline));
+        setOfflineAlertMinutes(rel.offlineAlertMinutes || 5);
+        setWebhookAutoRetryEnabled(rel.webhookAutoRetryEnabled !== false);
+        setTelegramAlertsEnabled(Boolean(rel.telegramAlertsEnabled));
+        setTelegramBotToken(rel.telegramBotTokenMasked || '');
+        setTelegramChatId(rel.telegramChatId || '');
       }
     } catch (err: any) {
       setStatusBanner({
@@ -113,6 +132,16 @@ export const ProfilePage: React.FC = () => {
         phone,
         webhookUrl,
         upiRoutingMode: routingMode,
+        gstin,
+        allowedIps: allowedIpsText,
+        reliabilitySettings: {
+          pauseCheckoutWhenOffline,
+          offlineAlertMinutes,
+          webhookAutoRetryEnabled,
+          telegramAlertsEnabled,
+          telegramBotToken,
+          telegramChatId,
+        },
       });
       if (res.data.success) {
         setStatusBanner({ type: 'success', text: 'Business profile saved cleanly.' });
@@ -516,6 +545,174 @@ export const ProfilePage: React.FC = () => {
             <div className="text-[11px] bg-white/15 px-3 py-1.5 rounded-xl font-semibold">
               Live Customer Checkout Header Preview
             </div>
+          </div>
+        </div>
+
+        {/* Zero-Drop Reliability, Telegram Alerts, GSTIN & Server IP Allowlist */}
+        <div className="pt-4 border-t border-slate-100 space-y-4">
+          <div>
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Zero-Drop Reliability Shield, Telegram Alerts, GSTIN &amp; API IP Allowlist</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Prevent lost payments when listener phones go offline, get instant Telegram payment pings, and lock server API secrets to specific IPs.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label htmlFor="prof-gstin" className="text-slate-600 font-semibold block mb-1">
+                Business GSTIN (Printed on Tax Receipts)
+              </label>
+              <input
+                id="prof-gstin"
+                type="text"
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                placeholder="e.g. 27AABCS1429B1Z5"
+                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-900"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label htmlFor="prof-ips" className="text-slate-600 font-semibold block mb-1">
+                Server API IP Allowlist (Comma-separated IPv4/IPv6; blank = all servers)
+              </label>
+              <input
+                id="prof-ips"
+                type="text"
+                value={allowedIpsText}
+                onChange={(e) => setAllowedIpsText(e.target.value)}
+                placeholder="e.g. 147.93.102.45, 203.0.113.10"
+                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-900"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <label className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pauseCheckoutWhenOffline}
+                onChange={(e) => setPauseCheckoutWhenOffline(e.target.checked)}
+                className="w-4 h-4 mt-0.5 accent-indigo-600"
+              />
+              <div>
+                <span className="font-bold text-slate-900 block">Pause Live QR If Phone Offline</span>
+                <span className="text-[10px] text-slate-500">
+                  Stops new checkouts with HTTP 503 if all paired listener devices are disconnected.
+                </span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={webhookAutoRetryEnabled}
+                onChange={(e) => setWebhookAutoRetryEnabled(e.target.checked)}
+                className="w-4 h-4 mt-0.5 accent-indigo-600"
+              />
+              <div>
+                <span className="font-bold text-slate-900 block">Auto-Retry Failed Webhooks</span>
+                <span className="text-[10px] text-slate-500">
+                  Exponential retries (15s → 1m → 5m → 15m → 30m) if your server restarts.
+                </span>
+              </div>
+            </label>
+
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+              <label htmlFor="prof-offmin" className="font-bold text-slate-900 block mb-1">
+                Offline Alert Threshold (Mins)
+              </label>
+              <input
+                id="prof-offmin"
+                type="number"
+                min={3}
+                max={120}
+                value={offlineAlertMinutes}
+                onChange={(e) => setOfflineAlertMinutes(Math.max(3, Number(e.target.value || 5)))}
+                className="w-full p-2 rounded-xl bg-white border border-slate-200 font-mono text-slate-900"
+              />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 space-y-3 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="inline-flex items-center gap-2 font-bold text-slate-900 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={telegramAlertsEnabled}
+                  onChange={(e) => setTelegramAlertsEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span>Enable Instant Telegram Payment &amp; Offline Device Alerts</span>
+              </label>
+              <button
+                type="button"
+                disabled={testingTelegram}
+                onClick={async () => {
+                  setTestingTelegram(true);
+                  setTelegramTestStatus(null);
+                  try {
+                    const res = await api.post('/merchant/reliability/test-telegram', {
+                      telegramBotToken,
+                      telegramChatId,
+                    });
+                    setTelegramTestStatus({ ok: true, text: res.data.message || 'Telegram ping sent!' });
+                  } catch (err: any) {
+                    setTelegramTestStatus({
+                      ok: false,
+                      text: err?.response?.data?.message || 'Telegram ping failed.',
+                    });
+                  } finally {
+                    setTestingTelegram(false);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px]"
+              >
+                {testingTelegram ? 'Sending Ping...' : 'Test Telegram Alert'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="prof-tg-token" className="text-slate-700 font-semibold block mb-1">
+                  Telegram Bot Token (from @BotFather)
+                </label>
+                <input
+                  id="prof-tg-token"
+                  type="text"
+                  value={telegramBotToken}
+                  onChange={(e) => setTelegramBotToken(e.target.value)}
+                  placeholder="123456789:AAHxxxxxxxxxxxxxxxxxxxx"
+                  className="w-full p-2.5 rounded-xl bg-white border border-slate-200 font-mono text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="prof-tg-chat" className="text-slate-700 font-semibold block mb-1">
+                  Telegram Chat ID
+                </label>
+                <input
+                  id="prof-tg-chat"
+                  type="text"
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  placeholder="e.g. 987654321 or @yourchannel"
+                  className="w-full p-2.5 rounded-xl bg-white border border-slate-200 font-mono text-slate-900"
+                />
+              </div>
+            </div>
+
+            {telegramTestStatus && (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`text-[11px] font-bold ${telegramTestStatus.ok ? 'text-emerald-700' : 'text-rose-700'}`}
+              >
+                {telegramTestStatus.text}
+              </div>
+            )}
           </div>
         </div>
 

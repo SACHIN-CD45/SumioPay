@@ -1,8 +1,11 @@
 import { IOrder } from '../models/order.model';
 import { IMerchant, Merchant } from '../models/merchant.model';
+import { PaymentLink } from '../models/paymentLink.model';
 import { EmailService } from './email.service';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
 import { activatePlatformSubscriptionFromOrder } from './subscriptionActivation.service';
+import { activateCustomerEntitlementFromOrder } from './saasEntitlement.service';
+import { sendTelegramPaymentAlert } from './reliability.service';
 import { recordUpiAccountCredit } from './upiRouter.service';
 
 function extractFriendlyBuyerName(order: Partial<IOrder>, fallback: string): string {
@@ -39,6 +42,20 @@ export async function finalizePaidOrderSideEffects(params: {
   await activatePlatformSubscriptionFromOrder(order).catch((err) => {
     console.error(`[SubscriptionActivation] Failed for ${order.orderId}:`, err?.message);
   });
+
+  // 1b. SaaS-in-a-Box Customer Entitlement Auto-Activation
+  await activateCustomerEntitlementFromOrder(order).catch((err) => {
+    console.error(`[SaasEntitlement] Failed for ${order.orderId}:`, err?.message);
+  });
+
+  // 1c. No-Code Payment Link Volume & Usage Telemetry
+  const paymentLinkId = (order.metadata as any)?.paymentLinkId;
+  if (paymentLinkId && !order.isTest && !skipVolumeIncrement) {
+    await PaymentLink.findOneAndUpdate(
+      { _id: paymentLinkId, merchantId: order.merchantId },
+      { $inc: { usesCount: 1, totalCollectedInr: order.exactAmount } }
+    ).catch(() => {});
+  }
 
   if (!merchant) {
     return;
@@ -112,7 +129,10 @@ export async function finalizePaidOrderSideEffects(params: {
     });
   }
 
-  // 4. Signed HMAC-SHA256 Merchant Webhook Dispatch
+  // 3b. Instant Telegram Payment Alert to Merchant (Live orders only)
+  sendTelegramPaymentAlert(merchant, order).catch(() => {});
+
+  // 4. Signed HMAC-SHA256 Merchant Webhook Dispatch (with Automatic Retries)
   const targetWebhookUrl = order.callbackWebhookUrl || merchant.webhookUrl;
   if (targetWebhookUrl) {
     dispatchMerchantWebhook(

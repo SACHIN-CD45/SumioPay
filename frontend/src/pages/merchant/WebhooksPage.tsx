@@ -553,18 +553,30 @@ echo json_encode(['received' => true]);
                 return (
                   <tr key={log._id} className="hover:bg-slate-50/60 transition">
                     <td className="py-3 px-3">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                          isSuccess
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : 'bg-rose-100 text-rose-800 border border-rose-200'
-                        }`}
-                      >
+                      <div className="flex flex-col items-start gap-1">
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${isSuccess ? 'bg-emerald-500' : 'bg-rose-500'}`}
-                        ></span>
-                        {log.responseStatus || 'TIMEOUT'}
-                      </span>
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            isSuccess
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              : log.status === 'PENDING_RETRY'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-rose-100 text-rose-800 border border-rose-200'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isSuccess
+                                ? 'bg-emerald-500'
+                                : log.status === 'PENDING_RETRY'
+                                ? 'bg-amber-500 animate-pulse'
+                                : 'bg-rose-500'
+                            }`}
+                          ></span>
+                          {log.responseStatus || 'TIMEOUT'}
+                          {log.status === 'PENDING_RETRY' ? ` • Retry ${log.attempt || 1}/${log.maxAttempts || 5}` : ''}
+                          {log.attempt > 1 && isSuccess ? ` (Attempt #${log.attempt})` : ''}
+                        </span>
+                      </div>
                     </td>
 
                     <td className="py-3 px-3 font-mono font-bold text-slate-900">

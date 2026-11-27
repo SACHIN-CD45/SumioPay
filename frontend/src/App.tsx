@@ -10,6 +10,7 @@ import { SecurityCompliancePage } from './pages/public/SecurityCompliancePage';
 import { IntegrationGuidePage } from './pages/public/IntegrationGuidePage';
 import { EnterprisePage } from './pages/public/EnterprisePage';
 import { HostedPaymentPage } from './pages/public/HostedPaymentPage';
+import { PublicPaymentLinkPage } from './pages/public/PublicPaymentLinkPage';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { LoginPage } from './pages/merchant/LoginPage';
@@ -27,6 +28,8 @@ import { ReportsPage } from './pages/merchant/ReportsPage';
 import { WebhooksPage } from './pages/merchant/WebhooksPage';
 import { SimulatorPage } from './pages/merchant/SimulatorPage';
 import { DocsPage } from './pages/merchant/DocsPage';
+import { PaymentLinksPage } from './pages/merchant/PaymentLinksPage';
+import { SaasPlansPage } from './pages/merchant/SaasPlansPage';
 import { SuperAdminLayout } from './pages/superadmin/SuperAdminLayout';
 import { SuperAdminLoginPage } from './pages/superadmin/SuperAdminLoginPage';
 import { SuperAdminOverviewPage } from './pages/superadmin/SuperAdminOverviewPage';
@@ -214,10 +217,13 @@ export const App: React.FC = () => {
 
         {/* Public Hosted Direct Payment Link & QR Checkout */}
         <Route path="/pay/:orderId" element={<HostedPaymentPage />} />
+        <Route path="/p/:slug" element={<PublicPaymentLinkPage />} />
 
         {/* Merchant Portal Protected Routes */}
         <Route element={<MerchantLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/links" element={<PaymentLinksPage />} />
+          <Route path="/saas-plans" element={<SaasPlansPage />} />
           <Route path="/connect" element={<ConnectPage />} />
           <Route path="/devices" element={<DevicesPage />} />
           <Route path="/orders" element={<OrdersPage />} />

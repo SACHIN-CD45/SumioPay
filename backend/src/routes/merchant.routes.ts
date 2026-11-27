@@ -26,6 +26,7 @@ import {
   getKyc,
   submitKyc,
   exportReport,
+  testTelegramAlert,
   refreshMerchantToken,
   logoutMerchant,
   logoutAllDevices,
@@ -75,7 +76,8 @@ router.get('/disputes', requireMerchantAuth, requireActiveSubscription, listDisp
 router.get('/kyc', requireMerchantAuth, requireActiveSubscription, getKyc);
 router.post('/kyc', requireMerchantAuth, requireActiveSubscription, submitKyc);
 
-// Financial Reports export
+// Financial Reports export & Reliability alerts
 router.get('/reports/export', requireMerchantAuth, requireActiveSubscription, exportReport);
+router.post('/reliability/test-telegram', requireMerchantAuth, requireActiveSubscription, testTelegramAlert);
 
 export default router;

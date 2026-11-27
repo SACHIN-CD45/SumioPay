@@ -19,6 +19,8 @@ import {
   FileText,
   X,
   Lock,
+  Link2,
+  Layers,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -44,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, isSub
       title: 'FINANCE & PAYMENTS',
       items: [
         { label: 'Overview', to: '/dashboard', icon: LayoutDashboard },
+        { label: 'Payment Links', to: '/links', icon: Link2, badge: 'NO-CODE', badgeColor: 'bg-indigo-100 text-indigo-700' },
         { label: 'Transactions Ledger', to: '/orders', icon: CreditCard },
         { label: 'Bank Reconciliation', to: '/reconciliation', icon: FileSpreadsheet },
         { label: 'Refunds & Disputes', to: '/refunds', icon: RotateCcw },
@@ -54,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, isSub
       title: 'DEVELOPER & INTEGRATION',
       items: [
         { label: 'Connect & Integrate', to: '/connect', icon: Zap, badge: 'SDK', badgeColor: 'bg-blue-100 text-blue-700' },
+        { label: 'SaaS Plans API', to: '/saas-plans', icon: Layers, badge: 'SAAS', badgeColor: 'bg-purple-100 text-purple-700' },
         { label: 'Integration Guide', to: '/guide', icon: Globe, badge: 'DOCS', badgeColor: 'bg-indigo-100 text-indigo-700' },
         { label: 'Webhooks & Events', to: '/webhooks', icon: KeyRound, badge: 'HMAC', badgeColor: 'bg-emerald-100 text-emerald-700' },
         { label: 'Payment Simulator', to: '/simulator', icon: Cpu },

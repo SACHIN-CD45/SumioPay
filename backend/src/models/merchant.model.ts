@@ -51,6 +51,17 @@ export interface IMerchant extends Document {
   webhookUrl?: string; // Merchant's callback endpoint
   webhookSecret: string; // Used for HMAC-SHA256 signature
   planTier: PlanTier;
+  gstin?: string;
+  allowedIps?: string[];
+  reliabilitySettings?: {
+    pauseCheckoutWhenOffline?: boolean;
+    offlineAlertMinutes?: number;
+    lastOfflineAlertAt?: Date | null;
+    webhookAutoRetryEnabled?: boolean;
+    telegramAlertsEnabled?: boolean;
+    telegramBotToken?: string;
+    telegramChatId?: string;
+  };
   isActive: boolean;
   totalVolume: number;
   totalTransactions: number;
@@ -123,6 +134,17 @@ const MerchantSchema = new Schema<IMerchant>(
         'ENTERPRISE',
       ],
       default: 'TRIAL',
+    },
+    gstin: { type: String, trim: true, uppercase: true, default: '' },
+    allowedIps: { type: [String], default: [] },
+    reliabilitySettings: {
+      pauseCheckoutWhenOffline: { type: Boolean, default: false },
+      offlineAlertMinutes: { type: Number, default: 5, min: 3, max: 120 },
+      lastOfflineAlertAt: { type: Date, default: null },
+      webhookAutoRetryEnabled: { type: Boolean, default: true },
+      telegramAlertsEnabled: { type: Boolean, default: false },
+      telegramBotToken: { type: String, trim: true, default: '' },
+      telegramChatId: { type: String, trim: true, default: '' },
     },
     isActive: { type: Boolean, default: true },
     totalVolume: { type: Number, default: 0 },

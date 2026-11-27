@@ -41,9 +41,15 @@ import {
   escapeCsvCell,
   generateNumericOtp,
   getClientIp,
+  sanitizeIpAllowlist,
   timingSafeEqualStr,
   validateSafeWebhookUrl,
 } from '../utils/securityGuards';
+import {
+  isValidTelegramBotToken,
+  isValidTelegramChatId,
+  sendTelegramMessage,
+} from '../services/reliability.service';
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -499,6 +505,19 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
         webhookSecret: entitlement.isExpired ? '' : merchant.webhookSecret,
         planTier: entitlement.planTier || merchant.planTier,
         subscriptionStatus: entitlement,
+        gstin: merchant.gstin || '',
+        allowedIps: merchant.allowedIps || [],
+        reliabilitySettings: {
+          pauseCheckoutWhenOffline: Boolean(merchant.reliabilitySettings?.pauseCheckoutWhenOffline),
+          offlineAlertMinutes: merchant.reliabilitySettings?.offlineAlertMinutes || 5,
+          webhookAutoRetryEnabled: merchant.reliabilitySettings?.webhookAutoRetryEnabled !== false,
+          telegramAlertsEnabled: Boolean(merchant.reliabilitySettings?.telegramAlertsEnabled),
+          telegramBotTokenConfigured: Boolean(merchant.reliabilitySettings?.telegramBotToken),
+          telegramBotTokenMasked: merchant.reliabilitySettings?.telegramBotToken
+            ? `••••${merchant.reliabilitySettings.telegramBotToken.slice(-6)}`
+            : '',
+          telegramChatId: merchant.reliabilitySettings?.telegramChatId || '',
+        },
         totalVolume: merchant.totalVolume,
         totalTransactions: merchant.totalTransactions,
         createdAt: merchant.createdAt,
@@ -524,6 +543,9 @@ export const updateMerchantProfile = async (req: AuthenticatedRequest, res: Resp
       webhookUrl,
       phone,
       upiRoutingMode,
+      gstin,
+      allowedIps,
+      reliabilitySettings,
     } = req.body;
 
     if (name && name.trim()) merchant.name = name.trim();
@@ -542,6 +564,73 @@ export const updateMerchantProfile = async (req: AuthenticatedRequest, res: Resp
     if (phone !== undefined) merchant.phone = (phone || '').trim();
     if (upiRoutingMode && ['PRIMARY_ONLY', 'ROUND_ROBIN', 'FAILOVER'].includes(upiRoutingMode)) {
       merchant.upiRoutingMode = upiRoutingMode;
+    }
+    if (gstin !== undefined) {
+      const cleanGst = String(gstin || '').toUpperCase().trim().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+      merchant.gstin = cleanGst;
+    }
+    if (allowedIps !== undefined) {
+      merchant.allowedIps = sanitizeIpAllowlist(allowedIps);
+    }
+    if (reliabilitySettings && typeof reliabilitySettings === 'object') {
+      const currRel = merchant.reliabilitySettings || {};
+      const nextPause =
+        reliabilitySettings.pauseCheckoutWhenOffline !== undefined
+          ? Boolean(reliabilitySettings.pauseCheckoutWhenOffline)
+          : Boolean(currRel.pauseCheckoutWhenOffline);
+      const nextMinutes =
+        reliabilitySettings.offlineAlertMinutes !== undefined
+          ? Math.max(3, Math.min(120, parseInt(reliabilitySettings.offlineAlertMinutes, 10) || 5))
+          : currRel.offlineAlertMinutes || 5;
+      const nextAutoRetry =
+        reliabilitySettings.webhookAutoRetryEnabled !== undefined
+          ? Boolean(reliabilitySettings.webhookAutoRetryEnabled)
+          : currRel.webhookAutoRetryEnabled !== false;
+      const nextTgEnabled =
+        reliabilitySettings.telegramAlertsEnabled !== undefined
+          ? Boolean(reliabilitySettings.telegramAlertsEnabled)
+          : Boolean(currRel.telegramAlertsEnabled);
+
+      let nextBotToken = currRel.telegramBotToken || '';
+      if (
+        typeof reliabilitySettings.telegramBotToken === 'string' &&
+        reliabilitySettings.telegramBotToken.trim() &&
+        !reliabilitySettings.telegramBotToken.startsWith('••••')
+      ) {
+        const candidateToken = reliabilitySettings.telegramBotToken.trim();
+        if (!isValidTelegramBotToken(candidateToken)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid Telegram Bot Token format (expected format like 123456789:AAH...).',
+          });
+        }
+        nextBotToken = candidateToken;
+      } else if (reliabilitySettings.telegramBotToken === '') {
+        nextBotToken = '';
+      }
+
+      let nextChatId = currRel.telegramChatId || '';
+      if (reliabilitySettings.telegramChatId !== undefined) {
+        const candidateChat = String(reliabilitySettings.telegramChatId || '').trim();
+        if (candidateChat && !isValidTelegramChatId(candidateChat)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid Telegram Chat ID (numeric chat ID e.g. 987654321 or @channel_name).',
+          });
+        }
+        nextChatId = candidateChat;
+      }
+
+      merchant.reliabilitySettings = {
+        ...currRel,
+        pauseCheckoutWhenOffline: nextPause,
+        offlineAlertMinutes: nextMinutes,
+        webhookAutoRetryEnabled: nextAutoRetry,
+        telegramAlertsEnabled: nextTgEnabled,
+        telegramBotToken: nextBotToken,
+        telegramChatId: nextChatId,
+      };
+      merchant.markModified('reliabilitySettings');
     }
 
     const accounts = syncMerchantUpiState(merchant);
@@ -1445,19 +1534,63 @@ export const exportReport = async (req: AuthenticatedRequest, res: Response) => 
     const { startDate, endDate, format } = req.query;
 
     const query: any = { merchantId, status: 'PAID' };
+    const funnelQuery: any = { merchantId, isTest: { $ne: true } };
     if (startDate || endDate) {
       query.paidAt = {};
-      if (startDate) query.paidAt.$gte = new Date(startDate as string);
-      if (endDate) query.paidAt.$lte = new Date(endDate as string);
+      funnelQuery.createdAt = {};
+      if (startDate) {
+        query.paidAt.$gte = new Date(startDate as string);
+        funnelQuery.createdAt.$gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        query.paidAt.$lte = new Date(endDate as string);
+        funnelQuery.createdAt.$lte = new Date(endDate as string);
+      }
     }
 
-    const orders = await Order.find(query).sort({ paidAt: -1 }).lean();
+    const [orders, allFunnelOrders] = await Promise.all([
+      Order.find(query).sort({ paidAt: -1 }).lean(),
+      Order.find(funnelQuery).select('status exactAmount metadata.assignedUpiId').lean(),
+    ]);
 
     const summary = {
       totalTransactions: orders.length,
       totalVolumeRupees: orders.reduce((sum, o) => sum + o.exactAmount, 0),
       currency: 'INR',
       period: { startDate: startDate || 'All-Time', endDate: endDate || 'Now' },
+    };
+
+    const upiMap = new Map<string, { upiId: string; initiated: number; paid: number; volumeInr: number }>();
+    let paidFunnelCount = 0;
+    let pendingFunnelCount = 0;
+    let expiredFunnelCount = 0;
+
+    for (const o of allFunnelOrders) {
+      if (o.status === 'PAID') paidFunnelCount += 1;
+      else if (o.status === 'PENDING' || o.status === 'PROCESSING') pendingFunnelCount += 1;
+      else if (o.status === 'EXPIRED') expiredFunnelCount += 1;
+
+      const handle = String((o.metadata as any)?.assignedUpiId || req.merchant!.upiId || 'Primary UPI');
+      const entry = upiMap.get(handle) || { upiId: handle, initiated: 0, paid: 0, volumeInr: 0 };
+      entry.initiated += 1;
+      if (o.status === 'PAID') {
+        entry.paid += 1;
+        entry.volumeInr = Number((entry.volumeInr + (o.exactAmount || 0)).toFixed(2));
+      }
+      upiMap.set(handle, entry);
+    }
+
+    const totalInitiated = allFunnelOrders.length;
+    const funnel = {
+      totalInitiated,
+      paidCount: paidFunnelCount,
+      pendingCount: pendingFunnelCount,
+      expiredCount: expiredFunnelCount,
+      conversionRatePercent: totalInitiated > 0 ? Number(((paidFunnelCount / totalInitiated) * 100).toFixed(1)) : 0,
+      upiPerformance: Array.from(upiMap.values()).map((u) => ({
+        ...u,
+        conversionPercent: u.initiated > 0 ? Number(((u.paid / u.initiated) * 100).toFixed(1)) : 0,
+      })),
     };
 
     if (format === 'csv') {
@@ -1484,11 +1617,52 @@ export const exportReport = async (req: AuthenticatedRequest, res: Response) => 
       success: true,
       data: {
         summary,
+        funnel,
         orders,
       },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const testTelegramAlert = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const rawToken =
+      typeof req.body?.telegramBotToken === 'string' &&
+      req.body.telegramBotToken.trim() &&
+      !req.body.telegramBotToken.startsWith('••••')
+        ? req.body.telegramBotToken.trim()
+        : merchant.reliabilitySettings?.telegramBotToken || '';
+    const chatId = String(req.body?.telegramChatId || merchant.reliabilitySettings?.telegramChatId || '').trim();
+
+    if (!rawToken || !chatId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter both your Telegram Bot Token and Chat ID first.',
+      });
+    }
+
+    const result = await sendTelegramMessage(
+      rawToken,
+      chatId,
+      `✅ SumioPay Test Alert Connected!\nBusiness: ${merchant.businessName}\nYou will receive instant ₹ payment credits & offline phone alerts here.`
+    );
+
+    if (!result.ok) {
+      return res.status(400).json({
+        success: false,
+        message: result.error || 'Telegram API rejected the test ping.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Telegram test alert sent! Check your Telegram chat.',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
