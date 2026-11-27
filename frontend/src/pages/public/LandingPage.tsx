@@ -222,6 +222,7 @@ export const LandingPage: React.FC = () => {
               <a href="#simulator" className="hover:text-blue-600 transition">Live Simulator</a>
               <a href="#calculator" className="hover:text-blue-600 transition">Fee Calculator</a>
               <a href="#pricing" className="hover:text-blue-600 transition">Pricing Plans</a>
+              <button type="button" onClick={() => navigate('/guide')} className="hover:text-blue-600 transition">Integration Guide</button>
               <button type="button" onClick={() => navigate('/security')} className="hover:text-blue-600 transition">Security &amp; Legal</button>
               <a href="#faq" className="hover:text-blue-600 transition">FAQ</a>
             </nav>
@@ -301,6 +302,15 @@ export const LandingPage: React.FC = () => {
                 className="py-1 text-left hover:text-blue-600 transition"
               >
                 Enterprise Custom SLA
+              </button>
+              <button
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  navigate('/guide');
+                }}
+                className="py-1 text-left hover:text-blue-600 transition"
+              >
+                Developer &amp; Platform Guide
               </button>
               <button
                 onClick={() => {
@@ -1295,6 +1305,11 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                 <span>Developer Portal</span>
               </div>
               <ul className="space-y-2 text-slate-400">
+                <li>
+                  <button onClick={() => navigate('/guide')} className="hover:text-indigo-400 text-slate-200 font-semibold transition text-left">
+                    Complete Integration Guide (/guide)
+                  </button>
+                </li>
                 <li>
                   <button onClick={() => navigate('/docs')} className="hover:text-indigo-400 transition text-left">
                     REST API Documentation

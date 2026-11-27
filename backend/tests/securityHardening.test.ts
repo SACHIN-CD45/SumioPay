@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   escapeCsvCell,
+  escapeRegex,
   generateNumericOtp,
   getClientIp,
   isPrivateOrReservedIp,
@@ -72,5 +73,11 @@ describe('Senior Security Guards & Anti-SSRF / OTP Hardening', () => {
       '203.0.113.45'
     );
     assert.equal(getClientIp({}, '::ffff:198.51.100.1'), '::ffff:198.51.100.1');
+  });
+
+  it('escapes regex metacharacters safely to prevent ReDoS and Mongo $regex errors', () => {
+    const escaped = escapeRegex('ORD-(2026)+.*[test]?');
+    assert.equal(escaped, 'ORD-\\(2026\\)\\+\\.\\*\\[test\\]\\?');
+    assert.doesNotThrow(() => new RegExp(escaped, 'i'));
   });
 });

@@ -15,7 +15,7 @@ import {
   sanitizeBrandColor,
   sanitizeSafeUrl,
 } from '../utils/checkoutBranding.js';
-import { validateSafeWebhookUrl } from '../utils/securityGuards.js';
+import { escapeRegex, validateSafeWebhookUrl } from '../utils/securityGuards.js';
 import { ApiKeyRequest } from '../middleware/apiKey.middleware.js';
 import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { config } from '../config/index.js';
@@ -245,11 +245,14 @@ export const getMerchantOrders = async (req: AuthenticatedRequest, res: Response
       query.isTest = isTest === 'true';
     }
     if (search) {
-      query.$or = [
-        { orderId: { $regex: search, $options: 'i' } },
-        { utrNumber: { $regex: search, $options: 'i' } },
-        { customerPhone: { $regex: search, $options: 'i' } },
-      ];
+      const safeSearch = escapeRegex(String(search).trim().slice(0, 80));
+      if (safeSearch) {
+        query.$or = [
+          { orderId: { $regex: safeSearch, $options: 'i' } },
+          { utrNumber: { $regex: safeSearch, $options: 'i' } },
+          { customerPhone: { $regex: safeSearch, $options: 'i' } },
+        ];
+      }
     }
 
     const [orders, total] = await Promise.all([

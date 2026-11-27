@@ -92,6 +92,15 @@ export const SuperAdminLayout: React.FC = () => {
       </nav>
 
       <div className="p-4 border-t border-slate-800 space-y-3">
+        <button
+          type="button"
+          onClick={() => navigate('/guide')}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-200 border border-slate-700/70 text-[11px] font-semibold transition"
+        >
+          <span>Platform &amp; Admin Guide</span>
+          <span className="font-mono text-amber-400">/guide</span>
+        </button>
+
         <div className="px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />

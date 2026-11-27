@@ -109,39 +109,51 @@ export const UpgradeButton = ({ user }) => {
     },
     {
       title: 'Step 3: SaaS Backend Webhook Receiver (Next.js / Express / Node.js)',
-      description: 'Receives the cryptographically signed HMAC-SHA256 payload from SumioPay to activate the user subscription in your database.',
+      description: 'Verifies timestamp-prefixed HMAC-SHA256 signatures (${timestamp}.${rawBody}) using timing-safe comparison before activating plans.',
       lang: 'javascript',
       code: `// Route: POST /api/webhooks/sumiopay
 const crypto = require('crypto');
 const express = require('express');
 const app = express();
 
-app.post('/api/webhooks/sumiopay', express.json(), async (req, res) => {
-  const signature = req.headers['x-sumiopay-signature'];
+// IMPORTANT: Use express.raw() so HMAC checks exact raw request bytes
+app.post('/api/webhooks/sumiopay', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = String(req.headers['x-sumiopay-signature'] || '');
+  const timestamp = String(req.headers['x-sumiopay-timestamp'] || '');
+  const rawBody = req.body.toString('utf8');
   const webhookSecret = process.env.SUMIOPAY_WEBHOOK_SECRET; // From Connect Page
 
-  // 1. Verify HMAC-SHA256 Signature (Prevents hackers & spoofing)
+  // 1. Replay Window Check (reject payloads older than 5 minutes)
+  const tsNum = parseInt(timestamp, 10);
+  if (!tsNum || Math.abs(Math.floor(Date.now() / 1000) - tsNum) > 300) {
+    return res.status(401).send('Webhook Timestamp Expired');
+  }
+
+  // 2. Verify HMAC-SHA256 over "\${timestamp}.\${rawBody}" in constant time
   const expectedSignature = crypto
     .createHmac('sha256', webhookSecret)
-    .update(JSON.stringify(req.body))
+    .update(\`\${timestamp}.\${rawBody}\`)
     .digest('hex');
 
-  if (signature !== expectedSignature) {
+  const sigBuf = Buffer.from(signature, 'utf8');
+  const expBuf = Buffer.from(expectedSignature, 'utf8');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     console.error("⚠️ Invalid Webhook Signature Rejected!");
     return res.status(401).send('Unauthorized Signature');
   }
 
-  // 2. Process Verified Bank Payment
-  const { event, data } = req.body;
-  if (event === 'payment.success') {
-    const { orderId, appName, userId, amount, utrNumber } = data;
+  // 3. Process Verified Bank Payment (idempotent on orderId)
+  const event = JSON.parse(rawBody);
+  if (event.type === 'payment.succeeded') {
+    const { orderId, appName, userId, exactAmount, utr, utrNumber } = event.data;
+    const verifiedUtr = utrNumber || utr;
 
-    console.log(\`✅ Verified ₹\${amount} credited for user \${userId} (UTR: \${utrNumber})\`);
+    console.log(\`✅ Verified ₹\${exactAmount} credited for user \${userId} (UTR: \${verifiedUtr})\`);
 
-    // 3. Atomically activate user subscription in MongoDB / PostgreSQL:
+    // 4. Atomically activate user subscription in MongoDB / PostgreSQL:
     // await db.users.updateOne(
     //   { _id: userId },
-    //   { $set: { isPro: true, planTier: 'PRO', proActivatedAt: new Date() } }
+    //   { $set: { isPro: true, planTier: 'PRO', lastOrderId: orderId, proActivatedAt: new Date() } }
     // );
   }
 
@@ -151,32 +163,39 @@ app.post('/api/webhooks/sumiopay', express.json(), async (req, res) => {
     },
     {
       title: 'Step 4: PHP / Laravel / Custom eCommerce Webhook Handler',
-      description: 'PHP implementation for WordPress, WooCommerce, or custom PHP stores.',
+      description: 'PHP implementation for WordPress, WooCommerce, or custom PHP stores using timing-safe hash_equals.',
       lang: 'php',
       code: `<?php
 // POST /api/sumiopay-webhook.php
 $signature = $_SERVER['HTTP_X_SUMIOPAY_SIGNATURE'] ?? '';
+$timestamp = $_SERVER['HTTP_X_SUMIOPAY_TIMESTAMP'] ?? '';
 $payload = file_get_contents('php://input');
 $webhookSecret = getenv('SUMIOPAY_WEBHOOK_SECRET');
 
-// 1. Verify cryptographic HMAC-SHA256 signature
-$expectedSignature = hash_hmac('sha256', $payload, $webhookSecret);
+// 1. Replay Defense (300 second window)
+if (!ctype_digit((string)$timestamp) || abs(time() - (int)$timestamp) > 300) {
+    http_response_code(401);
+    exit('Expired Timestamp');
+}
 
-if (!hash_equals($signature, $expectedSignature)) {
+// 2. Verify cryptographic HMAC-SHA256 signature over timestamp.payload
+$expectedSignature = hash_hmac('sha256', $timestamp . '.' . $payload, $webhookSecret);
+
+if (!hash_equals($expectedSignature, $signature)) {
     http_response_code(401);
     exit('Invalid Signature');
 }
 
 $event = json_decode($payload, true);
 
-if ($event['event'] === 'payment.success') {
+if (($event['type'] ?? '') === 'payment.succeeded') {
     $orderId = $event['data']['orderId'];
     $userId = $event['data']['userId'];
-    $amount = $event['data']['amount'];
-    $utr = $event['data']['utrNumber'];
+    $amount = $event['data']['exactAmount'];
+    $utr = $event['data']['utrNumber'] ?? $event['data']['utr'];
 
-    // 2. Update order in database:
-    // UPDATE orders SET status = 'PAID', utr = '$utr' WHERE id = '$orderId';
+    // 3. Update order idempotently in database:
+    // UPDATE orders SET status = 'PAID', utr = '$utr' WHERE id = '$orderId' AND status != 'PAID';
 }
 
 http_response_code(200);
@@ -208,14 +227,23 @@ echo json_encode(['status' => 'acknowledged']);
   return (
     <div className="p-8 space-y-10 max-w-6xl mx-auto text-xs">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-          <FileCode2 className="w-7 h-7 text-blue-600" />
-          Developer Architecture &amp; Integration Blueprint
-        </h1>
-        <p className="text-slate-500 mt-1 text-xs">
-          Learn how SumioPay mathematically eliminates fake payments, captures bank UPI alerts in &lt;1.2s, and integrates into SumioLab or any SaaS with 3 lines of code.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <FileCode2 className="w-7 h-7 text-blue-600" />
+            Developer Architecture &amp; Integration Blueprint
+          </h1>
+          <p className="text-slate-500 mt-1 text-xs">
+            Learn how SumioPay mathematically eliminates fake payments, captures bank UPI alerts in &lt;1.2s, and integrates into SumioLab or any SaaS with 3 lines of code.
+          </p>
+        </div>
+        <a
+          href="/guide"
+          className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shrink-0 transition self-start"
+        >
+          <span>Full Website &amp; SuperAdmin Guide</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </a>
       </div>
 
       {/* Visual End-to-End Payment Flow */}
@@ -321,7 +349,7 @@ echo json_encode(['status' => 'acknowledged']);
               <h3 className="font-bold text-slate-900 text-xs">Hardware Bank Telemetry (No Fake Screenshots)</h3>
             </div>
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              Customers never type their UTR manually. The UTR is read directly from your bank&apos;s cryptographic SMS/push notification by the background listener APK. Fake payment screenshots cannot trigger verification.
+              Customers can never self-approve payments. Every 12-digit UTR (via listener push or customer checkout UTR fallback) is strictly verified against an authentic incoming bank credit notification matching exact paise. Fake payment screenshots cannot trigger verification.
             </p>
           </div>
 

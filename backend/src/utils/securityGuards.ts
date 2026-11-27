@@ -209,3 +209,12 @@ export function getClientIp(headers: Record<string, any>, fallbackIp?: string): 
   }
   return String(fallbackIp || '').trim() || 'Unknown';
 }
+
+/**
+ * Escapes special regex metacharacters from user query strings before passing to MongoDB $regex
+ * to prevent malformed-regex 500 crashes and ReDoS attacks.
+ */
+export function escapeRegex(value: unknown): string {
+  return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+

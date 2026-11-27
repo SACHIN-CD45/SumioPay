@@ -52,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       title: 'DEVELOPER & INTEGRATION',
       items: [
         { label: 'Connect & Integrate', to: '/connect', icon: Zap, badge: 'SDK', badgeColor: 'bg-blue-100 text-blue-700' },
+        { label: 'Integration Guide', to: '/guide', icon: Globe, badge: 'DOCS', badgeColor: 'bg-indigo-100 text-indigo-700' },
         { label: 'Webhooks & Events', to: '/webhooks', icon: KeyRound, badge: 'HMAC', badgeColor: 'bg-emerald-100 text-emerald-700' },
         { label: 'Payment Simulator', to: '/simulator', icon: Cpu },
         { label: 'Developer API Docs', to: '/docs', icon: FileCode2 },
@@ -146,6 +147,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
 
       {/* Website & Support Footer Link */}
       <div className="pt-4 border-t border-slate-100 space-y-1 mt-auto">
+        <NavLink
+          to="/security"
+          onClick={onClose}
+          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition"
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <span>Security &amp; Legal Policy</span>
+        </NavLink>
         <NavLink
           to="/"
           onClick={onClose}

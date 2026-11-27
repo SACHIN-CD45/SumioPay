@@ -1,8 +1,10 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { requireMerchantAuth, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { Project } from '../../models/project.model';
 import { AuditLog } from '../../models/auditLog.model';
+import { validateSafeWebhookUrl } from '../../utils/securityGuards';
 
 const router = Router();
 
@@ -52,6 +54,12 @@ router.post('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Res
       return;
     }
 
+    const urlCheck = validateSafeWebhookUrl(webhookUrl);
+    if (!urlCheck.valid) {
+      res.status(400).json({ success: false, message: urlCheck.reason });
+      return;
+    }
+
     const webhookSecret = 'whsec_' + crypto.randomBytes(24).toString('hex');
 
     const project = await Project.create({
@@ -59,7 +67,7 @@ router.post('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Res
       name: name.trim(),
       code: cleanCode,
       description: description || '',
-      webhookUrl: webhookUrl || '',
+      webhookUrl: urlCheck.url,
       webhookSecret,
       environment: environment === 'SANDBOX' ? 'SANDBOX' : 'PRODUCTION',
       isActive: true,
@@ -92,8 +100,13 @@ router.post('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Res
 // GET /api/v1/projects/:id - Get project details
 router.get('/:id', requireMerchantAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const id = String(req.params.id || '');
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: 'Invalid project ID' });
+      return;
+    }
     const merchantId = req.merchant!._id;
-    const project = await Project.findOne({ _id: req.params.id, merchantId });
+    const project = await Project.findOne({ _id: id, merchantId });
 
     if (!project) {
       res.status(404).json({ success: false, message: 'Project not found' });
@@ -109,10 +122,23 @@ router.get('/:id', requireMerchantAuth, async (req: AuthenticatedRequest, res: R
 // PUT /api/v1/projects/:id - Update project configuration
 router.put('/:id', requireMerchantAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const id = String(req.params.id || '');
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: 'Invalid project ID' });
+      return;
+    }
     const merchantId = req.merchant!._id;
     const { name, description, webhookUrl, environment, isActive } = req.body;
 
-    const project = await Project.findOne({ _id: req.params.id, merchantId });
+    if (webhookUrl !== undefined) {
+      const urlCheck = validateSafeWebhookUrl(webhookUrl);
+      if (!urlCheck.valid) {
+        res.status(400).json({ success: false, message: urlCheck.reason });
+        return;
+      }
+    }
+
+    const project = await Project.findOne({ _id: id, merchantId });
     if (!project) {
       res.status(404).json({ success: false, message: 'Project not found' });
       return;
@@ -122,7 +148,7 @@ router.put('/:id', requireMerchantAuth, async (req: AuthenticatedRequest, res: R
 
     if (name !== undefined) project.name = name;
     if (description !== undefined) project.description = description;
-    if (webhookUrl !== undefined) project.webhookUrl = webhookUrl;
+    if (webhookUrl !== undefined) project.webhookUrl = validateSafeWebhookUrl(webhookUrl).url;
     if (environment !== undefined) project.environment = environment;
     if (isActive !== undefined) project.isActive = isActive;
 

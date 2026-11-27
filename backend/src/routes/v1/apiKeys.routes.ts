@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { requireMerchantAuth, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { ApiKey } from '../../models/apiKey.model';
 import { AuditLog } from '../../models/auditLog.model';
@@ -91,8 +92,13 @@ router.post('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Res
 // DELETE /api/v1/api-keys/:id - Revoke an API key
 router.delete('/:id', requireMerchantAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const id = String(req.params.id || '');
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: 'Invalid API key ID' });
+      return;
+    }
     const merchantId = req.merchant!._id;
-    const apiKey = await ApiKey.findOne({ _id: req.params.id, merchantId });
+    const apiKey = await ApiKey.findOne({ _id: id, merchantId });
 
     if (!apiKey) {
       res.status(404).json({ success: false, message: 'API key not found' });

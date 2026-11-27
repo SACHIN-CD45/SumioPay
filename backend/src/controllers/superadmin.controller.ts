@@ -16,6 +16,8 @@ import { WebhookLog } from '../models/webhookLog.model';
 import { config } from '../config';
 import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
+import { sanitizeSafeUrl } from '../utils/checkoutBranding';
+import { escapeRegex, getClientIp } from '../utils/securityGuards';
 import {
   PLATFORM_SUBSCRIPTION_METADATA_TYPE,
   getSubscriptionPlanCatalog,
@@ -34,9 +36,14 @@ export const superadminLogin = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const admin = await SuperAdmin.findOne({ email: email.toLowerCase() });
+    const admin = await SuperAdmin.findOne({ email: String(email).toLowerCase().trim() });
     if (!admin) {
       res.status(401).json({ success: false, message: 'Invalid superadmin credentials' });
+      return;
+    }
+
+    if (!admin.isActive) {
+      res.status(403).json({ success: false, message: 'Superadmin account is deactivated.' });
       return;
     }
 
@@ -47,10 +54,24 @@ export const superadminLogin = async (req: Request, res: Response): Promise<void
     }
 
     const token = jwt.sign(
-      { id: admin._id, email: admin.email, role: 'SUPERADMIN' },
-      config.jwtSecret,
-      { expiresIn: '7d' }
+      { id: admin._id, email: admin.email, role: 'SUPERADMIN', tokenType: 'ACCESS' },
+      config.jwt.accessSecret,
+      {
+        expiresIn: '24h',
+        issuer: config.jwt.issuer,
+        audience: config.jwt.audience,
+      }
     );
+
+    AuditLog.create({
+      actorType: 'SUPERADMIN',
+      actorEmail: admin.email,
+      action: 'SUPERADMIN_LOGIN',
+      resourceType: 'AUTH',
+      resourceId: admin._id.toString(),
+      ipAddress: getClientIp(req.headers as Record<string, any>, req.ip),
+      userAgent: req.get('user-agent'),
+    }).catch(() => {});
 
     res.status(200).json({
       success: true,
@@ -145,11 +166,14 @@ export const listAllMerchants = async (req: Request, res: Response): Promise<voi
     if (status === 'SUSPENDED') filter.isActive = false;
 
     if (search) {
-      filter.$or = [
-        { businessName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { upiId: { $regex: search, $options: 'i' } },
-      ];
+      const safeSearch = escapeRegex(String(search).trim().slice(0, 80));
+      if (safeSearch) {
+        filter.$or = [
+          { businessName: { $regex: safeSearch, $options: 'i' } },
+          { email: { $regex: safeSearch, $options: 'i' } },
+          { upiId: { $regex: safeSearch, $options: 'i' } },
+        ];
+      }
     }
 
     const [merchants, total] = await Promise.all([
@@ -207,14 +231,26 @@ export const listAllMerchants = async (req: Request, res: Response): Promise<voi
 // Toggle Merchant Status (ACTIVE <-> SUSPENDED)
 export const toggleMerchantStatus = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { merchantId } = req.params;
-    const { isActive } = req.body;
+    const merchantId = String(req.params.merchantId || '');
+    if (!mongoose.Types.ObjectId.isValid(merchantId)) {
+      res.status(400).json({ success: false, message: 'Invalid merchant ID' });
+      return;
+    }
+
+    const target = await Merchant.findById(merchantId).select('isActive');
+    if (!target) {
+      res.status(404).json({ success: false, message: 'Merchant not found' });
+      return;
+    }
+
+    const nextActive =
+      req.body && typeof req.body.isActive === 'boolean' ? req.body.isActive : !target.isActive;
 
     const merchant = await Merchant.findByIdAndUpdate(
       merchantId,
-      { isActive: !!isActive },
+      { isActive: nextActive },
       { new: true }
-    ).select('-passwordHash -apiSecret');
+    ).select('-passwordHash -apiSecret -webhookSecret');
 
     if (!merchant) {
       res.status(404).json({ success: false, message: 'Merchant not found' });
@@ -224,6 +260,7 @@ export const toggleMerchantStatus = async (req: Request, res: Response): Promise
     res.status(200).json({
       success: true,
       message: `Merchant status updated to ${merchant.isActive ? 'ACTIVE' : 'SUSPENDED'}`,
+      data: merchant,
       merchant,
     });
   } catch (err: any) {
@@ -244,11 +281,14 @@ export const listAllOrders = async (req: Request, res: Response): Promise<void> 
     if (status) filter.status = status;
     if (appName) filter.appName = appName;
     if (search) {
-      filter.$or = [
-        { orderId: { $regex: search, $options: 'i' } },
-        { utrNumber: { $regex: search, $options: 'i' } },
-        { customerUserId: { $regex: search, $options: 'i' } },
-      ];
+      const safeSearch = escapeRegex(String(search).trim().slice(0, 80));
+      if (safeSearch) {
+        filter.$or = [
+          { orderId: { $regex: safeSearch, $options: 'i' } },
+          { utrNumber: { $regex: safeSearch, $options: 'i' } },
+          { customerUserId: { $regex: safeSearch, $options: 'i' } },
+        ];
+      }
     }
 
     const [orders, total] = await Promise.all([
@@ -612,11 +652,16 @@ export const updateMerchantSubscriptionTier = async (req: Request, res: Response
       userAgent: req.get('user-agent'),
     });
 
+    const safeMerchant = merchant.toObject() as any;
+    delete safeMerchant.passwordHash;
+    delete safeMerchant.apiSecret;
+    delete safeMerchant.webhookSecret;
+
     res.status(200).json({
       success: true,
       message: `Merchant ${merchant.businessName} updated to ${planTier} (${parsedDuration} days)`,
       data: {
-        merchant,
+        merchant: safeMerchant,
         subscription: sub,
       },
     });
@@ -776,8 +821,10 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
       platformBilling,
     } = req.body;
 
-    if (announcementText !== undefined) settings.announcementText = announcementText;
-    if (announcementLink !== undefined) settings.announcementLink = announcementLink;
+    if (announcementText !== undefined) settings.announcementText = String(announcementText || '');
+    if (announcementLink !== undefined) {
+      settings.announcementLink = sanitizeSafeUrl(announcementLink) || '/login?register=true';
+    }
     if (isAnnouncementActive !== undefined) settings.isAnnouncementActive = isAnnouncementActive;
     if (maintenanceMode !== undefined) settings.maintenanceMode = maintenanceMode;
     if (maintenanceMessage !== undefined) settings.maintenanceMessage = maintenanceMessage;

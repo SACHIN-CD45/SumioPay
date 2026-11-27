@@ -6,6 +6,7 @@ import { PrivacyPolicyPage } from './pages/public/PrivacyPolicyPage';
 import { TermsPage } from './pages/public/TermsPage';
 import { RefundPolicyPage } from './pages/public/RefundPolicyPage';
 import { SecurityCompliancePage } from './pages/public/SecurityCompliancePage';
+import { IntegrationGuidePage } from './pages/public/IntegrationGuidePage';
 import { EnterprisePage } from './pages/public/EnterprisePage';
 import { HostedPaymentPage } from './pages/public/HostedPaymentPage';
 import { Navbar } from './components/Navbar';
@@ -147,6 +148,7 @@ export const App: React.FC = () => {
         <Route path="/refund-policy" element={<RefundPolicyPage />} />
         <Route path="/security" element={<SecurityCompliancePage />} />
         <Route path="/disclaimer" element={<SecurityCompliancePage />} />
+        <Route path="/guide" element={<IntegrationGuidePage />} />
 
         {/* Merchant Public Auth */}
         <Route path="/login" element={<LoginPage />} />
