@@ -1191,7 +1191,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
           subtotal: 399,
           couponCode: 'LAUNCH100',
           discountAmount: 100,
-          note: 'Live merchant checkout modal showing your website branding, applied coupon savings, and 0% UPI settlement.',
+          note: 'To complete your SumioLab Pro subscription, ₹299 will be processed securely via UPI.',
         }}
         apiUrl={API_BASE}
         apiKey={liveApiKey}

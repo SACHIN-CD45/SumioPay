@@ -193,6 +193,16 @@ export const getOrderStatus = async (req: Request, res: Response) => {
       fallbackAppName: order.appName,
     });
     const billDetails = order.metadata?.billDetails || null;
+    const rawMeta = order.metadata && typeof order.metadata === 'object' ? order.metadata : {};
+    const publicMetadata = {
+      ...(rawMeta.planName ? { planName: rawMeta.planName } : {}),
+      ...(rawMeta.planLabel ? { planLabel: rawMeta.planLabel } : {}),
+      ...(rawMeta.websiteName ? { websiteName: rawMeta.websiteName } : {}),
+      ...(billDetails ? { billDetails } : {}),
+      ...(billDetails?.returnUrl || rawMeta.returnUrl
+        ? { returnUrl: billDetails?.returnUrl || rawMeta.returnUrl }
+        : {}),
+    };
 
     res.json({
       success: true,
@@ -202,11 +212,9 @@ export const getOrderStatus = async (req: Request, res: Response) => {
         status: order.status,
         baseAmount: order.baseAmount,
         exactAmount: order.exactAmount,
-        paiseOffset: order.paiseOffset,
         upiIntentUrl: order.upiIntentUrl,
         isTest: order.isTest || false,
-        merchantName: merchantObj.businessName || merchantObj.name || 'Merchant',
-        upiId: order.metadata?.assignedUpiId || merchantObj.upiId || '',
+        merchantName: branding.websiteName,
         websiteName: branding.websiteName,
         websiteUrl: branding.websiteUrl,
         websiteLogoUrl: branding.websiteLogoUrl,
@@ -219,7 +227,7 @@ export const getOrderStatus = async (req: Request, res: Response) => {
         returnUrl: billDetails?.returnUrl || order.metadata?.returnUrl || '',
         utr: order.utrNumber,
         utrNumber: order.utrNumber,
-        metadata: order.metadata || {},
+        metadata: publicMetadata,
         paidAt: order.paidAt,
         expiresAt: order.expiresAt,
       },

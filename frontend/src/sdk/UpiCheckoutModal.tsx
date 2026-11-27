@@ -221,39 +221,6 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
     };
   }, [order, timeLeft, apiUrl, onSuccess, demoMode, appName]);
 
-  const handleSubmitUtr = async (utrNumber: string) => {
-    if (!order) return { success: false, message: 'No active order' };
-    try {
-      const res = await fetch(`${apiUrl}/order/submit-utr/${order.orderId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utrNumber }),
-      });
-      const data = await res.json();
-      if (data.matchedImmediately && data.data) {
-        setOrder((prev) => ({ ...(prev || {}), ...data.data, status: 'PAID' }));
-        try {
-          confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 } });
-        } catch {}
-        if (onSuccess) {
-          onSuccess({
-            orderId: order.orderId,
-            amount: data.data.exactAmount || order.exactAmount,
-            utr: data.data.utrNumber || utrNumber,
-            appName: order.appName || appName,
-          });
-        }
-      }
-      return {
-        success: Boolean(data.success),
-        matchedImmediately: Boolean(data.matchedImmediately),
-        message: data.message,
-      };
-    } catch {
-      return { success: false, message: 'Network error while verifying UTR' };
-    }
-  };
-
   if (!isOpen) return null;
 
   const minutes = Math.floor(timeLeft / 60);
@@ -266,8 +233,8 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
         {loading ? (
           <div className="max-w-md mx-auto bg-white rounded-3xl p-10 shadow-2xl border border-slate-200 flex flex-col items-center justify-center gap-3 text-slate-900">
             <Loader2 className="w-9 h-9 text-indigo-600 animate-spin" />
-            <p className="text-sm font-bold text-slate-800">Preparing Trusted Checkout...</p>
-            <p className="text-xs text-slate-500">Allocating zero-collision UPI settlement</p>
+            <p className="text-sm font-bold text-slate-800">Preparing Secure Checkout...</p>
+            <p className="text-xs text-slate-500">Establishing encrypted payment session</p>
           </div>
         ) : error || !order ? (
           <div className="max-w-md mx-auto bg-white rounded-3xl p-8 shadow-2xl border border-slate-200 text-center space-y-3 text-slate-900 relative">
@@ -298,7 +265,6 @@ export const UpiCheckoutModal: React.FC<UpiCheckoutModalProps> = ({
             timeFormatted={timeFormatted}
             isDemoMode={demoMode}
             onClose={onClose}
-            onSubmitUtr={handleSubmitUtr}
             onSimulatePayment={
               demoMode
                 ? () => {

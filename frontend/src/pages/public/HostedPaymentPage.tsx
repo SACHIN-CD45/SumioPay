@@ -95,29 +95,6 @@ export const HostedPaymentPage: React.FC = () => {
     }
   };
 
-  const handleSubmitUtr = async (utrNumber: string) => {
-    if (!orderId) {
-      return { success: false, message: 'Missing order identifier' };
-    }
-    try {
-      const res = await publicApi.post(`/order/submit-utr/${orderId}`, { utrNumber });
-      if (res.data?.matchedImmediately && res.data?.data) {
-        setOrder((prev) => ({ ...(prev || {}), ...res.data.data, status: 'PAID' }));
-        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-      }
-      return {
-        success: Boolean(res.data?.success),
-        matchedImmediately: Boolean(res.data?.matchedImmediately),
-        message: res.data?.message,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err.response?.data?.message || 'Unable to verify UTR right now.',
-      };
-    }
-  };
-
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -127,7 +104,7 @@ export const HostedPaymentPage: React.FC = () => {
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
         <div className="text-center space-y-3">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" />
-          <p className="text-slate-600 text-xs font-semibold">Loading SumioPay Trusted Checkout...</p>
+          <p className="text-slate-600 text-xs font-semibold">Preparing Secure Checkout...</p>
         </div>
       </div>
     );
@@ -160,23 +137,10 @@ export const HostedPaymentPage: React.FC = () => {
         timeFormatted={formattedTime}
         onSimulatePayment={handleSimulatePayment}
         simulating={simulating}
-        onSubmitUtr={handleSubmitUtr}
       />
 
-      <div className="text-center text-[11px] text-slate-500 mt-5 space-y-1">
-        <div>
-          &copy; {new Date().getFullYear()} SumioTech &bull; Direct 100% Bank-to-Bank UPI Automation (₹0 Held by SumioPay)
-        </div>
-        <div>
-          SumioPay is a software utility, not a bank or PA/PG.{' '}
-          <button
-            type="button"
-            onClick={() => navigate('/disclaimer')}
-            className="text-indigo-600 hover:underline font-semibold"
-          >
-            Legal Disclaimer &amp; Security
-          </button>
-        </div>
+      <div className="text-center text-[11px] text-slate-400 mt-5">
+        &copy; {new Date().getFullYear()} SumioTech &bull; Secured by SumioPay
       </div>
     </div>
   );

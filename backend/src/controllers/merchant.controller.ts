@@ -949,13 +949,13 @@ function buildSubscriptionBillDetails(
       subtotal: sixMonthStandard,
       couponCode: 'SAVE6M',
       discountAmount: discount,
-      note: `Pay ₹${basePriceInr.toFixed(2)} now via Direct UPI — your SumioPay workspace activates automatically in <1.2s with 0% surcharge.`,
+      note: `To begin your subscription, ₹${basePriceInr.toFixed(2)} will be charged securely via UPI.`,
     };
   }
   return {
     items: [{ label, quantity: 1, amount: basePriceInr }],
     subtotal: basePriceInr,
-    note: `Pay ₹${basePriceInr.toFixed(2)} now via Direct UPI — your SumioPay workspace activates automatically in <1.2s with 0% surcharge.`,
+    note: `To begin your subscription, ₹${basePriceInr.toFixed(2)} will be charged securely via UPI.`,
   };
 }
 

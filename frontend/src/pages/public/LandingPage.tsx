@@ -1452,7 +1452,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
           subtotal: monthlyPrice + 100,
           couponCode: 'SUMIO100',
           discountAmount: 100,
-          note: `Preview how customers see your brand, applied coupon discount, and SumioPay Trusted Business shield at checkout.`,
+          note: `To begin your subscription, ₹${monthlyPrice} will be processed securely via UPI.`,
         }}
         demoMode={true}
       />

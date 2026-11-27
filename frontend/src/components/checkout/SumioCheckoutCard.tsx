@@ -5,8 +5,6 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  Copy,
-  Check,
   Smartphone,
   ExternalLink,
   X,
@@ -15,7 +13,6 @@ import {
   Lock,
   Loader2,
   QrCode,
-  Hash,
 } from 'lucide-react';
 
 export interface BillLineItem {
@@ -42,7 +39,7 @@ export interface CheckoutOrderPayload {
   baseAmount: number;
   paiseOffset?: number;
   exactAmount: number;
-  upiId: string;
+  upiId?: string;
   merchantName?: string;
   websiteName?: string;
   websiteUrl?: string;
@@ -70,6 +67,7 @@ interface SumioCheckoutCardProps {
   onClose?: () => void;
   onSimulatePayment?: () => Promise<void> | void;
   simulating?: boolean;
+  /** Kept optional for backwards compatibility; intentionally not rendered in customer UI */
   onSubmitUtr?: (utrNumber: string) => Promise<{
     success: boolean;
     matchedImmediately?: boolean;
@@ -99,16 +97,11 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
   onClose,
   onSimulatePayment,
   simulating = false,
-  onSubmitUtr,
 }) => {
   const [logoFailed, setLogoFailed] = useState(false);
-  const [copiedUpi, setCopiedUpi] = useState(false);
-  const [activeRail, setActiveRail] = useState<'RECOMMENDED' | 'UPI_ID' | 'VERIFY_UTR'>('RECOMMENDED');
+  const [activeRail, setActiveRail] = useState<'RECOMMENDED' | 'UPI'>('RECOMMENDED');
   const [vpaInput, setVpaInput] = useState('');
   const [vpaStatus, setVpaStatus] = useState<{ ok: boolean; text: string } | null>(null);
-  const [utrInput, setUtrInput] = useState('');
-  const [utrSubmitting, setUtrSubmitting] = useState(false);
-  const [utrFeedback, setUtrFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const brandColor =
     order.brandColor && /^#[0-9a-fA-F]{6}$/.test(order.brandColor)
@@ -121,123 +114,74 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
     order.metadata?.websiteName ||
     order.merchantName ||
     order.appName ||
-    'SumioPay Merchant';
+    'Verified Store';
 
   const bill: CheckoutBillDetails | null =
     order.billDetails || order.metadata?.billDetails || null;
 
-  const paiseOffset =
-    typeof order.paiseOffset === 'number'
-      ? order.paiseOffset
-      : Math.max(0, Number((order.exactAmount - order.baseAmount).toFixed(2)));
-
   const rawDiscount = bill?.discountAmount || 0;
+  const taxAmount = bill?.taxAmount || 0;
+  const platformFee = bill?.platformFee || 0;
+  const hasRichBillBreakdown =
+    rawDiscount > 0 ||
+    taxAmount > 0 ||
+    platformFee > 0 ||
+    (bill?.items?.length || 0) > 1;
+
   const displaySubtotal =
     bill?.subtotal !== undefined
       ? bill.subtotal
       : rawDiscount > 0
       ? Math.max(
           0,
-          Number(
-            (
-              order.baseAmount +
-              rawDiscount -
-              (bill?.taxAmount || 0) -
-              (bill?.platformFee || 0)
-            ).toFixed(2)
-          )
+          Number((order.baseAmount + rawDiscount - taxAmount - platformFee).toFixed(2))
         )
       : order.baseAmount;
 
   const displayReturnUrl = order.returnUrl || bill?.returnUrl || order.metadata?.returnUrl || '';
   const initialLetter = websiteName.trim().charAt(0).toUpperCase() || 'S';
 
-  const upiValue =
-    order.upiIntentUrl ||
-    `upi://pay?pa=${encodeURIComponent(order.upiId)}&pn=${encodeURIComponent(websiteName)}&am=${order.exactAmount.toFixed(2)}&cu=INR&tr=${encodeURIComponent(order.orderId)}`;
+  const upiValue = order.upiIntentUrl;
   const upiQuery = upiValue.includes('?') ? upiValue.split('?')[1] : '';
 
   const isMobileBrowser =
     typeof navigator !== 'undefined' &&
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
-  const handleCopyUpi = () => {
-    if (!order.upiId) return;
-    navigator.clipboard.writeText(order.upiId);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2000);
-  };
-
   const handleVerifyVpaAndLaunch = (e: React.FormEvent) => {
     e.preventDefault();
     const cleaned = vpaInput.trim();
-    if (!/^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9]{2,}$/.test(cleaned)) {
+    const isValidVpa = /^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9]{2,}$/.test(cleaned);
+    const isValidMobile = /^\d{10}$/.test(cleaned);
+
+    if (!isValidVpa && !isValidMobile) {
       setVpaStatus({
         ok: false,
-        text: 'Enter a valid UPI ID (e.g. name@okhdfcbank, phone@ybl)',
+        text: 'Enter a valid UPI ID (e.g. name@okhdfcbank) or 10-digit mobile number',
       });
       return;
     }
+
     if (isMobileBrowser) {
       setVpaStatus({
         ok: true,
-        text: `UPI handle ${cleaned} verified. Opening UPI app to pay exact ₹${order.exactAmount.toFixed(2)}...`,
+        text: `Opening UPI app to complete payment of ₹${formatMoney(order.exactAmount)}...`,
       });
       window.location.href = upiValue;
       return;
     }
+
     setVpaStatus({
       ok: true,
-      text: `UPI ID ${cleaned} verified. Scan the QR code above using your UPI app on mobile to pay exact ₹${order.exactAmount.toFixed(2)}, or enter your 12-digit UTR after paying.`,
+      text: `UPI request initiated for ${cleaned}. Approve the payment in your UPI app or scan the QR code above for instant completion.`,
     });
-  };
-
-  const handleVerifyUtrSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanUtr = utrInput.trim();
-    if (!/^\d{12}$/.test(cleanUtr)) {
-      setUtrFeedback({
-        ok: false,
-        text: 'Please enter the exact 12-digit numeric UTR / UPI reference number.',
-      });
-      return;
-    }
-
-    if (isDemoMode || !onSubmitUtr) {
-      setUtrFeedback({
-        ok: true,
-        text: 'In live checkouts, this verifies your 12-digit UTR directly against the merchant Android Listener bank feed.',
-      });
-      return;
-    }
-
-    setUtrSubmitting(true);
-    setUtrFeedback(null);
-    try {
-      const result = await onSubmitUtr(cleanUtr);
-      setUtrFeedback({
-        ok: result.success,
-        text:
-          result.message ||
-          (result.matchedImmediately
-            ? 'Payment verified from bank feed!'
-            : 'UTR recorded. Auto-confirming once bank notification arrives.'),
-      });
-    } catch (err: any) {
-      setUtrFeedback({
-        ok: false,
-        text: err?.message || 'Could not verify UTR. Please double check digits.',
-      });
-    } finally {
-      setUtrSubmitting(false);
-    }
   };
 
   const summaryNote =
     bill?.note ||
     (planName
-      ? `Paying ${websiteName} for ${planName}. Instant ₹${formatMoney(order.exactAmount)} direct UPI verification with 0% gateway surcharge.`
-      : `Paying ${websiteName} directly via SumioPay Zero-MDR UPI Gateway. Order Ref: ${order.orderId}.`);
+      ? `To complete your payment for ${planName}, ₹${formatMoney(order.exactAmount)} will be charged via UPI.`
+      : `Paying ${websiteName} ₹${formatMoney(order.exactAmount)} securely via UPI.`);
 
   const utrRef = order.utrNumber || order.utr;
 
@@ -246,19 +190,19 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
       {order.isTest && (
         <div className="bg-amber-400 text-slate-950 font-bold text-[11px] px-4 py-1.5 flex items-center justify-center gap-1.5">
           <Zap className="w-3.5 h-3.5 fill-current" />
-          <span>SANDBOX TEST MODE — No Real Money Is Charged</span>
+          <span>TEST MODE — No Real Money Is Charged</span>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-12">
-        {/* LEFT BRANDED SUMMARY PANEL (Hostinger x Razorpay Style) */}
+        {/* LEFT BRANDED SUMMARY PANEL */}
         <div
           className="md:col-span-5 p-6 sm:p-7 text-white flex flex-col justify-between relative overflow-hidden"
           style={{
             background: `linear-gradient(155deg, ${brandColor} 0%, ${brandDark} 100%)`,
           }}
         >
-          {/* Decorative Commerce Bags & Discount Vector Graphic */}
+          {/* Decorative Commerce Bags Graphic */}
           <svg
             viewBox="0 0 240 150"
             className="pointer-events-none select-none absolute -bottom-2 left-2 w-48 opacity-20"
@@ -267,7 +211,9 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
             <rect x="22" y="42" width="68" height="84" rx="12" fill="white" />
             <path d="M40 42c0-15 32-15 32 0" stroke="white" strokeWidth="7" fill="none" />
             <circle cx="56" cy="82" r="18" fill="white" fillOpacity="0.28" />
-            <text x="56" y="88" textAnchor="middle" fill="white" fontSize="18" fontWeight="900">%</text>
+            <text x="56" y="88" textAnchor="middle" fill="white" fontSize="18" fontWeight="900">
+              %
+            </text>
             <rect x="104" y="24" width="76" height="98" rx="12" fill="white" fillOpacity="0.85" />
             <path d="M124 24c0-17 36-17 36 0" stroke="white" strokeWidth="7" fill="none" />
             <rect x="176" y="72" width="44" height="52" rx="8" fill="white" fillOpacity="0.65" />
@@ -296,16 +242,14 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                 <div className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-0.5 rounded-full bg-slate-950/35 border border-white/20 backdrop-blur-sm">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span className="text-[11px] font-semibold text-white/95">
-                    {order.kycVerified
-                      ? 'SumioPay KYC Verified Business'
-                      : order.trustLabel || 'SumioPay Trusted Business'}
+                    {order.trustLabel || 'SumioPay Trusted Business'}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* White Floating Price Summary Card */}
-            <div className="bg-white text-slate-900 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
+            <div className="bg-white text-slate-900 rounded-2xl p-4 sm:p-5 shadow-lg space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-600">Price Summary</span>
                 <span className="text-[10px] font-mono text-slate-400">{order.orderId}</span>
@@ -315,93 +259,83 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                 ₹{formatMoney(order.exactAmount)}
               </div>
 
-              {/* Optional Itemized Bill / Coupon / Tax Breakdown */}
-              <div className="pt-2.5 border-t border-slate-100 space-y-1.5 text-[11px]">
-                {bill?.items && bill.items.length > 0 && (
-                  <div className="space-y-1 pb-1.5 border-b border-slate-100">
-                    {bill.items.slice(0, 4).map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-slate-600">
-                        <span className="truncate pr-2">
-                          {item.label}
-                          {item.quantity && item.quantity > 1 ? ` × ${item.quantity}` : ''}
-                        </span>
-                        <span className="font-mono font-semibold text-slate-800 shrink-0">
-                          ₹{formatMoney(item.amount * (item.quantity || 1))}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Clean Bill Breakdown (Only shown for itemized carts, coupons, or taxes — never exposes backend offset logic) */}
+              {hasRichBillBreakdown && (
+                <div className="pt-2.5 border-t border-slate-100 space-y-1.5 text-[11px]">
+                  {bill?.items && bill.items.length > 0 && (
+                    <div className="space-y-1 pb-1.5 border-b border-slate-100">
+                      {bill.items.slice(0, 4).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-slate-600">
+                          <span className="truncate pr-2">
+                            {item.label}
+                            {item.quantity && item.quantity > 1 ? ` × ${item.quantity}` : ''}
+                          </span>
+                          <span className="font-mono font-semibold text-slate-800 shrink-0">
+                            ₹{formatMoney(item.amount * (item.quantity || 1))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>{bill?.subtotal !== undefined || rawDiscount > 0 ? 'Bill Subtotal' : (planName || 'Order Amount')}</span>
-                  <span className="font-mono font-semibold text-slate-800">
-                    ₹{formatMoney(displaySubtotal)}
-                  </span>
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Subtotal</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      ₹{formatMoney(displaySubtotal)}
+                    </span>
+                  </div>
+
+                  {(bill?.couponCode || rawDiscount > 0) && (
+                    <div className="flex items-center justify-between text-emerald-700 font-semibold">
+                      <span className="inline-flex items-center gap-1">
+                        <Tag className="w-3 h-3" />
+                        Coupon {bill?.couponCode ? `(${bill.couponCode})` : 'Applied'}
+                      </span>
+                      <span className="font-mono">-₹{formatMoney(rawDiscount)}</span>
+                    </div>
+                  )}
+
+                  {taxAmount > 0 && (
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>{bill?.taxLabel || 'GST / Taxes'}</span>
+                      <span className="font-mono font-semibold text-slate-800">
+                        +₹{formatMoney(taxAmount)}
+                      </span>
+                    </div>
+                  )}
+
+                  {platformFee > 0 && (
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Convenience Fee</span>
+                      <span className="font-mono font-semibold text-slate-800">
+                        +₹{formatMoney(platformFee)}
+                      </span>
+                    </div>
+                  )}
+
+                  {rawDiscount > 0 && (
+                    <div className="pt-1.5 mt-1 border-t border-emerald-100 flex items-center justify-between text-[10px] font-bold text-emerald-700 bg-emerald-50/80 px-2.5 py-1 rounded-lg">
+                      <span>Total Savings</span>
+                      <span className="font-mono">You save ₹{formatMoney(rawDiscount)}</span>
+                    </div>
+                  )}
                 </div>
-
-                {(bill?.couponCode || rawDiscount > 0) && (
-                  <div className="flex items-center justify-between text-emerald-700 font-semibold">
-                    <span className="inline-flex items-center gap-1">
-                      <Tag className="w-3 h-3" />
-                      Coupon {bill?.couponCode ? `(${bill.couponCode})` : 'Applied'}
-                    </span>
-                    <span className="font-mono">
-                      -₹{formatMoney(rawDiscount)}
-                    </span>
-                  </div>
-                )}
-
-                {bill?.taxAmount !== undefined && bill.taxAmount > 0 && (
-                  <div className="flex items-center justify-between text-slate-600">
-                    <span>{bill.taxLabel || 'GST / Taxes'}</span>
-                    <span className="font-mono font-semibold text-slate-800">
-                      +₹{formatMoney(bill.taxAmount)}
-                    </span>
-                  </div>
-                )}
-
-                {bill?.platformFee !== undefined && bill.platformFee > 0 && (
-                  <div className="flex items-center justify-between text-slate-600">
-                    <span>Convenience Fee</span>
-                    <span className="font-mono font-semibold text-slate-800">
-                      +₹{formatMoney(bill.platformFee)}
-                    </span>
-                  </div>
-                )}
-
-                {paiseOffset > 0 && (
-                  <div className="flex items-center justify-between text-amber-700">
-                    <span>Unique Verify Offset</span>
-                    <span className="font-mono font-semibold">+₹{paiseOffset.toFixed(2)}</span>
-                  </div>
-                )}
-
-                {rawDiscount > 0 && (
-                  <div className="pt-1.5 mt-1 border-t border-emerald-100 flex items-center justify-between text-[10px] font-bold text-emerald-700 bg-emerald-50/80 px-2.5 py-1 rounded-lg">
-                    <span>Total Coupon Savings</span>
-                    <span className="font-mono">You save ₹{formatMoney(rawDiscount)}</span>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Soft Tinted Order Summary Box */}
+            {/* Translucent Summary Card */}
             <div className="rounded-2xl bg-white/15 border border-white/20 backdrop-blur-sm p-3.5 text-xs leading-relaxed text-white/95">
               {summaryNote}
             </div>
           </div>
 
           {/* Left Footer: Secured by SumioPay */}
-          <div className="mt-6 pt-4 flex items-center justify-between text-xs text-white/90 relative z-10">
-            <div className="inline-flex items-center gap-1.5 font-bold">
-              <Lock className="w-3.5 h-3.5" />
+          <div className="mt-6 pt-4 flex items-center text-xs text-white/90 relative z-10">
+            <div className="inline-flex items-center gap-1.5 font-semibold">
+              <Lock className="w-3.5 h-3.5 opacity-90" />
               <span>Secured by</span>
               <span className="font-black tracking-tight text-white">SumioPay</span>
             </div>
-            <span className="text-[10px] font-mono bg-white/15 px-2 py-0.5 rounded-full">
-              0% UPI MDR
-            </span>
           </div>
         </div>
 
@@ -413,14 +347,7 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
               Payment Options
             </h3>
 
-            <div className="flex items-center gap-2.5">
-              {order.status === 'PENDING' && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-700">
-                  <Clock className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{timeFormatted}</span>
-                </div>
-              )}
-
+            <div className="flex items-center gap-2">
               {onClose ? (
                 <button
                   type="button"
@@ -450,11 +377,11 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
               </div>
               <div>
                 <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase tracking-wider mb-1">
-                  Instant Bank Verified
+                  Payment Confirmed
                 </span>
                 <h4 className="text-xl font-black text-slate-900">Payment Successful!</h4>
                 <p className="text-xs text-slate-500 mt-1">
-                  ₹{formatMoney(order.exactAmount)} received directly by {websiteName}.
+                  ₹{formatMoney(order.exactAmount)} paid to {websiteName}.
                 </p>
               </div>
 
@@ -464,11 +391,11 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                   <span className="font-bold text-slate-900">{order.orderId}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Bank UTR:</span>
+                  <span className="text-slate-500">Reference ID:</span>
                   <span className="font-bold text-emerald-700">{utrRef || 'Confirmed'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Settled Time:</span>
+                  <span className="text-slate-500">Paid At:</span>
                   <span className="font-bold text-slate-900">
                     {order.paidAt ? new Date(order.paidAt).toLocaleTimeString('en-IN') : 'Just now'}
                   </span>
@@ -497,7 +424,7 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
               <AlertCircle className="w-12 h-12 text-rose-500" />
               <h4 className="text-lg font-extrabold text-slate-900">Payment Session Expired</h4>
               <p className="text-xs text-slate-500 max-w-sm">
-                The 15-minute unique paise reservation for order {order.orderId} has timed out. Please return to {websiteName} and start a fresh payment.
+                This checkout session for order {order.orderId} has timed out. Please return to {websiteName} and start a fresh payment.
               </p>
               {displayReturnUrl ? (
                 <a
@@ -518,8 +445,8 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-12 flex-1">
-              {/* Method Sidebar Rail */}
-              <div className="sm:col-span-4 border-b sm:border-b-0 sm:border-r border-slate-100 bg-slate-50/60 p-3 flex sm:flex-col gap-1.5 overflow-x-auto">
+              {/* Clean 2-Option Payment Rail (Matches Standard Gateway Layout) */}
+              <div className="sm:col-span-4 border-b sm:border-b-0 sm:border-r border-slate-100 bg-slate-50/50 p-3 flex sm:flex-col gap-1.5 overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setActiveRail('RECOMMENDED')}
@@ -537,60 +464,48 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setActiveRail('UPI_ID')}
+                  onClick={() => setActiveRail('UPI')}
                   className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-left text-xs font-bold whitespace-nowrap transition ${
-                    activeRail === 'UPI_ID'
+                    activeRail === 'UPI'
                       ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs'
                       : 'text-slate-600 hover:bg-slate-100 border border-transparent'
                   }`}
                 >
                   <span className="flex items-center gap-2">
                     <Smartphone className="w-3.5 h-3.5 shrink-0" />
-                    <span>UPI Apps</span>
+                    <span>UPI</span>
                   </span>
-                  <span className="hidden lg:inline-flex text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-extrabold">
-                    0% FEE
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveRail('VERIFY_UTR')}
-                  className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-left text-xs font-bold whitespace-nowrap transition ${
-                    activeRail === 'VERIFY_UTR'
-                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs'
-                      : 'text-slate-600 hover:bg-slate-100 border border-transparent'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Hash className="w-3.5 h-3.5 shrink-0" />
-                    <span>Verify UTR</span>
-                  </span>
+                  <div className="hidden lg:flex items-center -space-x-1">
+                    <span className="w-3.5 h-3.5 rounded-full bg-blue-600 text-white text-[7px] font-black flex items-center justify-center ring-1 ring-white">
+                      G
+                    </span>
+                    <span className="w-3.5 h-3.5 rounded-full bg-purple-600 text-white text-[7px] font-black flex items-center justify-center ring-1 ring-white">
+                      Pe
+                    </span>
+                    <span className="w-3.5 h-3.5 rounded-full bg-sky-500 text-white text-[7px] font-black flex items-center justify-center ring-1 ring-white">
+                      P
+                    </span>
+                  </div>
                 </button>
               </div>
 
               {/* Active Payment View */}
               <div className="sm:col-span-8 p-5 space-y-4 flex flex-col justify-between">
                 <div className="space-y-4">
-                  {/* UPI QR Box in Recommended, or Direct App Launcher Tiles in UPI Apps */}
+                  {/* UPI QR Box */}
                   {activeRail === 'RECOMMENDED' && (
-                    <div className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 space-y-3">
+                    <div className="rounded-2xl border border-slate-200/90 bg-slate-50/50 p-4 space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-extrabold text-slate-800">UPI QR</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                            Pay exact ₹{formatMoney(order.exactAmount)}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                            <Clock className="w-2.5 h-2.5 text-slate-400" />
-                            <span>{timeFormatted}</span>
-                          </span>
-                        </div>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-slate-600 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{timeFormatted}</span>
+                        </span>
                       </div>
 
                       <div className="flex flex-col sm:flex-row items-center gap-4">
                         <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-xs shrink-0">
-                          <QRCodeSVG value={upiValue} size={148} level="M" />
+                          <QRCodeSVG value={upiValue} size={146} level="M" />
                         </div>
 
                         <div className="text-center sm:text-left space-y-2.5">
@@ -614,174 +529,99 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                             ))}
                           </div>
 
-                          <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                          <div className="sm:hidden pt-1 flex justify-center">
                             <a
                               href={upiValue}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold transition"
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 text-white text-[11px] font-bold"
                             >
-                              <Smartphone className="w-3 h-3" />
-                              <span>Open UPI App</span>
+                              <Smartphone className="w-3.5 h-3.5" />
+                              <span>Pay with UPI App</span>
                               <ExternalLink className="w-3 h-3 opacity-75" />
                             </a>
-
-                            <button
-                              type="button"
-                              onClick={handleCopyUpi}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[11px] font-mono text-slate-700 transition"
-                              title="Copy Destination UPI ID"
-                            >
-                              {copiedUpi ? (
-                                <Check className="w-3 h-3 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-3 h-3 text-slate-500" />
-                              )}
-                              <span>{copiedUpi ? 'Copied!' : order.upiId}</span>
-                            </button>
                           </div>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {activeRail === 'UPI_ID' && (
-                    <div className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 space-y-3">
+                  {/* UPI Apps Tab (No Raw VPA Displayed) */}
+                  {activeRail === 'UPI' && (
+                    <div className="rounded-2xl border border-slate-200/90 bg-slate-50/50 p-4 space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-extrabold text-slate-800">
-                          1-Tap UPI App Launch (Mobile)
+                          Choose UPI App
                         </span>
-                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                          0% UPI Fee
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-slate-600 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{timeFormatted}</span>
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         {[
-                          { label: 'Google Pay', href: upiQuery ? `tez://upi/pay?${upiQuery}` : upiValue, badge: 'GPay' },
-                          { label: 'PhonePe', href: upiQuery ? `phonepe://pay?${upiQuery}` : upiValue, badge: 'PhonePe' },
-                          { label: 'Paytm', href: upiQuery ? `paytmmp://pay?${upiQuery}` : upiValue, badge: 'Paytm' },
-                          { label: 'Any UPI App', href: upiValue, badge: 'BHIM / CRED' },
+                          { label: 'Google Pay', href: upiQuery ? `tez://upi/pay?${upiQuery}` : upiValue },
+                          { label: 'PhonePe', href: upiQuery ? `phonepe://pay?${upiQuery}` : upiValue },
+                          { label: 'Paytm', href: upiQuery ? `paytmmp://pay?${upiQuery}` : upiValue },
+                          { label: 'Other UPI Apps', href: upiValue },
                         ].map((app) => (
                           <a
                             key={app.label}
                             href={app.href}
-                            className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 text-xs font-bold text-slate-800 transition"
+                            className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 text-xs font-bold text-slate-800 transition"
                           >
                             <span>{app.label}</span>
                             <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                           </a>
                         ))}
                       </div>
-                      <div className="flex items-center justify-between pt-1 text-[11px] text-slate-600">
-                        <span>Destination VPA:</span>
-                        <button
-                          type="button"
-                          onClick={handleCopyUpi}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-slate-200 font-mono text-slate-800 hover:bg-slate-100"
-                        >
-                          {copiedUpi ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-400" />}
-                          <span>{copiedUpi ? 'Copied!' : order.upiId}</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveRail('RECOMMENDED')}
+                        className="text-[11px] font-bold text-indigo-600 hover:underline"
+                      >
+                        Show UPI QR Code instead &rarr;
+                      </button>
                     </div>
                   )}
 
-                  {/* Bottom Box: Pay with UPI ID OR Submit 12-Digit UTR */}
-                  {activeRail !== 'VERIFY_UTR' ? (
-                    <form
-                      onSubmit={handleVerifyVpaAndLaunch}
-                      className="rounded-2xl border border-slate-200/90 p-4 space-y-2.5 bg-white"
-                    >
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-extrabold text-slate-800">
-                          Pay with UPI ID / App Link
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setActiveRail('VERIFY_UTR')}
-                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline"
-                        >
-                          Paid already? Enter UTR
-                        </button>
-                      </div>
+                  {/* Pay with UPI ID / Number Card */}
+                  <form
+                    onSubmit={handleVerifyVpaAndLaunch}
+                    className="rounded-2xl border border-slate-200/90 p-4 space-y-3 bg-white"
+                  >
+                    <label className="text-xs font-extrabold text-slate-800 block">
+                      Pay with UPI ID / Number
+                    </label>
 
-                      <input
-                        type="text"
-                        value={vpaInput}
-                        onChange={(e) => {
-                          setVpaInput(e.target.value);
-                          setVpaStatus(null);
-                        }}
-                        placeholder="example@okhdfcbank"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
-                      />
+                    <input
+                      type="text"
+                      value={vpaInput}
+                      onChange={(e) => {
+                        setVpaInput(e.target.value);
+                        setVpaStatus(null);
+                      }}
+                      placeholder="example@okhdfcbank"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
+                    />
 
-                      {vpaStatus && (
-                        <p
-                          className={`text-[11px] font-semibold ${
-                            vpaStatus.ok ? 'text-emerald-700' : 'text-rose-600'
-                          }`}
-                        >
-                          {vpaStatus.text}
-                        </p>
-                      )}
-
-                      <button
-                        type="submit"
-                        className="w-full py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white text-xs font-extrabold transition shadow-sm"
+                    {vpaStatus && (
+                      <p
+                        className={`text-[11px] font-semibold ${
+                          vpaStatus.ok ? 'text-emerald-700' : 'text-rose-600'
+                        }`}
                       >
-                        Verify and Pay ₹{formatMoney(order.exactAmount)}
-                      </button>
-                    </form>
-                  ) : (
-                    <form
-                      onSubmit={handleVerifyUtrSubmit}
-                      className="rounded-2xl border border-slate-200/90 p-4 space-y-3 bg-slate-50/50"
+                        {vpaStatus.text}
+                      </p>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white text-xs font-extrabold transition shadow-sm"
                     >
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-900">
-                          Already Paid ₹{formatMoney(order.exactAmount)}? Verify 12-Digit UTR
-                        </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Paste the 12-digit UPI Reference / UTR from Google Pay, PhonePe, or Paytm to match directly with {websiteName}&apos;s bank listener feed.
-                        </p>
-                      </div>
+                      Verify and Pay
+                    </button>
+                  </form>
 
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={12}
-                        value={utrInput}
-                        onChange={(e) => {
-                          setUtrInput(e.target.value.replace(/\D/g, '').slice(0, 12));
-                          setUtrFeedback(null);
-                        }}
-                        placeholder="e.g. 432198765432"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
-                      />
-
-                      {utrFeedback && (
-                        <div
-                          className={`p-2.5 rounded-xl text-[11px] font-semibold ${
-                            utrFeedback.ok
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}
-                        >
-                          {utrFeedback.text}
-                        </div>
-                      )}
-
-                      <button
-                        type="submit"
-                        disabled={utrSubmitting}
-                        className="w-full py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-extrabold flex items-center justify-center gap-2 transition"
-                      >
-                        {utrSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        <span>{utrSubmitting ? 'Checking Bank Feed...' : 'Verify UTR & Confirm'}</span>
-                      </button>
-                    </form>
-                  )}
-
-                  {/* Test / Sandbox Instant Pay Button */}
+                  {/* Test / Sandbox Instant Pay Button (Only shown in Test Mode) */}
                   {(order.isTest || isDemoMode) && onSimulatePayment && (
                     <button
                       type="button"
@@ -801,16 +641,16 @@ export const SumioCheckoutCard: React.FC<SumioCheckoutCardProps> = ({
                   )}
                 </div>
 
-                {/* Live Polling Footer */}
+                {/* Clean Gateway Status Footer */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
                   <div className="flex items-center gap-1.5">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                     </span>
-                    <span className="font-medium">Listening for instant bank confirmation...</span>
+                    <span className="font-medium">Waiting for payment confirmation...</span>
                   </div>
-                  <span className="font-mono text-[10px] text-slate-400">UPI Auto-Match</span>
+                  <span className="text-[10px] text-slate-400 font-medium">256-bit TLS</span>
                 </div>
               </div>
             </div>

@@ -945,7 +945,7 @@ Body:
           subtotal: 599,
           couponCode: 'PRO100',
           discountAmount: 100,
-          note: 'Live merchant test checkout displaying your website identity, coupon discount, and Trusted Business badge.',
+          note: 'To begin your annual subscription, ₹499 will be processed securely via UPI.',
         }}
         apiUrl={API_BASE}
         apiKey={merchant?.apiKey}

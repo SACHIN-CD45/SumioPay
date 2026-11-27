@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
-import { api, publicApi } from '../../lib/api';
+import { api } from '../../lib/api';
 import { SumioCheckoutCard, CheckoutBillDetails } from '../../components/checkout/SumioCheckoutCard';
 import {
   CreditCard,
@@ -164,29 +164,6 @@ export const BillingPage: React.FC = () => {
     setCheckoutOrder(subscription.pendingCheckoutOrder);
     setCheckoutStatus('PENDING');
     setPaidUtr('');
-  };
-
-  const handleSubmitSubscriptionUtr = async (utrNumber: string) => {
-    if (!checkoutOrder) return { success: false, message: 'No active checkout order' };
-    try {
-      const res = await publicApi.post(`/order/submit-utr/${checkoutOrder.orderId}`, { utrNumber });
-      if (res.data?.matchedImmediately && res.data?.data) {
-        setCheckoutStatus('PAID');
-        setPaidUtr(res.data.data.utrNumber || utrNumber);
-        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-        await fetchSubscription();
-      }
-      return {
-        success: Boolean(res.data?.success),
-        matchedImmediately: Boolean(res.data?.matchedImmediately),
-        message: res.data?.message,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err?.response?.data?.message || 'Unable to verify UTR right now.',
-      };
-    }
   };
 
   const plansConfig = subscription?.plans || {
@@ -686,16 +663,14 @@ export const BillingPage: React.FC = () => {
                 orderId: checkoutOrder.orderId,
                 appName: 'SUMIOPAY',
                 baseAmount: checkoutOrder.baseAmount,
-                paiseOffset: checkoutOrder.paiseOffset,
                 exactAmount: checkoutOrder.exactAmount,
-                upiId: checkoutOrder.upiId,
                 merchantName: checkoutOrder.merchantName,
-                websiteName: checkoutOrder.websiteName || checkoutOrder.merchantName || 'SumioPay',
+                websiteName: checkoutOrder.websiteName || checkoutOrder.merchantName || 'SumioTech',
                 websiteLogoUrl: checkoutOrder.websiteLogoUrl,
                 brandColor: checkoutOrder.brandColor || '#4F3DF5',
                 trustedBusiness: checkoutOrder.trustedBusiness ?? true,
                 kycVerified: checkoutOrder.kycVerified ?? true,
-                trustLabel: checkoutOrder.trustLabel || 'SumioPay Trusted Business',
+                trustLabel: 'SumioPay Trusted Business',
                 billDetails: checkoutOrder.billDetails || null,
                 upiIntentUrl: checkoutOrder.upiIntentUrl,
                 status: checkoutStatus,
@@ -705,7 +680,6 @@ export const BillingPage: React.FC = () => {
               planName={checkoutOrder.plan?.label || checkoutOrder.planLabel || 'SumioPay Subscription'}
               timeFormatted={formatTimer(secondsLeft)}
               onClose={() => setCheckoutOrder(null)}
-              onSubmitUtr={handleSubmitSubscriptionUtr}
             />
           </div>
         </div>

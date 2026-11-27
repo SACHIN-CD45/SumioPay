@@ -238,6 +238,16 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
       fallbackAppName: order.appName,
     });
     const billDetails = order.metadata?.billDetails || null;
+    const rawMeta = order.metadata && typeof order.metadata === 'object' ? order.metadata : {};
+    const publicMetadata = {
+      ...(rawMeta.planName ? { planName: rawMeta.planName } : {}),
+      ...(rawMeta.planLabel ? { planLabel: rawMeta.planLabel } : {}),
+      ...(rawMeta.websiteName ? { websiteName: rawMeta.websiteName } : {}),
+      ...(billDetails ? { billDetails } : {}),
+      ...(billDetails?.returnUrl || rawMeta.returnUrl
+        ? { returnUrl: billDetails?.returnUrl || rawMeta.returnUrl }
+        : {}),
+    };
 
     res.status(200).json({
       success: true,
@@ -250,8 +260,7 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
         exactAmountInPaise: Math.round(order.exactAmount * 100),
         currency: 'INR',
         isTest: order.isTest || false,
-        upiId: order.metadata?.assignedUpiId || merchantObj.upiId || '',
-        merchantName: merchantObj.upiName || merchantObj.businessName || 'Merchant',
+        merchantName: branding.websiteName,
         websiteName: branding.websiteName,
         websiteUrl: branding.websiteUrl,
         websiteLogoUrl: branding.websiteLogoUrl,
@@ -266,7 +275,7 @@ router.get('/orders/:id', async (req: Request, res: Response): Promise<void> => 
         utr: order.utrNumber,
         utrNumber: order.utrNumber,
         upiIntentUrl: order.upiIntentUrl,
-        metadata: order.metadata || {},
+        metadata: publicMetadata,
         expiresAt: order.expiresAt,
         paidAt: order.paidAt,
         createdAt: order.createdAt,
@@ -301,7 +310,6 @@ router.get('/orders/:id/status', async (req: Request, res: Response): Promise<vo
         exactAmount: order.exactAmount,
         utr: order.utrNumber,
         utrNumber: order.utrNumber,
-        metadata: order.metadata || {},
         paidAt: order.paidAt,
       },
     });

@@ -1,6 +1,6 @@
 /**
- * SumioPay Universal Drop-In Checkout SDK (v2.8 Enterprise)
- * Razorpay/Hostinger-style Branded Checkout, Coupon/Bill Summary, First-Party SVG QR & UTR Verify.
+ * SumioPay Universal Drop-In Checkout SDK (v2.9 Enterprise)
+ * Seamless Razorpay-style Branded Checkout, Coupon/Bill Summary & First-Party SVG QR.
  * Corporate: SumioTech • contact@sumiotech.in • +91 9875182659
  */
 (function(window) {
@@ -108,7 +108,7 @@
       shell.innerHTML =
         '<div style="padding:48px 24px;text-align:center;">' +
         '  <div style="width:28px;height:28px;border:3px solid #4F3DF5;border-top-color:transparent;border-radius:50%;margin:0 auto 12px;animation:sumiopay-spin 0.8s linear infinite;"></div>' +
-        '  <div style="font-size:14px;font-weight:700;color:#1E293B;">Loading SumioPay Trusted Checkout...</div>' +
+        '  <div style="font-size:14px;font-weight:700;color:#1E293B;">Loading Checkout...</div>' +
         '</div>' +
         '<style>@keyframes sumiopay-spin{to{transform:rotate(360deg)}}@media(max-width:740px){.sp-split{grid-template-columns:1fr!important}.sp-inner{grid-template-columns:1fr!important}}</style>';
 
@@ -172,9 +172,6 @@
         var brandDark = darkenHex(brandHex);
         var bill = order.billDetails || billDetails || {};
         var returnUrl = sanitizeUrl(order.returnUrl || bill.returnUrl || options.returnUrl);
-        var paiseOffset = typeof order.paiseOffset === 'number'
-          ? order.paiseOffset
-          : Math.max(0, Number((resolvedAmount - (baseAmount || resolvedAmount)).toFixed(2)));
         var qrImgUrl = apiBase + '/public/qr?data=' + encodeURIComponent(order.upiIntentUrl);
 
         var avatarHtml = logoUrl
@@ -184,47 +181,51 @@
         var rawDiscount = Number(bill.discountAmount || 0);
         var taxAmount = Number(bill.taxAmount || 0);
         var platformFee = Number(bill.platformFee || 0);
+        var itemCount = Array.isArray(bill.items) ? bill.items.length : 0;
+        var hasRichBreakdown = rawDiscount > 0 || taxAmount > 0 || platformFee > 0 || itemCount > 1;
         var displaySubtotal = bill.subtotal !== undefined
           ? Number(bill.subtotal)
           : (rawDiscount > 0
               ? Math.max(0, Number(((baseAmount || resolvedAmount) + rawDiscount - taxAmount - platformFee).toFixed(2)))
               : (baseAmount || resolvedAmount));
 
-        var breakdownRows = '';
-        if (Array.isArray(bill.items)) {
-          for (var idx = 0; idx < Math.min(bill.items.length, 4); idx++) {
-            var it = bill.items[idx];
-            var q = Number(it.quantity || 1);
-            breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(it.label) + (q > 1 ? ' × ' + q : '') + '</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(Number(it.amount) * q) + '</span></div>';
+        var breakdownBlock = '';
+        if (hasRichBreakdown) {
+          var breakdownRows = '';
+          if (Array.isArray(bill.items)) {
+            for (var idx = 0; idx < Math.min(bill.items.length, 4); idx++) {
+              var it = bill.items[idx];
+              var q = Number(it.quantity || 1);
+              breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(it.label) + (q > 1 ? ' × ' + q : '') + '</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(Number(it.amount) * q) + '</span></div>';
+            }
           }
-        }
-        var subtotalLabel = (bill.subtotal !== undefined || rawDiscount > 0) ? 'Bill Subtotal' : (planName || 'Order Amount');
-        breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(subtotalLabel) + '</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(displaySubtotal) + '</span></div>';
-
-        if (bill.couponCode || rawDiscount > 0) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#047857;font-weight:700;margin-bottom:4px;"><span>Coupon ' + (bill.couponCode ? '(' + escapeHtml(bill.couponCode) + ')' : 'Applied') + '</span><span style="font-family:monospace;">-₹' + formatInr(rawDiscount) + '</span></div>';
-        }
-        if (taxAmount > 0) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(bill.taxLabel || 'GST / Taxes') + '</span><span style="font-family:monospace;font-weight:600;">+₹' + formatInr(taxAmount) + '</span></div>';
-        }
-        if (platformFee > 0) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>Convenience Fee</span><span style="font-family:monospace;font-weight:600;">+₹' + formatInr(platformFee) + '</span></div>';
-        }
-        if (paiseOffset > 0) {
-          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#B45309;margin-bottom:4px;"><span>Unique Verify Offset</span><span style="font-family:monospace;font-weight:600;">+₹' + paiseOffset.toFixed(2) + '</span></div>';
-        }
-        if (rawDiscount > 0) {
-          breakdownRows += '<div style="margin-top:6px;padding:5px 8px;border-radius:8px;background:#ECFDF5;color:#047857;font-size:10px;font-weight:800;display:flex;justify-content:space-between;"><span>Total Coupon Savings</span><span style="font-family:monospace;">You save ₹' + formatInr(rawDiscount) + '</span></div>';
+          breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>Subtotal</span><span style="font-family:monospace;font-weight:600;">₹' + formatInr(displaySubtotal) + '</span></div>';
+          if (bill.couponCode || rawDiscount > 0) {
+            breakdownRows += '<div style="display:flex;justify-content:space-between;color:#047857;font-weight:700;margin-bottom:4px;"><span>Coupon ' + (bill.couponCode ? '(' + escapeHtml(bill.couponCode) + ')' : 'Applied') + '</span><span style="font-family:monospace;">-₹' + formatInr(rawDiscount) + '</span></div>';
+          }
+          if (taxAmount > 0) {
+            breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>' + escapeHtml(bill.taxLabel || 'GST / Taxes') + '</span><span style="font-family:monospace;font-weight:600;">+₹' + formatInr(taxAmount) + '</span></div>';
+          }
+          if (platformFee > 0) {
+            breakdownRows += '<div style="display:flex;justify-content:space-between;color:#475569;margin-bottom:4px;"><span>Convenience Fee</span><span style="font-family:monospace;font-weight:600;">+₹' + formatInr(platformFee) + '</span></div>';
+          }
+          if (rawDiscount > 0) {
+            breakdownRows += '<div style="margin-top:6px;padding:5px 8px;border-radius:8px;background:#ECFDF5;color:#047857;font-size:10px;font-weight:800;display:flex;justify-content:space-between;"><span>Total Savings</span><span style="font-family:monospace;">You save ₹' + formatInr(rawDiscount) + '</span></div>';
+          }
+          breakdownBlock = '<div style="border-top:1px solid #F1F5F9;padding-top:8px;margin-top:8px;font-size:11px;">' + breakdownRows + '</div>';
         }
 
-        var noteText = bill.note || ('Paying ' + siteName + ' directly via SumioPay Zero-MDR UPI Gateway. Order #' + order.orderId + '.');
-        var trustBadgeText = order.kycVerified ? 'SumioPay KYC Verified Business' : 'SumioPay Trusted Business';
+        var noteText = bill.note || ('To complete your payment for ' + (planName || siteName) + ', ₹' + formatInr(resolvedAmount) + ' will be processed securely via UPI.');
         var testBanner = order.isTest
-          ? '<div style="background:#FBBF24;color:#0F172A;font-size:11px;font-weight:800;text-align:center;padding:6px 12px;">SANDBOX TEST MODE — No Real Money Is Charged</div>'
+          ? '<div style="background:#FBBF24;color:#0F172A;font-size:11px;font-weight:800;text-align:center;padding:6px 12px;">TEST MODE — No Real Money Is Charged</div>'
+          : '';
+
+        var mobileAppBtn = isMobileBrowser
+          ? '<a href="' + escapeHtml(order.upiIntentUrl) + '" style="display:inline-block;margin-top:8px;padding:8px 14px;background:#0F172A;color:#fff;font-weight:700;font-size:11px;border-radius:8px;text-decoration:none;">Pay with UPI App</a>'
           : '';
 
         shell.innerHTML =
-          '<style>@keyframes sumiopay-pulse{0%,100%{opacity:1}50%{opacity:0.3}}@media(max-width:740px){.sp-split{grid-template-columns:1fr!important}.sp-inner{grid-template-columns:1fr!important}}</style>' +
+          '<style>@keyframes sumiopay-pulse{0%,100%{opacity:1}50%{opacity:0.3}}@media(max-width:740px){.sp-split{grid-template-columns:1fr!important}}</style>' +
           testBanner +
           '<div class="sp-split" style="display:grid;grid-template-columns:5fr 7fr;">' +
           '  <div style="background:linear-gradient(155deg,' + brandHex + ' 0%,' + brandDark + ' 100%);color:#fff;padding:26px;display:flex;flex-direction:column;justify-content:space-between;gap:20px;position:relative;overflow:hidden;">' +
@@ -240,52 +241,51 @@
                    avatarHtml +
           '        <div>' +
           '          <div style="font-size:18px;font-weight:800;line-height:1.2;">' + escapeHtml(siteName) + '</div>' +
-          '          <div style="display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:3px 9px;border-radius:999px;background:rgba(15,23,42,0.34);border:1px solid rgba(255,255,255,0.2);font-size:11px;font-weight:600;">&#128737;&#65039; ' + escapeHtml(trustBadgeText) + '</div>' +
+          '          <div style="display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:3px 9px;border-radius:999px;background:rgba(15,23,42,0.34);border:1px solid rgba(255,255,255,0.2);font-size:11px;font-weight:600;">&#128737;&#65039; SumioPay Trusted Business</div>' +
           '        </div>' +
           '      </div>' +
           '      <div style="background:#fff;color:#0F172A;border-radius:16px;padding:16px 18px;box-shadow:0 12px 24px rgba(0,0,0,0.16);margin-bottom:14px;">' +
           '        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748B;font-weight:600;margin-bottom:4px;"><span>Price Summary</span><span style="font-family:monospace;">' + escapeHtml(order.orderId) + '</span></div>' +
-          '        <div style="font-size:28px;font-weight:900;letter-spacing:-0.5px;margin-bottom:10px;">₹' + formatInr(resolvedAmount) + '</div>' +
-          '        <div style="border-top:1px solid #F1F5F9;padding-top:8px;font-size:11px;">' + breakdownRows + '</div>' +
+          '        <div style="font-size:28px;font-weight:900;letter-spacing:-0.5px;">₹' + formatInr(resolvedAmount) + '</div>' +
+                   breakdownBlock +
           '      </div>' +
           '      <div style="background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.22);border-radius:14px;padding:12px 14px;font-size:12px;line-height:1.45;color:rgba(255,255,255,0.95);">' + escapeHtml(noteText) + '</div>' +
           '    </div>' +
-          '    <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.9);font-weight:700;">' +
+          '    <div style="position:relative;z-index:1;display:flex;align-items:center;font-size:11px;color:rgba(255,255,255,0.9);font-weight:600;">' +
           '      <span>&#128274; Secured by <strong>SumioPay</strong></span>' +
-          '      <span style="font-family:monospace;background:rgba(255,255,255,0.16);padding:3px 8px;border-radius:999px;">0% MDR</span>' +
           '    </div>' +
           '  </div>' +
           '  <div style="background:#fff;display:flex;flex-direction:column;">' +
           '    <div style="padding:16px 22px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;">' +
           '      <div style="font-size:15px;font-weight:800;color:#0F172A;">Payment Options</div>' +
-          '      <div style="display:flex;align-items:center;gap:10px;">' +
-          '        <span id="sp-timer-badge" style="font-size:11px;font-family:monospace;font-weight:700;padding:4px 10px;border-radius:999px;background:#F1F5F9;border:1px solid #E2E8F0;color:#334155;">15:00</span>' +
-          '        <button id="sumiopay-close-x" style="background:#F8FAFC;border:1px solid #E2E8F0;width:28px;height:28px;border-radius:8px;cursor:pointer;color:#64748B;font-size:16px;">&times;</button>' +
-          '      </div>' +
+          '      <button id="sumiopay-close-x" style="background:#F8FAFC;border:1px solid #E2E8F0;width:28px;height:28px;border-radius:8px;cursor:pointer;color:#64748B;font-size:16px;">&times;</button>' +
           '    </div>' +
           '    <div id="sp-payment-body" style="padding:20px 22px;flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:14px;">' +
-          '      <div style="border:1px solid #E2E8F0;border-radius:16px;padding:16px;background:#F8FAFC;display:flex;flex-wrap:wrap;align-items:center;gap:16px;">' +
-          '        <div style="padding:8px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;">' +
-          '          <img src="' + qrImgUrl + '" width="144" height="144" style="display:block;" alt="UPI Payment QR" />' +
+          '      <div style="border:1px solid #E2E8F0;border-radius:16px;padding:16px;background:#F8FAFC;">' +
+          '        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+          '          <span style="font-size:12px;font-weight:800;color:#0F172A;">UPI QR</span>' +
+          '          <span id="sp-timer-badge" style="font-size:11px;font-family:monospace;font-weight:700;padding:3px 10px;border-radius:999px;background:#fff;border:1px solid #E2E8F0;color:#334155;">15:00</span>' +
           '        </div>' +
-          '        <div style="flex:1;min-width:160px;">' +
-          '          <div style="font-size:12px;font-weight:800;color:#0F172A;margin-bottom:4px;">Scan the QR using any UPI App</div>' +
-          '          <div style="font-size:11px;color:#64748B;margin-bottom:10px;">GPay &bull; PhonePe &bull; Paytm &bull; BHIM &bull; CRED</div>' +
-          '          <div style="display:flex;flex-wrap:wrap;gap:6px;">' +
-          '            <a href="' + escapeHtml(order.upiIntentUrl) + '" style="display:inline-block;padding:8px 12px;background:#0F172A;color:#fff;font-weight:700;font-size:11px;border-radius:8px;text-decoration:none;">Open UPI App</a>' +
-          '            <button id="sumiopay-copy-upi" style="padding:8px 10px;background:#fff;border:1px solid #CBD5E1;border-radius:8px;font-size:11px;color:#334155;font-family:monospace;cursor:pointer;">' + escapeHtml(order.upiId || 'Copy UPI') + '</button>' +
+          '        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;">' +
+          '          <div style="padding:8px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;">' +
+          '            <img src="' + qrImgUrl + '" width="144" height="144" style="display:block;" alt="UPI Payment QR" />' +
+          '          </div>' +
+          '          <div style="flex:1;min-width:160px;">' +
+          '            <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">Scan the QR using any UPI App</div>' +
+          '            <div style="font-size:11px;color:#64748B;">GPay &bull; PhonePe &bull; Paytm &bull; BHIM &bull; CRED</div>' +
+                       mobileAppBtn +
           '          </div>' +
           '        </div>' +
           '      </div>' +
           '      <div style="border:1px solid #E2E8F0;border-radius:16px;padding:16px;background:#fff;">' +
-          '        <div style="font-size:12px;font-weight:800;color:#0F172A;margin-bottom:8px;">Pay with UPI ID / Verify 12-Digit UTR</div>' +
-          '        <input id="sp-vpa-or-utr" type="text" placeholder="example@okhdfcbank or 12-digit UTR" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #CBD5E1;border-radius:10px;font-size:12px;margin-bottom:8px;" />' +
+          '        <div style="font-size:12px;font-weight:800;color:#0F172A;margin-bottom:8px;">Pay with UPI ID / Number</div>' +
+          '        <input id="sp-vpa-input" type="text" placeholder="example@okhdfcbank" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #CBD5E1;border-radius:10px;font-size:12px;margin-bottom:8px;" />' +
           '        <div id="sp-vpa-msg" style="font-size:11px;margin-bottom:8px;display:none;"></div>' +
-          '        <button id="sp-verify-btn" style="width:100%;padding:11px;background:#0F172A;color:#fff;border:none;border-radius:10px;font-weight:800;font-size:12px;cursor:pointer;">Verify and Pay ₹' + formatInr(resolvedAmount) + '</button>' +
+          '        <button id="sp-verify-btn" style="width:100%;padding:11px;background:#0F172A;color:#fff;border:none;border-radius:10px;font-weight:800;font-size:12px;cursor:pointer;">Verify and Pay</button>' +
           '      </div>' +
           '      <div style="border-top:1px solid #F1F5F9;padding-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748B;">' +
-          '        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:7px;height:7px;background:#10B981;border-radius:50%;display:inline-block;animation:sumiopay-pulse 1.2s infinite;"></span> Listening for instant bank confirmation...</span>' +
-          '        <span style="font-family:monospace;">UPI Auto-Match</span>' +
+          '        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:7px;height:7px;background:#10B981;border-radius:50%;display:inline-block;animation:sumiopay-pulse 1.2s infinite;"></span> Waiting for payment confirmation...</span>' +
+          '        <span>256-bit TLS</span>' +
           '      </div>' +
           '    </div>' +
           '  </div>' +
@@ -293,50 +293,26 @@
 
         document.getElementById('sumiopay-close-x').onclick = closeModal;
 
-        var copyBtn = document.getElementById('sumiopay-copy-upi');
-        if (copyBtn && order.upiId) {
-          copyBtn.onclick = function() {
-            navigator.clipboard.writeText(order.upiId);
-            copyBtn.innerText = 'Copied!';
-            setTimeout(function() { copyBtn.innerText = order.upiId; }, 2000);
-          };
-        }
-
         var verifyBtn = document.getElementById('sp-verify-btn');
-        var vpaInputEl = document.getElementById('sp-vpa-or-utr');
+        var vpaInputEl = document.getElementById('sp-vpa-input');
         var vpaMsgEl = document.getElementById('sp-vpa-msg');
         if (verifyBtn && vpaInputEl) {
           verifyBtn.onclick = function() {
             var val = (vpaInputEl.value || '').trim();
             vpaMsgEl.style.display = 'block';
-            if (/^\d{12}$/.test(val)) {
-              vpaMsgEl.style.color = '#334155';
-              vpaMsgEl.innerText = 'Verifying 12-digit UTR with bank feed...';
-              fetch(apiBase + '/order/submit-utr/' + encodeURIComponent(order.orderId), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ utrNumber: val }),
-              })
-                .then(function(r) { return r.json(); })
-                .then(function(rData) {
-                  vpaMsgEl.style.color = rData.success ? '#047857' : '#DC2626';
-                  vpaMsgEl.innerText = rData.message || 'UTR checked.';
-                })
-                .catch(function() {
-                  vpaMsgEl.style.color = '#DC2626';
-                  vpaMsgEl.innerText = 'Could not submit UTR right now.';
-                });
-            } else if (/^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9]{2,}$/.test(val)) {
+            var isValidVpa = /^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9]{2,}$/.test(val);
+            var isValidPhone = /^\d{10}$/.test(val);
+            if (isValidVpa || isValidPhone) {
               vpaMsgEl.style.color = '#047857';
               if (isMobileBrowser) {
-                vpaMsgEl.innerText = 'Valid UPI ID! Opening UPI app to pay exact ₹' + formatInr(resolvedAmount) + '...';
+                vpaMsgEl.innerText = 'Opening UPI app to complete payment of ₹' + formatInr(resolvedAmount) + '...';
                 window.location.href = order.upiIntentUrl;
               } else {
-                vpaMsgEl.innerText = 'UPI ID ' + val + ' validated. Scan the QR code above on mobile to pay exact ₹' + formatInr(resolvedAmount) + ', or enter your 12-digit UTR once paid.';
+                vpaMsgEl.innerText = 'UPI request initiated for ' + val + '. Approve the payment in your UPI app or scan the QR code above for instant completion.';
               }
             } else {
               vpaMsgEl.style.color = '#DC2626';
-              vpaMsgEl.innerText = 'Enter a valid UPI ID (e.g. name@okhdfcbank) or 12-digit numeric UTR.';
+              vpaMsgEl.innerText = 'Enter a valid UPI ID (e.g. name@okhdfcbank) or 10-digit mobile number.';
             }
           };
         }
@@ -361,7 +337,7 @@
               if (sData.success && sData.data && sData.data.status === 'PAID') {
                 clearInterval(pollTimer);
                 clearInterval(countdownTimer);
-                var utr = sData.data.utrNumber || sData.data.utr || 'Verified';
+                var utr = sData.data.utrNumber || sData.data.utr || 'Confirmed';
                 var returnBtnHtml = returnUrl
                   ? '<a href="' + escapeHtml(returnUrl) + '" style="display:inline-block;margin-top:14px;padding:10px 20px;background:#0F172A;color:#fff;font-weight:800;font-size:12px;border-radius:10px;text-decoration:none;">Continue to ' + escapeHtml(siteName) + '</a>'
                   : '';
@@ -370,9 +346,9 @@
                   bodyEl.innerHTML =
                     '<div style="text-align:center;padding:32px 16px;">' +
                     '  <div style="font-size:48px;color:#10B981;margin-bottom:8px;">&#10004;</div>' +
-                    '  <h3 style="font-size:20px;font-weight:900;color:#0F172A;margin:0 0 6px;">Payment Confirmed!</h3>' +
-                    '  <div style="font-size:12px;color:#64748B;font-family:monospace;margin-bottom:14px;">Bank UTR: ' + escapeHtml(utr) + '</div>' +
-                    '  <div style="font-size:12px;color:#047857;font-weight:700;background:#ECFDF5;padding:10px;border-radius:10px;">Verified for ' + escapeHtml(siteName) + '</div>' +
+                    '  <h3 style="font-size:20px;font-weight:900;color:#0F172A;margin:0 0 6px;">Payment Successful!</h3>' +
+                    '  <div style="font-size:12px;color:#64748B;font-family:monospace;margin-bottom:14px;">Reference ID: ' + escapeHtml(utr) + '</div>' +
+                    '  <div style="font-size:12px;color:#047857;font-weight:700;background:#ECFDF5;padding:10px;border-radius:10px;">Paid to ' + escapeHtml(siteName) + '</div>' +
                        returnBtnHtml +
                     '</div>';
                 }
