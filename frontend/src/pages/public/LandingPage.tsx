@@ -177,8 +177,8 @@ export const LandingPage: React.FC = () => {
       a: 'We provide an official @sumiopay/sdk for Node.js / TypeScript backends, a drop-in <UpiCheckoutModal /> React component that takes 3 minutes to mount, and tamper-proof HMAC-SHA256 signed webhooks for automated fulfillment.',
     },
     {
-      q: 'Is customer banking data stored on your cloud?',
-      a: 'No. SumioPay adheres to a strict Non-Custodial Zero Liability architecture under the DPDP Act 2023. No customer debit/credit card numbers or CVVs are ever handled or stored on our servers.',
+      q: 'Does SumioPay hold my money, or is customer banking data stored on your cloud?',
+      a: 'SumioPay holds ₹0.00 of customer or merchant funds at all times. Payments go 100% directly from your customer’s UPI app into your own bank account VPA. SumioPay is a non-custodial software automation tool (not a bank, RBI-licensed Payment Aggregator, or NPCI entity) and never stores debit/credit cards, CVVs, UPI PINs, or net banking passwords.',
     },
   ];
 
@@ -222,6 +222,7 @@ export const LandingPage: React.FC = () => {
               <a href="#simulator" className="hover:text-blue-600 transition">Live Simulator</a>
               <a href="#calculator" className="hover:text-blue-600 transition">Fee Calculator</a>
               <a href="#pricing" className="hover:text-blue-600 transition">Pricing Plans</a>
+              <button type="button" onClick={() => navigate('/security')} className="hover:text-blue-600 transition">Security &amp; Legal</button>
               <a href="#faq" className="hover:text-blue-600 transition">FAQ</a>
             </nav>
           </div>
@@ -300,6 +301,15 @@ export const LandingPage: React.FC = () => {
                 className="py-1 text-left hover:text-blue-600 transition"
               >
                 Enterprise Custom SLA
+              </button>
+              <button
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  navigate('/security');
+                }}
+                className="py-1 text-left hover:text-blue-600 transition"
+              >
+                Security &amp; Legal Disclaimer
               </button>
               <a
                 href="#faq"
@@ -736,10 +746,10 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
               Built for High-Scale Enterprise
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-              Enterprise Grade Infrastructure & Non-Custodial Architecture
+              Zero Fund Custody &amp; Real Cryptographic Security
             </h2>
             <p className="text-slate-400 text-sm sm:text-base">
-              Designed from first principles to remove financial aggregation risk, ensure DPDP Act 2023 compliance, and provide dedicated infrastructure.
+              Built from first principles so ₹0 ever stays in escrow: SSRF-firewalled webhooks, CSPRNG paise-locking, constant-time OTP locks, and 100% direct bank settlement.
             </p>
           </div>
 
@@ -754,17 +764,17 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
 
             <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
               <Database className="w-6 h-6 text-emerald-400" />
-              <h3 className="font-bold text-white text-base">Non-Custodial Direct Settlement</h3>
+              <h3 className="font-bold text-white text-base">₹0 Fund Custody (Direct-to-Bank)</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Zero client funds are pooled or escrowed. Customer funds route directly to your bank account VPA, eliminating third-party account freezing risks.
+                Zero client funds are pooled, escrowed, or touched. Every rupee flows directly between the customer&apos;s UPI app and your bank VPA — eliminating holding delays.
               </p>
             </div>
 
             <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
               <Shield className="w-6 h-6 text-cyan-400" />
-              <h3 className="font-bold text-white text-base">DPDP Act 2023 & Non-PII Storage</h3>
+              <h3 className="font-bold text-white text-base">SSRF Firewall &amp; Anti-Replay Defense</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                No customer card numbers, net banking credentials, or Aadhaar numbers touch our cloud. All transactions occur via NPCI standardized UPI rail.
+                HMAC-SHA256 webhook signing with DNS/RFC1918 SSRF blocking, strict 12-digit UTR anti-replay checks, rotating JWT families, and zero card/CVV/PIN storage.
               </p>
             </div>
 
@@ -1356,6 +1366,11 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
               </div>
               <ul className="space-y-2 text-slate-400">
                 <li>
+                  <button onClick={() => navigate('/security')} className="hover:text-emerald-400 text-slate-200 font-semibold transition text-left">
+                    Security &amp; Non-Custodial Disclaimer
+                  </button>
+                </li>
+                <li>
                   <button onClick={() => navigate('/pricing')} className="hover:text-purple-400 transition text-left">
                     Pricing Plans & Limits
                   </button>
@@ -1372,7 +1387,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
                 </li>
                 <li>
                   <button onClick={() => navigate('/privacy')} className="hover:text-purple-400 transition text-left">
-                    Privacy Policy (DPDP 2023)
+                    Privacy &amp; Data Policy
                   </button>
                 </li>
                 <li>
@@ -1384,20 +1399,24 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
             </div>
           </div>
 
-          {/* Bottom Legal Notice Bar */}
+          {/* Transparent Non-Custodial Legal Notice Bar */}
           <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
             <div>
               <p>&copy; {new Date().getFullYear()} SumioTech. All rights reserved. Built for Indian merchants &amp; SaaS founders.</p>
               <p className="text-[11px] text-slate-500 mt-1">
-                Zero Fund Holding Architecture &bull; Non-Custodial Direct Settlement to Merchant UPI VPAs &bull; DPDP Act 2023 & RBI Guidelines Compliant.
+                100% Non-Custodial Software Utility &bull; ₹0.00 Held by SumioPay — Customer payments route directly bank-to-bank into Merchant UPI VPAs. Not a bank, Payment Aggregator, RBI, or NPCI entity.
               </p>
             </div>
-            <div className="flex items-center gap-4 text-[11px]">
-              <span className="text-slate-300 font-medium">NPCI UPI Aligned</span>
+            <div className="flex flex-wrap items-center gap-4 text-[11px]">
+              <span className="text-emerald-400 font-semibold">₹0 Fund Custody</span>
               <span className="text-slate-600">&bull;</span>
-              <span className="text-slate-300 font-medium">ISO 27001 Standard Aligned</span>
+              <button onClick={() => navigate('/security')} className="text-slate-300 hover:text-white underline font-medium">
+                Security Architecture
+              </button>
               <span className="text-slate-600">&bull;</span>
-              <span className="text-slate-300 font-medium">100% Data Sovereignty in India</span>
+              <button onClick={() => navigate('/disclaimer')} className="text-slate-300 hover:text-white underline font-medium">
+                Legal Disclaimer
+              </button>
             </div>
           </div>
         </div>

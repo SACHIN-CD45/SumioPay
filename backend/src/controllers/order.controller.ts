@@ -15,6 +15,7 @@ import {
   sanitizeBrandColor,
   sanitizeSafeUrl,
 } from '../utils/checkoutBranding.js';
+import { validateSafeWebhookUrl } from '../utils/securityGuards.js';
 import { ApiKeyRequest } from '../middleware/apiKey.middleware.js';
 import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { config } from '../config/index.js';
@@ -33,6 +34,14 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       isTest = false,
       metadata = {},
     } = req.body;
+
+    const webhookCheck = validateSafeWebhookUrl(callbackWebhookUrl);
+    if (!webhookCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_WEBHOOK_URL', message: webhookCheck.reason },
+      });
+    }
 
     const billDetails = normalizeBillDetails(req.body);
     const numBase = resolveCheckoutBaseRupees(baseAmount, billDetails);
@@ -101,7 +110,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       status: 'PENDING',
       upiIntentUrl,
       expiresAt,
-      callbackWebhookUrl: callbackWebhookUrl || merchant.webhookUrl || '',
+      callbackWebhookUrl: webhookCheck.url || merchant.webhookUrl || '',
       metadata: safeMeta,
     });
 
@@ -381,7 +390,15 @@ export const submitCustomerUtr = async (req: Request, res: Response) => {
         matchedImmediately: true,
         alreadyPaid: true,
         message: 'Order is already confirmed and PAID.',
-        data: order,
+        data: {
+          orderId: order.orderId,
+          status: order.status,
+          baseAmount: order.baseAmount,
+          exactAmount: order.exactAmount,
+          utr: order.utrNumber,
+          utrNumber: order.utrNumber,
+          paidAt: order.paidAt,
+        },
       });
     }
 
@@ -483,7 +500,15 @@ export const submitCustomerUtr = async (req: Request, res: Response) => {
         success: true,
         matchedImmediately: true,
         message: 'UTR matched with bank credit! Payment confirmed.',
-        data: order,
+        data: {
+          orderId: order.orderId,
+          status: order.status,
+          baseAmount: order.baseAmount,
+          exactAmount: order.exactAmount,
+          utr: order.utrNumber,
+          utrNumber: order.utrNumber,
+          paidAt: order.paidAt,
+        },
       });
     }
 

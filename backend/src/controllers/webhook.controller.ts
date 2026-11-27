@@ -6,6 +6,7 @@ import { Device } from '../models/device.model';
 import { WebhookLog } from '../models/webhookLog.model';
 import { UnmappedPayment } from '../models/unmappedPayment.model';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
+import { validateSafeWebhookUrl } from '../utils/securityGuards';
 import { EmailService } from '../services/email.service';
 import { activatePlatformSubscriptionFromOrder } from '../services/subscriptionActivation.service';
 import { recordUpiAccountCredit } from '../services/upiRouter.service';
@@ -21,8 +22,8 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
 
     const { package_name = '', title = '', message = '', post_time } = req.body;
 
-    if (!message) {
-      res.status(400).json({ success: false, message: 'Notification message is required' });
+    if (!message || typeof message !== 'string' || message.length > 2000) {
+      res.status(400).json({ success: false, message: 'Valid notification message (<= 2000 chars) is required' });
       return;
     }
 
@@ -226,10 +227,11 @@ export const testWebhookDispatch = async (req: Request, res: Response): Promise<
     const { targetUrl } = req.body;
     const destinationUrl = targetUrl || merchant.webhookUrl;
 
-    if (!destinationUrl) {
+    const urlCheck = validateSafeWebhookUrl(destinationUrl);
+    if (!urlCheck.valid || !urlCheck.url) {
       res.status(400).json({
         success: false,
-        message: 'No webhook URL provided or configured on merchant account',
+        message: urlCheck.reason || 'No valid webhook URL provided or configured on merchant account',
       });
       return;
     }
@@ -439,8 +441,8 @@ export const simulatePushAlert = async (req: Request, res: Response): Promise<vo
     const merchantId = merchant._id;
     const { package_name = '', message = '' } = req.body;
 
-    if (!message) {
-      res.status(400).json({ success: false, message: 'Notification message is required' });
+    if (!message || typeof message !== 'string' || message.length > 2000) {
+      res.status(400).json({ success: false, message: 'Valid notification message (<= 2000 chars) is required' });
       return;
     }
 

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { Merchant, IMerchant } from '../models/merchant.model';
 import { ApiKey } from '../models/apiKey.model';
 import { config } from '../config';
+import { timingSafeEqualStr } from '../utils/securityGuards';
 
 export interface ApiKeyRequest extends Request {
   merchant?: IMerchant;
@@ -80,11 +81,12 @@ export const requireApiKeyOrMerchantAuth = async (
     const lookupMerchantKey = isTestKey ? apiKey.replace(/^sp_test_/, 'sp_live_') : apiKey;
 
     const query: any = { apiKey: lookupMerchantKey, isActive: true };
-    if (apiSecret) {
-      query.apiSecret = apiSecret;
-    }
-
     let merchant = await Merchant.findOne(query);
+    if (merchant && apiSecret) {
+      if (!merchant.apiSecret || !timingSafeEqualStr(merchant.apiSecret, apiSecret)) {
+        merchant = null;
+      }
+    }
 
     // 2. Fallback: Check hashed scoped project API Keys in ApiKey collection
     if (!merchant && !apiSecret) {

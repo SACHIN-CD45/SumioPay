@@ -823,37 +823,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto text-xs text-slate-600 space-y-4 leading-relaxed">
-              <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-blue-900">
-                <strong>SumioPay</strong> is an enterprise UPI verification automation technology suite provided by{' '}
-                <strong>SumioTech</strong>.
+              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-950 space-y-1">
+                <div className="font-extrabold">Non-Custodial Disclaimer: SumioPay Holds ₹0.00</div>
+                <p>
+                  <strong>SumioPay</strong> (by <strong>SumioTech</strong>) is strictly a B2B payment automation and webhook verification software tool —{' '}
+                  <strong>NOT</strong> a bank, RBI-licensed Payment Aggregator / Payment Gateway, NPCI entity, or escrow service.
+                </p>
               </div>
 
-              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">1. Direct Bank Settlement Model</h4>
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">1. Direct-to-Merchant Bank Settlement</h4>
               <p>
-                SumioPay operates strictly on a self-hosted direct settlement architecture. All customer payments flow 100% directly into your verified bank account UPI VPA. SumioPay and SumioTech do not hold, escrow, pool, or intercept customer funds at any stage.
+                All customer payments transfer 100% directly from the buyer&apos;s UPI app to your own bank account UPI ID. SumioPay and SumioTech never touch, pool, hold, or settle customer funds at any stage and charge 0% transaction fees.
               </p>
 
-              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">2. Companion Listener APK</h4>
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">2. Companion Listener APK &amp; Security</h4>
               <p>
-                To automate UPI payment verification, you install the companion Android listener application on an active mobile device receiving your bank SMS alerts or UPI push notifications. The APK encrypts and forwards verification telemetry via TLS 1.3 to your dedicated gateway instance.
+                Automated verification requires pairing an active Android device receiving your bank credit notifications. Pairing tokens expire in 30 minutes, OTPs lock after 5 failed guesses, and outbound webhooks are cryptographically signed using HMAC-SHA256. You must verify webhook signatures on your backend before granting paid access.
               </p>
 
-              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">3. Merchant Responsibility &amp; Compliance</h4>
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">3. Merchant Legal &amp; Refund Responsibility</h4>
               <p>
-                Merchants are solely responsible for compliance with Reserve Bank of India (RBI) guidelines, NPCI regulations, income tax disclosures, and anti-money laundering (AML) laws. SumioPay prohibits unlawful activities, prohibited gambling, or unauthorized financial transactions.
+                Because funds land directly in your bank account, you are solely accountable for customer refunds, tax/GST compliance, bank KYC limits, and legality of products sold. Fraud, betting, phishing, or unlawful activity causes immediate termination.
               </p>
 
-              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">4. Zero Commission &amp; Billing</h4>
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">4. Zero Commission Software Billing</h4>
               <p>
-                SumioPay charges flat software subscription fees for our software automation tools and charges 0% transaction commission on your UPI turnover.
+                SumioPay charges only flat SaaS software subscription fees for automation infrastructure and never takes any cut on your UPI turnover.
               </p>
 
-              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">5. Corporate Contact &amp; Support</h4>
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">5. Corporate Contact &amp; Full Disclaimers</h4>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono text-[11px] space-y-1">
                 <div>Corporate Entity: SumioTech</div>
                 <div>Official Support: contact@sumiotech.in</div>
                 <div>Support Helpline: +91 9875182659</div>
-                <div>Website: https://sumiopay.sumiotech.in</div>
+                <div>Security &amp; Disclaimer: https://sumiopay.sumiotech.in/security</div>
               </div>
             </div>
 

@@ -25,7 +25,7 @@ const bootstrap = async () => {
         isActive: true,
       });
       await admin.save();
-      console.log(`[SumioPay] SuperAdmin seeded: ${config.superAdminDefault.email} / ${config.superAdminDefault.password}`);
+      console.log(`[SumioPay] Initial SuperAdmin seeded for ${config.superAdminDefault.email} (set SUPERADMIN_PASSWORD in .env and rotate after login).`);
     }
 
     // Seed default SumioTech corporate merchant for internal apps (SumioLab, SumioBilling, etc.)

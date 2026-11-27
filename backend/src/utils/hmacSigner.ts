@@ -3,6 +3,7 @@ import axios from 'axios';
 import WebhookLog from '../models/webhookLog.model';
 import Order from '../models/order.model';
 import mongoose from 'mongoose';
+import { resolveAndAssertSafeWebhookUrl } from './securityGuards';
 
 export type WebhookEventType =
   | 'payment.created'
@@ -55,7 +56,8 @@ export async function dispatchMerchantWebhook(
   const signature = signWebhookPayload(payloadString, webhookSecret, timestamp);
 
   try {
-    const res = await axios.post(webhookUrl, payload, {
+    const safeUrl = await resolveAndAssertSafeWebhookUrl(webhookUrl);
+    const res = await axios.post(safeUrl, payload, {
       headers: {
         'Content-Type': 'application/json',
         'x-sumiopay-event-id': eventId,
@@ -65,6 +67,7 @@ export async function dispatchMerchantWebhook(
         'User-Agent': 'SumioPay-Enterprise-Webhook-Engine/2.0',
       },
       timeout: 8000,
+      maxRedirects: 0,
     });
 
     await WebhookLog.create({

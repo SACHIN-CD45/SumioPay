@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { requireMerchantAuth, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { dispatchMerchantWebhook } from '../../utils/hmacSigner';
+import { validateSafeWebhookUrl } from '../../utils/securityGuards';
 import { WebhookLog } from '../../models/webhookLog.model';
 import { AuditLog } from '../../models/auditLog.model';
 
@@ -42,12 +43,13 @@ router.post('/', requireMerchantAuth, async (req: AuthenticatedRequest, res: Res
     const merchant = req.merchant!;
     const { webhookUrl } = req.body;
 
-    if (webhookUrl && !webhookUrl.startsWith('http')) {
-      res.status(400).json({ success: false, message: 'Invalid URL. Must begin with http:// or https://' });
+    const urlCheck = validateSafeWebhookUrl(webhookUrl);
+    if (!urlCheck.valid) {
+      res.status(400).json({ success: false, message: urlCheck.reason || 'Invalid webhook URL.' });
       return;
     }
 
-    merchant.webhookUrl = (webhookUrl || '').trim();
+    merchant.webhookUrl = urlCheck.url;
     await merchant.save();
 
     await AuditLog.create({
@@ -81,8 +83,12 @@ router.post('/test', requireMerchantAuth, async (req: AuthenticatedRequest, res:
     const merchant = req.merchant!;
     const targetUrl = req.body.url || merchant.webhookUrl;
 
-    if (!targetUrl) {
-      res.status(400).json({ success: false, message: 'No webhook URL provided or configured' });
+    const urlCheck = validateSafeWebhookUrl(targetUrl);
+    if (!urlCheck.valid || !urlCheck.url) {
+      res.status(400).json({
+        success: false,
+        message: urlCheck.reason || 'No valid webhook URL provided or configured',
+      });
       return;
     }
 

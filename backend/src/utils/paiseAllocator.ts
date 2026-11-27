@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Order from '../models/order.model.js';
 
@@ -35,13 +36,12 @@ export async function allocateUniquePaise(
   let chosenPaise: number;
 
   if (availablePaise.length > 0) {
-    // Pick randomly from unassigned pool for unpredictable amounts
-    const randomIndex = Math.floor(Math.random() * availablePaise.length);
+    // Pick cryptographically from unassigned pool for unpredictable amounts
+    const randomIndex = crypto.randomInt(0, availablePaise.length);
     chosenPaise = availablePaise[randomIndex];
   } else {
-    // Fallback if all 99 paise slots are filled in the 15-minute window:
-    // Generate a fractional micro-offset or shift base amount by +1
-    chosenPaise = Math.floor(Math.random() * 99) + 1;
+    // Fallback if all 99 paise slots are filled in the 15-minute window
+    chosenPaise = crypto.randomInt(1, 100);
   }
 
   const paiseOffset = chosenPaise / 100;

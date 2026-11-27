@@ -36,6 +36,63 @@ import {
   syncMerchantUpiState,
 } from '../services/upiRouter.service';
 import { sanitizeBrandColor, sanitizeSafeUrl } from '../utils/checkoutBranding';
+import {
+  escapeCsvCell,
+  generateNumericOtp,
+  getClientIp,
+  timingSafeEqualStr,
+  validateSafeWebhookUrl,
+} from '../utils/securityGuards';
+
+const MAX_OTP_ATTEMPTS = 5;
+
+/**
+ * Verifies a user-submitted OTP using constant-time comparison and enforces a strict 5-attempt lockout.
+ */
+async function verifyAndConsumeOtp(
+  email: string,
+  purpose: 'REGISTRATION' | 'PASSWORD_RESET',
+  candidateOtp: unknown
+): Promise<{ ok: boolean; message?: string }> {
+  const cleanOtp = typeof candidateOtp === 'string' ? candidateOtp.trim() : '';
+  if (!cleanOtp || !/^\d{6}$/.test(cleanOtp)) {
+    return { ok: false, message: 'A valid 6-digit verification code is required.' };
+  }
+
+  const otpRecord = await Otp.findOne({
+    email,
+    purpose,
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: -1 });
+
+  if (!otpRecord) {
+    return { ok: false, message: 'Invalid or expired verification code. Please request a new code.' };
+  }
+
+  if (otpRecord.attempts >= MAX_OTP_ATTEMPTS) {
+    await Otp.deleteMany({ email, purpose });
+    return {
+      ok: false,
+      message: 'Too many incorrect OTP attempts. For security, this code has been invalidated. Request a new code.',
+    };
+  }
+
+  if (!timingSafeEqualStr(otpRecord.otp, cleanOtp)) {
+    otpRecord.attempts = (otpRecord.attempts || 0) + 1;
+    if (otpRecord.attempts >= MAX_OTP_ATTEMPTS) {
+      await Otp.deleteMany({ email, purpose });
+      return {
+        ok: false,
+        message: 'Too many incorrect OTP attempts. For security, this code has been invalidated. Request a new code.',
+      };
+    }
+    await otpRecord.save();
+    return { ok: false, message: 'Invalid verification code. Please check and try again.' };
+  }
+
+  await Otp.deleteMany({ email, purpose });
+  return { ok: true };
+}
 
 export const sendRegistrationOtp = async (req: Request, res: Response) => {
   try {
@@ -53,8 +110,8 @@ export const sendRegistrationOtp = async (req: Request, res: Response) => {
       });
     }
 
-    // Generate cryptographically secure 6-digit numeric OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate cryptographically secure 6-digit numeric OTP using CSPRNG
+    const otp = generateNumericOtp(6);
 
     // Expire any existing registration OTPs for this email
     await Otp.deleteMany({ email: cleanEmail, purpose: 'REGISTRATION' });
@@ -107,27 +164,14 @@ export const registerMerchant = async (req: Request, res: Response) => {
       });
     }
 
-    // Strictly verify Email OTP before activating merchant registration
-    if (!otp || typeof otp !== 'string' || !otp.trim()) {
+    // Strictly verify Email OTP (constant-time + 5-attempt lockout) before registering
+    const otpCheck = await verifyAndConsumeOtp(cleanEmail, 'REGISTRATION', otp);
+    if (!otpCheck.ok) {
       return res.status(400).json({
         success: false,
-        message: 'Email verification code (OTP) is required. Please request and enter your 6-digit OTP.',
+        message: otpCheck.message,
       });
     }
-
-    const otpRecord = await Otp.findOne({
-      email: cleanEmail,
-      purpose: 'REGISTRATION',
-      expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
-
-    if (!otpRecord || otpRecord.otp !== otp.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification code. Please request a new code.',
-      });
-    }
-    await Otp.deleteMany({ email: cleanEmail, purpose: 'REGISTRATION' });
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
@@ -269,7 +313,7 @@ export const loginMerchant = async (req: Request, res: Response) => {
     });
 
     // Asynchronously send Login Alert Email
-    const clientIp = (req.headers['x-forwarded-for'] as string) || req.ip || 'Unknown';
+    const clientIp = getClientIp(req.headers as Record<string, any>, req.ip);
     EmailService.sendLoginAlert(
       merchant.email,
       merchant.name,
@@ -319,7 +363,7 @@ export const sendForgotPasswordOtp = async (req: Request, res: Response) => {
       });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = generateNumericOtp(6);
     await Otp.deleteMany({ email: cleanEmail, purpose: 'PASSWORD_RESET' });
 
     await Otp.create({
@@ -353,14 +397,9 @@ export const resetPasswordWithOtp = async (req: Request, res: Response) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const otpRecord = await Otp.findOne({
-      email: cleanEmail,
-      purpose: 'PASSWORD_RESET',
-      expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
-
-    if (!otpRecord || otpRecord.otp !== otp.trim()) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired password reset code.' });
+    const otpCheck = await verifyAndConsumeOtp(cleanEmail, 'PASSWORD_RESET', otp);
+    if (!otpCheck.ok) {
+      return res.status(400).json({ success: false, message: otpCheck.message });
     }
 
     const merchant = await Merchant.findOne({ email: cleanEmail });
@@ -372,7 +411,8 @@ export const resetPasswordWithOtp = async (req: Request, res: Response) => {
     merchant.passwordHash = await bcrypt.hash(newPassword, salt);
     await merchant.save();
 
-    await Otp.deleteMany({ email: cleanEmail, purpose: 'PASSWORD_RESET' });
+    // Revoke all previously issued refresh tokens upon password reset
+    await JwtService.revokeAllSessions(merchant._id.toString()).catch(() => {});
 
     res.json({
       success: true,
@@ -447,7 +487,13 @@ export const updateMerchantProfile = async (req: AuthenticatedRequest, res: Resp
     if (websiteUrl !== undefined) merchant.websiteUrl = sanitizeSafeUrl(websiteUrl);
     if (websiteLogoUrl !== undefined) merchant.websiteLogoUrl = sanitizeSafeUrl(websiteLogoUrl);
     if (brandColor !== undefined) merchant.brandColor = sanitizeBrandColor(brandColor);
-    if (webhookUrl !== undefined) merchant.webhookUrl = (webhookUrl || '').trim();
+    if (webhookUrl !== undefined) {
+      const urlCheck = validateSafeWebhookUrl(webhookUrl);
+      if (!urlCheck.valid) {
+        return res.status(400).json({ success: false, message: urlCheck.reason });
+      }
+      merchant.webhookUrl = urlCheck.url;
+    }
     if (phone !== undefined) merchant.phone = (phone || '').trim();
     if (upiRoutingMode && ['PRIMARY_ONLY', 'ROUND_ROBIN', 'FAILOVER'].includes(upiRoutingMode)) {
       merchant.upiRoutingMode = upiRoutingMode;
@@ -480,7 +526,22 @@ export const updateMerchantProfile = async (req: AuthenticatedRequest, res: Resp
     res.json({
       success: true,
       message: 'Merchant profile & UPI settings saved',
-      data: merchant,
+      data: {
+        id: merchant._id,
+        name: merchant.name,
+        email: merchant.email,
+        phone: merchant.phone,
+        businessName: merchant.businessName,
+        websiteName: merchant.websiteName || merchant.businessName || '',
+        websiteUrl: merchant.websiteUrl || '',
+        websiteLogoUrl: merchant.websiteLogoUrl || '',
+        brandColor: sanitizeBrandColor(merchant.brandColor),
+        upiId: merchant.upiId,
+        upiName: merchant.upiName,
+        upiAccounts: accounts,
+        upiRoutingMode: merchant.upiRoutingMode || 'PRIMARY_ONLY',
+        webhookUrl: merchant.webhookUrl,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
@@ -1357,9 +1418,18 @@ export const exportReport = async (req: AuthenticatedRequest, res: Response) => 
     if (format === 'csv') {
       const headers = 'OrderId,AppName,Customer,RupeeAmount,UTR,PaidAt\n';
       const rows = orders
-        .map((o) => `${o.orderId},${o.appName},${o.customerUserId || ''},${o.exactAmount.toFixed(2)},${o.utrNumber || ''},${o.paidAt ? new Date(o.paidAt).toISOString() : ''}`)
+        .map((o) =>
+          [
+            escapeCsvCell(o.orderId),
+            escapeCsvCell(o.appName),
+            escapeCsvCell(o.customerUserId || ''),
+            escapeCsvCell(o.exactAmount.toFixed(2)),
+            escapeCsvCell(o.utrNumber || ''),
+            escapeCsvCell(o.paidAt ? new Date(o.paidAt).toISOString() : ''),
+          ].join(',')
+        )
         .join('\n');
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="sumiopay-report.csv"');
       res.send(headers + rows);
       return;

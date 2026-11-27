@@ -23,6 +23,7 @@ export const generatePairingToken = async (req: Request, res: Response): Promise
       merchantId,
       deviceName,
       pairingToken,
+      pairingExpiresAt: tokenExpiry,
       deviceToken: `dev_${crypto.randomBytes(20).toString('hex')}`,
       batteryPercent: 100,
       isCharging: false,
@@ -85,7 +86,10 @@ export const completePairing = async (req: Request, res: Response): Promise<void
     const device = await Device.findOne({
       $or: [{ pairingToken: cleanToken }, { pairingToken: withPrefix }],
     });
-    if (!device) {
+    if (!device || (device.pairingExpiresAt && device.pairingExpiresAt.getTime() <= Date.now())) {
+      if (device && device.pairingExpiresAt && device.pairingExpiresAt.getTime() <= Date.now()) {
+        await Device.deleteOne({ _id: device._id, isPaired: { $ne: true } }).catch(() => {});
+      }
       res.status(400).json({
         success: false,
         message: 'Invalid or expired pairing token. Please generate a fresh token from your web dashboard.',
@@ -94,8 +98,8 @@ export const completePairing = async (req: Request, res: Response): Promise<void
     }
 
     const merchant = await Merchant.findById(device.merchantId);
-    if (!merchant) {
-      res.status(400).json({ success: false, message: 'Associated merchant not found' });
+    if (!merchant || !merchant.isActive) {
+      res.status(403).json({ success: false, message: 'Associated merchant not found or suspended' });
       return;
     }
 
@@ -107,6 +111,7 @@ export const completePairing = async (req: Request, res: Response): Promise<void
     device.isCharging = isCharging !== undefined ? !!isCharging : true;
     device.lastPingAt = new Date();
     device.pairingToken = undefined; // consume pairing token
+    device.pairingExpiresAt = undefined;
     await device.save();
 
     res.status(200).json({

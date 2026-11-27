@@ -14,6 +14,7 @@ import {
   sanitizeBrandColor,
   sanitizeSafeUrl,
 } from '../../utils/checkoutBranding';
+import { validateSafeWebhookUrl } from '../../utils/securityGuards';
 import crypto from 'crypto';
 
 const router = Router();
@@ -84,6 +85,15 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       metadata = {},
     } = req.body;
 
+    const webhookCheck = validateSafeWebhookUrl(callbackWebhookUrl);
+    if (!webhookCheck.valid) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_WEBHOOK_URL', message: webhookCheck.reason },
+      });
+      return;
+    }
+
     const billDetails = normalizeBillDetails(req.body);
     let finalPaise = amountInPaise
       ? parseInt(amountInPaise, 10)
@@ -145,7 +155,7 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       status: 'PENDING',
       upiIntentUrl: initiation.upiIntentUrl || '',
       expiresAt: initiation.expiresAt,
-      callbackWebhookUrl: callbackWebhookUrl || merchant.webhookUrl || '',
+      callbackWebhookUrl: webhookCheck.url || merchant.webhookUrl || '',
       metadata: safeMeta,
     });
 

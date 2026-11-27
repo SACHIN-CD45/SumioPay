@@ -6,6 +6,7 @@ export interface IDevice extends Document {
   deviceName: string;
   deviceToken: string; // Live pair token for Android APK
   pairingToken?: string; // Short-lived token for initial QR pairing
+  pairingExpiresAt?: Date; // Strict expiry timestamp for pairingToken
   isPaired: boolean;
   deviceModel?: string;
   androidVersion?: string;
@@ -30,6 +31,7 @@ const DeviceSchema = new Schema<IDevice>(
       default: () => `dev_${crypto.randomBytes(20).toString('hex')}`,
     },
     pairingToken: { type: String, sparse: true },
+    pairingExpiresAt: { type: Date },
     isPaired: { type: Boolean, default: false },
     deviceModel: { type: String, default: '' },
     androidVersion: { type: String, default: '' },

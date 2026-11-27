@@ -26,8 +26,17 @@ import v1WebhooksRoutes from './routes/v1/webhooks.routes';
 export const createApp = (): express.Application => {
   const app = express();
 
-  // Security and Utilities
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  // Trust Nginx reverse proxy for accurate client IP & rate limiting
+  app.set('trust proxy', 1);
+  app.disable('x-powered-by');
+
+  // Security headers and CORS
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    })
+  );
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -79,6 +88,10 @@ export const createApp = (): express.Application => {
   app.use('/api', apiLimiter);
   app.use('/api/superadmin/login', authLimiter);
   app.use('/api/merchant/login', authLimiter);
+  app.use('/api/merchant/register', authLimiter);
+  app.use('/api/merchant/send-registration-otp', authLimiter);
+  app.use('/api/merchant/forgot-password', authLimiter);
+  app.use('/api/device/pair', authLimiter);
 
   // Comprehensive SRE Health Probes
   app.get('/health', (_req, res) => {

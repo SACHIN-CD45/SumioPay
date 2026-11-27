@@ -163,8 +163,20 @@ export const HostedPaymentPage: React.FC = () => {
         onSubmitUtr={handleSubmitUtr}
       />
 
-      <div className="text-center text-[11px] text-slate-500 mt-5">
-        &copy; {new Date().getFullYear()} SumioTech &bull; Direct 0% Fee UPI Gateway
+      <div className="text-center text-[11px] text-slate-500 mt-5 space-y-1">
+        <div>
+          &copy; {new Date().getFullYear()} SumioTech &bull; Direct 100% Bank-to-Bank UPI Automation (₹0 Held by SumioPay)
+        </div>
+        <div>
+          SumioPay is a software utility, not a bank or PA/PG.{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/disclaimer')}
+            className="text-indigo-600 hover:underline font-semibold"
+          >
+            Legal Disclaimer &amp; Security
+          </button>
+        </div>
       </div>
     </div>
   );

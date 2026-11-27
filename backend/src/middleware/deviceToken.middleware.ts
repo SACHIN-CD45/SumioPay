@@ -18,8 +18,9 @@ export const requireDeviceToken = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const deviceToken =
+    const rawToken =
       (req.headers['x-device-token'] as string) || (req.body?.deviceToken as string);
+    const deviceToken = typeof rawToken === 'string' ? rawToken.trim() : '';
 
     if (!deviceToken) {
       res.status(401).json({
@@ -30,7 +31,8 @@ export const requireDeviceToken = async (
       return;
     }
 
-    const device = await Device.findOne({ deviceToken, isActive: true });
+    // Only fully paired and active listener devices can authenticate
+    const device = await Device.findOne({ deviceToken, isActive: true, isPaired: true });
     if (!device) {
       res.status(401).json({
         success: false,
