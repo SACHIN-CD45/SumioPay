@@ -96,6 +96,20 @@ async function verifyAndConsumeOtp(
 
 export const sendRegistrationOtp = async (req: Request, res: Response) => {
   try {
+    const settings = await SystemSetting.findOne().select('maintenanceMode maintenanceMessage allowNewMerchantRegistrations').lean();
+    if (settings?.maintenanceMode) {
+      return res.status(503).json({
+        success: false,
+        message: settings.maintenanceMessage || 'SumioPay is currently undergoing maintenance. Registration is temporarily paused.',
+      });
+    }
+    if (settings && settings.allowNewMerchantRegistrations === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'New merchant onboarding is temporarily closed by platform administration.',
+      });
+    }
+
     const { email, name } = req.body;
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email address is required.' });
@@ -139,6 +153,20 @@ export const sendRegistrationOtp = async (req: Request, res: Response) => {
 
 export const registerMerchant = async (req: Request, res: Response) => {
   try {
+    const settings = await SystemSetting.findOne();
+    if (settings?.maintenanceMode) {
+      return res.status(503).json({
+        success: false,
+        message: settings.maintenanceMessage || 'SumioPay is currently undergoing maintenance. Registration is temporarily paused.',
+      });
+    }
+    if (settings && settings.allowNewMerchantRegistrations === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'New merchant registrations are currently disabled by platform administration.',
+      });
+    }
+
     const { name, email, password, businessName, upiId, upiName, phone, otp, termsAccepted } = req.body;
 
     if (!termsAccepted) {
@@ -152,6 +180,20 @@ export const registerMerchant = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: 'Name, email, password, business name, and UPI ID are required.',
+      });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long.',
+      });
+    }
+
+    if (!isValidUpiVpa(String(upiId).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid UPI ID (e.g. name@okaxis or business@icici).',
       });
     }
 
@@ -176,7 +218,6 @@ export const registerMerchant = async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const settings = await SystemSetting.findOne();
     const catalog = getSubscriptionPlanCatalog(settings);
     const trialStart = new Date();
     const trialEnd = computeTrialPeriodEnd(catalog.trialDays, trialStart);
@@ -868,7 +909,6 @@ export const getDashboardStats = async (req: AuthenticatedRequest, res: Response
           isCharging: activeDevice?.isCharging || false,
           lastPingAt: activeDevice?.lastPingAt || null,
           deviceName: activeDevice?.deviceName || 'No device connected',
-          deviceToken: activeDevice?.deviceToken || '',
         },
         recentOrders,
       },

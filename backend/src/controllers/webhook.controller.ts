@@ -5,11 +5,10 @@ import { Merchant } from '../models/merchant.model';
 import { Device } from '../models/device.model';
 import { WebhookLog } from '../models/webhookLog.model';
 import { UnmappedPayment } from '../models/unmappedPayment.model';
+import { SecurityEvent } from '../models/securityEvent.model';
 import { dispatchMerchantWebhook } from '../utils/hmacSigner';
 import { validateSafeWebhookUrl } from '../utils/securityGuards';
-import { EmailService } from '../services/email.service';
-import { activatePlatformSubscriptionFromOrder } from '../services/subscriptionActivation.service';
-import { recordUpiAccountCredit } from '../services/upiRouter.service';
+import { finalizePaidOrderSideEffects } from '../services/paymentSettlement.service';
 
 // Android APK Listener calls this when any bank/UPI notification is intercepted
 export const handleListenerPush = async (req: Request, res: Response): Promise<void> => {
@@ -20,14 +19,19 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const { package_name = '', title = '', message = '', post_time } = req.body;
+    const { package_name = '', title = '', message = '' } = req.body;
 
     if (!message || typeof message !== 'string' || message.length > 2000) {
       res.status(400).json({ success: false, message: 'Valid notification message (<= 2000 chars) is required' });
       return;
     }
 
-    // 1. Parse notification using universal regex engine
+    const merchantId = device.merchantId;
+
+    // Refresh device heartbeat timestamp on any legitimate telemetry ping
+    Device.updateOne({ _id: device._id }, { $set: { lastPingAt: new Date() } }).catch(() => {});
+
+    // 1. Parse notification using universal regex engine (ignores debits, OTPs & collect requests)
     const parsed = parseBankNotification(message, package_name);
 
     if (!parsed.isPaymentAlert || !parsed.amount || parsed.amount <= 0) {
@@ -40,21 +44,47 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const merchantId = device.merchantId;
     const merchant = await Merchant.findById(merchantId);
-    if (!merchant) {
-      res.status(404).json({ success: false, message: 'Merchant not found' });
+    if (!merchant || !merchant.isActive) {
+      res.status(403).json({ success: false, message: 'Merchant account inactive or not found' });
       return;
     }
 
-    // 2. Anti-Fraud Check: Prevent Duplicate UTR Reuse (Replay Attack)
-    if (parsed.utr) {
+    const isApkSandboxCheck =
+      package_name === 'com.phonepe.simulator' ||
+      message.includes('(PhonePe Test Alert)');
+
+    // 2. Anti-Fraud Check: Prevent Duplicate UTR Reuse (Replay Attack) across paid orders
+    if (parsed.utr && !isApkSandboxCheck) {
       const utrExists = await Order.findOne({
         merchantId,
         utrNumber: parsed.utr,
         status: 'PAID',
+        isTest: { $ne: true },
       });
       if (utrExists) {
+        // Check if this is just the same order's dual alert (e.g. PhonePe + Bank SMS for identical amount)
+        if (Math.abs(Number(utrExists.exactAmount || 0) - parsed.amount) <= 0.01) {
+          res.status(200).json({
+            success: true,
+            matched: true,
+            duplicate: true,
+            orderId: utrExists.orderId,
+            message: 'Order was already verified and marked as PAID',
+          });
+          return;
+        }
+
+        SecurityEvent.create({
+          merchantId,
+          eventType: 'DUPLICATE_UTR_ATTEMPT',
+          severity: 'HIGH',
+          description: `Duplicate UTR ${parsed.utr} replay attempt detected against settled order ${utrExists.orderId}.`,
+          ipAddress: req.ip || '',
+          userAgent: req.get('user-agent') || 'SumioPayListener',
+          metadata: { utr: parsed.utr, existingOrderId: utrExists.orderId, incomingAmount: parsed.amount },
+        }).catch(() => {});
+
         res.status(409).json({
           success: false,
           securityAlert: 'DUPLICATE_UTR_REPLAY_ATTEMPT',
@@ -64,20 +94,38 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
       }
     }
 
-    // 3. Strict Differential Matching: Look for matching active PENDING order with exact rupee & paise
-    const matchingOrder = await Order.findOne({
-      merchantId,
-      exactAmount: parsed.amount,
-      status: 'PENDING',
-      expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
+    // 3. Atomic Differential Matching: Isolate Test vs Live orders & prevent double-credit race conditions
+    // when Bank SMS and UPI push notifications arrive milliseconds apart.
+    const updateFields: Record<string, any> = {
+      status: 'PAID',
+      paidAt: new Date(),
+      rawNotificationMessage: message,
+      senderName: parsed.senderName || '',
+      bankAppName: parsed.appName || package_name,
+    };
+    if (parsed.utr) {
+      updateFields.utrNumber = parsed.utr;
+    }
+
+    const matchingOrder = await Order.findOneAndUpdate(
+      {
+        merchantId,
+        exactAmount: parsed.amount,
+        status: 'PENDING',
+        isTest: isApkSandboxCheck ? true : { $ne: true },
+        expiresAt: { $gt: new Date() },
+      },
+      { $set: updateFields },
+      { new: true, sort: { createdAt: -1 } }
+    );
 
     if (!matchingOrder) {
-      // Check if order exists but already marked paid
+      // Check if an order with this exact amount was already settled cleanly by a parallel alert
       const alreadyPaid = await Order.findOne({
         merchantId,
         exactAmount: parsed.amount,
         status: 'PAID',
+        isTest: isApkSandboxCheck ? true : { $ne: true },
       }).sort({ updatedAt: -1 });
 
       if (alreadyPaid) {
@@ -91,20 +139,41 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
         return;
       }
 
-      // Log into Unmapped Payments for Merchant Reconciliation
-      try {
-        await UnmappedPayment.create({
-          merchantId,
+      if (isApkSandboxCheck) {
+        res.status(200).json({
+          success: true,
+          matched: false,
           amount: parsed.amount,
-          utrNumber: parsed.utr || '',
-          senderName: parsed.senderName || '',
-          rawMessage: message,
-          bankAppName: parsed.appName || package_name,
-          status: 'UNRESOLVED',
-          notes: `Received at ${new Date().toISOString()} but no pending order matched exact amount ₹${parsed.amount.toFixed(2)}`,
+          utr: parsed.utr,
+          message: `Sandbox check ignored for live orders — create a Test Mode ₹${parsed.amount.toFixed(2)} order to test matching.`,
         });
-      } catch (err: any) {
-        console.error('[UnmappedPayment Log Error]', err.message);
+        return;
+      }
+
+      // Deduplicate unmapped credit entries when both UPI app and Bank SMS fire for the same UTR
+      let existingUnmapped = null;
+      if (parsed.utr) {
+        existingUnmapped = await UnmappedPayment.findOne({
+          merchantId,
+          utrNumber: parsed.utr,
+        });
+      }
+
+      if (!existingUnmapped) {
+        try {
+          await UnmappedPayment.create({
+            merchantId,
+            amount: parsed.amount,
+            utrNumber: parsed.utr || '',
+            senderName: parsed.senderName || '',
+            rawMessage: message,
+            bankAppName: parsed.appName || package_name,
+            status: 'UNRESOLVED',
+            notes: `Received at ${new Date().toISOString()} but no pending order matched exact amount ₹${parsed.amount.toFixed(2)}`,
+          });
+        } catch (err: any) {
+          console.error('[UnmappedPayment Log Error]', err.message);
+        }
       }
 
       res.status(200).json({
@@ -117,87 +186,11 @@ export const handleListenerPush = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    // Refresh device heartbeat timestamp when real signal arrives
-    Device.updateOne({ _id: device._id }, { $set: { lastPingAt: new Date() } }).catch(() => {});
-
-    // 4. Mark Order as PAID atomically and persist payer/bank attribution
-    matchingOrder.status = 'PAID';
-    matchingOrder.paidAt = new Date();
-    matchingOrder.utrNumber = parsed.utr || matchingOrder.utrNumber || '';
-    matchingOrder.rawNotificationMessage = message;
-    matchingOrder.senderName = parsed.senderName || '';
-    matchingOrder.bankAppName = parsed.appName || package_name;
-    await matchingOrder.save();
-
-    // Auto-activate SumioPay platform subscription if this order belongs to Self-Billing
-    await activatePlatformSubscriptionFromOrder(matchingOrder).catch((err) => {
-      console.error(`[SubscriptionActivation] Failed for ${matchingOrder.orderId}:`, err.message);
+    // 4. Unified Post-Payment Fulfillment: Subscription Activation, Live GMV, Enterprise Bill Emails & Signed Webhook
+    await finalizePaidOrderSideEffects({
+      order: matchingOrder,
+      merchant,
     });
-
-    // 5. Update merchant lifetime volume and transactions counter (live orders only)
-    if (!matchingOrder.isTest) {
-      await Merchant.findByIdAndUpdate(merchantId, {
-        $inc: { totalVolume: matchingOrder.exactAmount, totalTransactions: 1 },
-      });
-      await recordUpiAccountCredit(
-        merchantId,
-        (matchingOrder.metadata as any)?.assignedUpiId,
-        matchingOrder.exactAmount
-      ).catch(() => {});
-    }
-
-    // 6. Send Instant Payment Confirmation / Invoice Email
-    const customerOrMerchantEmail = matchingOrder.customerEmail || merchant.email;
-    if (customerOrMerchantEmail) {
-      EmailService.sendPaymentReceipt(
-        customerOrMerchantEmail,
-        matchingOrder.customerPhone || merchant.businessName,
-        {
-          orderId: matchingOrder.orderId,
-          amount: matchingOrder.baseAmount,
-          exactAmount: matchingOrder.exactAmount,
-          paiseOffset: matchingOrder.paiseOffset,
-          utr: matchingOrder.utrNumber || 'Direct Bank Credit',
-          merchantBusinessName: merchant.businessName,
-          appName: matchingOrder.appName,
-          paymentDate: matchingOrder.paidAt
-            ? matchingOrder.paidAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-            : undefined,
-        }
-      ).catch((emailErr) => {
-        console.error(`[EmailReceipt] Failed to send receipt for ${matchingOrder.orderId}:`, emailErr.message);
-      });
-    }
-
-    // 7. Trigger Webhook with HMAC-SHA256 signature to client's SaaS endpoint
-    const targetUrl = matchingOrder.callbackWebhookUrl || merchant.webhookUrl;
-    if (targetUrl) {
-      dispatchMerchantWebhook(
-        merchant._id,
-        matchingOrder.orderId,
-        targetUrl,
-        merchant.webhookSecret,
-        {
-          orderId: matchingOrder.orderId,
-          appName: matchingOrder.appName,
-          userId: matchingOrder.customerUserId,
-          customerUserId: matchingOrder.customerUserId,
-          baseAmount: matchingOrder.baseAmount,
-          exactAmount: matchingOrder.exactAmount,
-          amount: matchingOrder.exactAmount,
-          amountInPaise: Math.round(matchingOrder.exactAmount * 100),
-          status: 'PAID',
-          utr: matchingOrder.utrNumber,
-          utrNumber: matchingOrder.utrNumber,
-          senderName: matchingOrder.senderName || '',
-          bankAppName: matchingOrder.bankAppName || '',
-          metadata: matchingOrder.metadata || {},
-          paidAt: matchingOrder.paidAt,
-        }
-      ).catch((err) => {
-        console.error(`[Webhook] Dispatch failed for order ${matchingOrder.orderId}:`, err.message);
-      });
-    }
 
     res.status(200).json({
       success: true,
@@ -239,7 +232,7 @@ export const testWebhookDispatch = async (req: Request, res: Response): Promise<
     const delivered = await dispatchMerchantWebhook(
       merchant._id,
       `TEST_${Date.now()}`,
-      destinationUrl,
+      urlCheck.url,
       merchant.webhookSecret,
       {
         orderId: `ORD_DEMO_${Date.now()}`,
@@ -256,7 +249,7 @@ export const testWebhookDispatch = async (req: Request, res: Response): Promise<
     res.status(200).json({
       success: delivered,
       message: delivered ? 'Test webhook delivered successfully' : 'Webhook destination unreachable',
-      destinationUrl,
+      destinationUrl: urlCheck.url,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
@@ -367,60 +360,23 @@ export const reconcileUnmappedPayment = async (req: Request, res: Response): Pro
     payment.resolvedOrderId = orderId || payment.resolvedOrderId;
     await payment.save();
 
-    // If linked to an order, mark that order as PAID and notify merchant SaaS webhook
     if (orderId) {
-      const order = await Order.findOne({ orderId, merchantId });
-      if (order && order.status === 'PENDING') {
-        order.status = 'PAID';
-        order.paidAt = new Date();
-        order.utrNumber = payment.utrNumber || order.utrNumber || '';
-        order.rawNotificationMessage = payment.rawMessage;
-        order.senderName = payment.senderName || '';
-        order.bankAppName = payment.bankAppName || '';
-        await order.save();
-
-        await activatePlatformSubscriptionFromOrder(order).catch((err) => {
-          console.error(`[SubscriptionActivation] Unmapped reconcile failed for ${order.orderId}:`, err.message);
-        });
-
-        if (!order.isTest) {
-          await Merchant.findByIdAndUpdate(merchantId, {
-            $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
-          });
-          await recordUpiAccountCredit(
-            merchantId,
-            (order.metadata as any)?.assignedUpiId,
-            order.exactAmount
-          ).catch(() => {});
-        }
-
-        const merchant = await Merchant.findById(merchantId);
-        const targetUrl = order.callbackWebhookUrl || merchant?.webhookUrl;
-        if (merchant && targetUrl) {
-          dispatchMerchantWebhook(
-            merchant._id,
-            order.orderId,
-            targetUrl,
-            merchant.webhookSecret,
-            {
-              orderId: order.orderId,
-              appName: order.appName,
-              userId: order.customerUserId,
-              customerUserId: order.customerUserId,
-              baseAmount: order.baseAmount,
-              exactAmount: order.exactAmount,
-              amount: order.exactAmount,
-              amountInPaise: Math.round(order.exactAmount * 100),
-              status: 'PAID',
-              utr: order.utrNumber,
-              utrNumber: order.utrNumber,
-              senderName: order.senderName || '',
-              bankAppName: order.bankAppName || '',
-              metadata: order.metadata || {},
-              paidAt: order.paidAt,
-            }
-          ).catch(() => {});
-        }
+      const updatedOrder = await Order.findOneAndUpdate(
+        { orderId, merchantId, status: { $in: ['PENDING', 'EXPIRED'] } },
+        {
+          $set: {
+            status: 'PAID',
+            paidAt: new Date(),
+            ...(payment.utrNumber ? { utrNumber: payment.utrNumber } : {}),
+            rawNotificationMessage: payment.rawMessage,
+            senderName: payment.senderName || '',
+            bankAppName: payment.bankAppName || '',
+          },
+        },
+        { new: true }
+      );
+      if (updatedOrder) {
+        await finalizePaidOrderSideEffects({ order: updatedOrder });
       }
     }
 
@@ -457,13 +413,26 @@ export const simulatePushAlert = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const matchingOrder = await Order.findOne({
-      merchantId,
-      exactAmount: parsed.amount,
-      status: 'PENDING',
-      isTest: true,
-      expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
+    const matchingOrder = await Order.findOneAndUpdate(
+      {
+        merchantId,
+        exactAmount: parsed.amount,
+        status: 'PENDING',
+        isTest: true,
+        expiresAt: { $gt: new Date() },
+      },
+      {
+        $set: {
+          status: 'PAID',
+          paidAt: new Date(),
+          utrNumber: parsed.utr || `SIM${Date.now().toString().slice(-9)}`,
+          rawNotificationMessage: message,
+          senderName: parsed.senderName || '',
+          bankAppName: parsed.appName || package_name,
+        },
+      },
+      { new: true, sort: { createdAt: -1 } }
+    );
 
     if (!matchingOrder) {
       const liveOrderSameAmount = await Order.findOne({
@@ -483,40 +452,11 @@ export const simulatePushAlert = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    matchingOrder.status = 'PAID';
-    matchingOrder.paidAt = new Date();
-    matchingOrder.utrNumber = parsed.utr || `SIM${Date.now().toString().slice(-9)}`;
-    matchingOrder.rawNotificationMessage = message;
-    matchingOrder.senderName = parsed.senderName || '';
-    matchingOrder.bankAppName = parsed.appName || package_name;
-    await matchingOrder.save();
-
-    const targetUrl = matchingOrder.callbackWebhookUrl || merchant.webhookUrl;
-    if (targetUrl) {
-      dispatchMerchantWebhook(
-        merchant._id,
-        matchingOrder.orderId,
-        targetUrl,
-        merchant.webhookSecret,
-        {
-          orderId: matchingOrder.orderId,
-          appName: matchingOrder.appName,
-          userId: matchingOrder.customerUserId,
-          customerUserId: matchingOrder.customerUserId,
-          baseAmount: matchingOrder.baseAmount,
-          exactAmount: matchingOrder.exactAmount,
-          amount: matchingOrder.exactAmount,
-          amountInPaise: Math.round(matchingOrder.exactAmount * 100),
-          status: 'PAID',
-          utr: matchingOrder.utrNumber,
-          utrNumber: matchingOrder.utrNumber,
-          senderName: matchingOrder.senderName || '',
-          bankAppName: matchingOrder.bankAppName || '',
-          metadata: matchingOrder.metadata || {},
-          paidAt: matchingOrder.paidAt,
-        }
-      ).catch(() => {});
-    }
+    await finalizePaidOrderSideEffects({
+      order: matchingOrder,
+      merchant,
+      skipVolumeIncrement: true,
+    });
 
     res.status(200).json({
       success: true,

@@ -45,7 +45,35 @@ const EnvSchema = z.object({
   CASHFREE_SECRET_KEY: z.string().optional().default(''),
   RAZORPAY_KEY_ID: z.string().optional().default(''),
   RAZORPAY_KEY_SECRET: z.string().optional().default(''),
+
+  // SMTP / Email Receipt Delivery (Hostinger / Standard SMTP)
+  SMTP_HOST: z.string().optional().default('smtp.hostinger.com'),
+  SMTP_PORT: z.string().optional().default('465'),
+  SMTP_SECURE: z.string().optional().default('true'),
+  SMTP_USER: z.string().optional().default('contact@sumiotech.in'),
+  SMTP_PASS: z.string().optional().default(''),
+  SMTP_FROM: z.string().optional().default(''),
+  PUBLIC_URL: z.string().optional().default('https://sumiopay.sumiotech.in'),
+  API_PUBLIC_URL: z.string().optional().default('https://apipay.sumiotech.in'),
 });
+
+if (nodeEnv === 'production') {
+  if (
+    !process.env.JWT_ACCESS_SECRET ||
+    process.env.JWT_ACCESS_SECRET.includes('REPLACE_WITH_') ||
+    !process.env.JWT_REFRESH_SECRET ||
+    process.env.JWT_REFRESH_SECRET.includes('REPLACE_WITH_')
+  ) {
+    console.warn(
+      '[SumioPay SECURITY WARNING] Production JWT_ACCESS_SECRET / JWT_REFRESH_SECRET are using fallback defaults or placeholders. Set strong random secrets in backend/.env!'
+    );
+  }
+  if (!process.env.SMTP_PASS) {
+    console.warn(
+      '[SumioPay EMAIL WARNING] SMTP_PASS is not configured in backend/.env — OTPs and Enterprise Payment Bill emails are running in console-simulator mode.'
+    );
+  }
+}
 
 const parsed = EnvSchema.safeParse(process.env);
 

@@ -55,7 +55,8 @@ app.post('/api/checkout/create', requireUserSession, async (req, res) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': process.env.SUMIOPAY_LIVE_KEY, // sp_live_... (or sp_test_... for sandbox)
+      'x-api-key': process.env.SUMIOPAY_LIVE_KEY,       // sp_live_... (or sp_test_... for sandbox)
+      'x-api-secret': process.env.SUMIOPAY_API_SECRET,  // sp_sec_... (keep secret on backend only)
       'Idempotency-Key': \`ord_\${req.user.id}_\${req.body.cartId}\`,
     },
     body: JSON.stringify({

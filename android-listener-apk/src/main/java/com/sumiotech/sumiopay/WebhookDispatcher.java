@@ -7,17 +7,19 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
  * Enterprise Webhook Dispatcher
- * Dispatches intercepted SMS and Notification credit alerts to the SumioPay Central Backend.
- * Also keeps an in-app audit log for the Capacitor Web UI.
+ * Dispatches intercepted SMS and Notification credit alerts to the SumioPay Central Backend
+ * with automatic 1-time transient retry on cellular drops.
  */
 public class WebhookDispatcher {
 
@@ -41,52 +43,76 @@ public class WebhookDispatcher {
         }
 
         EXECUTOR.execute(() -> {
-            HttpURLConnection conn = null;
             int responseCode = -1;
             boolean success = false;
             String resultMsg = "";
 
-            try {
-                URL url = new URL(serverUrl.trim() + "/api/central-payment/verify-webhook");
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                conn.setRequestProperty("x-device-token", deviceToken);
-                conn.setConnectTimeout(8000);
-                conn.setReadTimeout(8000);
-                conn.setDoOutput(true);
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                HttpURLConnection conn = null;
+                try {
+                    URL url = new URL(serverUrl.trim().replaceAll("/+$", "") + "/api/central-payment/verify-webhook");
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                    conn.setRequestProperty("x-device-token", deviceToken.trim());
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(8000);
+                    conn.setDoOutput(true);
 
-                JSONObject payload = new JSONObject();
-                payload.put("secret_key", deviceToken);
-                payload.put("deviceToken", deviceToken);
-                payload.put("package_name", packageName != null ? packageName : "generic.payment");
-                payload.put("title", title != null ? title : "");
-                payload.put("message", message);
-                payload.put("post_time", postTime > 0 ? postTime : System.currentTimeMillis());
+                    JSONObject payload = new JSONObject();
+                    payload.put("secret_key", deviceToken.trim());
+                    payload.put("deviceToken", deviceToken.trim());
+                    payload.put("package_name", packageName != null ? packageName : "generic.payment");
+                    payload.put("title", title != null ? title : "");
+                    payload.put("message", message);
+                    payload.put("post_time", postTime > 0 ? postTime : System.currentTimeMillis());
 
-                byte[] postData = payload.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(postData);
-                    os.flush();
+                    byte[] postData = payload.toString().getBytes(StandardCharsets.UTF_8);
+                    try (OutputStream os = conn.getOutputStream()) {
+                        os.write(postData);
+                        os.flush();
+                    }
+
+                    responseCode = conn.getResponseCode();
+                    success = (responseCode >= 200 && responseCode < 300);
+
+                    String serverBody = "";
+                    try {
+                        InputStream stream = success ? conn.getInputStream() : conn.getErrorStream();
+                        if (stream != null) {
+                            Scanner s = new Scanner(stream).useDelimiter("\\A");
+                            serverBody = s.hasNext() ? s.next() : "";
+                        }
+                    } catch (Exception ignored) {}
+
+                    resultMsg = !serverBody.isEmpty() ? ("HTTP " + responseCode + " • " + serverBody) : ("HTTP " + responseCode);
+                    Log.i(TAG, "[$] Attempt " + attempt + " to " + serverUrl + " -> " + responseCode);
+
+                    // Stop retrying on 2xx success or definitive 4xx rejection
+                    if (success || (responseCode >= 400 && responseCode < 500)) {
+                        break;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Attempt " + attempt + " failed: " + e.getMessage());
+                    resultMsg = e.getMessage() != null ? e.getMessage() : "Network error";
+                    responseCode = 500;
+                } finally {
+                    if (conn != null) {
+                        conn.disconnect();
+                    }
                 }
 
-                responseCode = conn.getResponseCode();
-                success = (responseCode >= 200 && responseCode < 300);
-                resultMsg = "HTTP " + responseCode;
-                Log.i(TAG, "[$] Dispatched to " + serverUrl + " -> " + responseCode);
-
-                // Save to local UI audit log
-                saveLog(context, packageName, title, message, success, responseCode);
-
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to dispatch webhook: " + e.getMessage());
-                resultMsg = e.getMessage();
-                saveLog(context, packageName, title, message, false, 500);
-            } finally {
-                if (conn != null) {
-                    conn.disconnect();
+                if (attempt == 1) {
+                    try {
+                        Thread.sleep(1200);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
+
+            saveLog(context, packageName, title, message, success, responseCode);
 
             if (callback != null) {
                 callback.onResult(success, responseCode, resultMsg);
@@ -108,7 +134,6 @@ public class WebhookDispatcher {
             item.put("success", success);
             item.put("code", code);
 
-            // Keep max 25 recent items
             JSONArray updated = new JSONArray();
             updated.put(item);
             for (int i = 0; i < Math.min(logs.length(), 24); i++) {

@@ -26,6 +26,7 @@ import {
   computeExtendedPeriodEnd,
   activatePlatformSubscriptionFromOrder,
 } from '../services/subscriptionActivation.service';
+import { finalizePaidOrderSideEffects } from '../services/paymentSettlement.service';
 
 // SuperAdmin Login
 export const superadminLogin = async (req: Request, res: Response): Promise<void> => {
@@ -1288,40 +1289,22 @@ export const resolveUnmappedPayment = async (req: Request, res: Response): Promi
       }
 
       if (linkedOrder.status !== 'PAID') {
-        linkedOrder.status = 'PAID';
-        linkedOrder.utrNumber = linkedOrder.utrNumber || unmapped.utrNumber || '';
-        linkedOrder.senderName = linkedOrder.senderName || unmapped.senderName || '';
-        linkedOrder.bankAppName = linkedOrder.bankAppName || unmapped.bankAppName || '';
-        linkedOrder.paidAt = linkedOrder.paidAt || new Date();
-        await linkedOrder.save();
-
-        const merchant = await Merchant.findByIdAndUpdate(
-          linkedOrder.merchantId,
-          { $inc: { totalVolume: linkedOrder.exactAmount, totalTransactions: 1 } },
+        const updated = await Order.findOneAndUpdate(
+          { orderId: linkedOrder.orderId, status: { $ne: 'PAID' } },
+          {
+            $set: {
+              status: 'PAID',
+              utrNumber: linkedOrder.utrNumber || unmapped.utrNumber || '',
+              senderName: linkedOrder.senderName || unmapped.senderName || '',
+              bankAppName: linkedOrder.bankAppName || unmapped.bankAppName || '',
+              paidAt: linkedOrder.paidAt || new Date(),
+            },
+          },
           { new: true }
         );
-
-        await activatePlatformSubscriptionFromOrder(linkedOrder);
-
-        const targetWebhookUrl = linkedOrder.callbackWebhookUrl || merchant?.webhookUrl;
-        if (targetWebhookUrl && merchant) {
-          await dispatchMerchantWebhook(
-            linkedOrder.merchantId,
-            linkedOrder.orderId,
-            targetWebhookUrl,
-            merchant.webhookSecret,
-            {
-              orderId: linkedOrder.orderId,
-              status: 'PAID',
-              amount: linkedOrder.exactAmount,
-              utrNumber: linkedOrder.utrNumber,
-              senderName: linkedOrder.senderName,
-              bankAppName: linkedOrder.bankAppName,
-              paidAt: linkedOrder.paidAt,
-              reconciledBy: 'SUPERADMIN',
-            },
-            'payment.succeeded'
-          ).catch(() => {});
+        if (updated) {
+          linkedOrder = updated;
+          await finalizePaidOrderSideEffects({ order: updated });
         }
       }
     }

@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { requireApiKeyOrMerchantAuth } from '../../middleware/apiKey.middleware';
+import { ApiKeyRequest, requireApiKeyOrMerchantAuth, requireServerApiAuth } from '../../middleware/apiKey.middleware';
 import { requireIdempotency } from '../../middleware/idempotency.middleware';
 import { paymentOrchestrator } from '../../services/providers/paymentOrchestrator.service';
 import { StateMachineService } from '../../services/stateMachine.service';
 import { dispatchMerchantWebhook } from '../../utils/hmacSigner';
 import { Order } from '../../models/order.model';
 import { Organization } from '../../models/organization.model';
+import { Project } from '../../models/project.model';
+import { SystemSetting } from '../../models/systemSetting.model';
 import { Refund } from '../../models/refund.model';
 import {
   buildCheckoutBranding,
@@ -19,8 +21,8 @@ import crypto from 'crypto';
 
 const router = Router();
 
-// GET /api/v1/payments/orders or /api/v1/payments — List payments
-router.get('/', requireApiKeyOrMerchantAuth, async (req: Request, res: Response): Promise<void> => {
+// GET /api/v1/payments/orders or /api/v1/payments — List payments (Server Auth Required)
+router.get('/', requireApiKeyOrMerchantAuth, requireServerApiAuth('orders:read'), async (req: Request, res: Response): Promise<void> => {
   try {
     const merchant = (req as any).merchant;
     const page = parseInt(req.query.page as string) || 1;
@@ -72,7 +74,23 @@ router.get('/', requireApiKeyOrMerchantAuth, async (req: Request, res: Response)
 // POST /api/v1/payments/orders — Create Payment Order
 router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (req: Request, res: Response): Promise<void> => {
   try {
-    const merchant = (req as any).merchant;
+    const apiReq = req as ApiKeyRequest;
+    const merchant = apiReq.merchant!;
+
+    const settings = await SystemSetting.findOne().select('maintenanceMode maintenanceMessage').lean();
+    if (settings?.maintenanceMode) {
+      res.status(503).json({
+        success: false,
+        error: {
+          code: 'MAINTENANCE_MODE',
+          message:
+            settings.maintenanceMessage ||
+            'SumioPay is currently in maintenance mode. Payment initiation is temporarily paused.',
+        },
+      });
+      return;
+    }
+
     const {
       amountInPaise,
       baseAmount,
@@ -85,13 +103,33 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       metadata = {},
     } = req.body;
 
-    const webhookCheck = validateSafeWebhookUrl(callbackWebhookUrl);
-    if (!webhookCheck.valid) {
-      res.status(400).json({
-        success: false,
-        error: { code: 'INVALID_WEBHOOK_URL', message: webhookCheck.reason },
-      });
-      return;
+    const canOverrideWebhook = apiReq.authMethod !== 'API_KEY_ONLY';
+    let resolvedWebhookUrl = merchant.webhookUrl || '';
+    if (apiReq.apiKeyProjectId) {
+      const project = await Project.findOne({
+        _id: apiReq.apiKeyProjectId,
+        merchantId: merchant._id,
+        isActive: true,
+      })
+        .select('webhookUrl')
+        .lean();
+      if (project?.webhookUrl) {
+        resolvedWebhookUrl = project.webhookUrl;
+      }
+    }
+
+    if (canOverrideWebhook && callbackWebhookUrl) {
+      const webhookCheck = validateSafeWebhookUrl(callbackWebhookUrl);
+      if (!webhookCheck.valid) {
+        res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_WEBHOOK_URL', message: webhookCheck.reason },
+        });
+        return;
+      }
+      if (webhookCheck.url) {
+        resolvedWebhookUrl = webhookCheck.url;
+      }
     }
 
     const billDetails = normalizeBillDetails(req.body);
@@ -155,7 +193,7 @@ router.post('/orders', requireApiKeyOrMerchantAuth, requireIdempotency, async (r
       status: 'PENDING',
       upiIntentUrl: initiation.upiIntentUrl || '',
       expiresAt: initiation.expiresAt,
-      callbackWebhookUrl: webhookCheck.url || merchant.webhookUrl || '',
+      callbackWebhookUrl: resolvedWebhookUrl,
       metadata: safeMeta,
     });
 
@@ -318,8 +356,8 @@ router.get('/orders/:id/status', async (req: Request, res: Response): Promise<vo
   }
 });
 
-// POST /api/v1/payments/orders/:id/cancel — Cancel pending order
-router.post('/orders/:id/cancel', requireApiKeyOrMerchantAuth, async (req: Request, res: Response): Promise<void> => {
+// POST /api/v1/payments/orders/:id/cancel — Cancel pending order (Server Auth Required)
+router.post('/orders/:id/cancel', requireApiKeyOrMerchantAuth, requireServerApiAuth('orders:create'), async (req: Request, res: Response): Promise<void> => {
   try {
     const merchant = (req as any).merchant;
     const order = await Order.findOne({ orderId: req.params.id, merchantId: merchant._id });
@@ -341,8 +379,8 @@ router.post('/orders/:id/cancel', requireApiKeyOrMerchantAuth, async (req: Reque
   }
 });
 
-// POST /api/v1/payments/orders/:id/refund — Initiate/record refund on settled order
-router.post('/orders/:id/refund', requireApiKeyOrMerchantAuth, async (req: Request, res: Response): Promise<void> => {
+// POST /api/v1/payments/orders/:id/refund — Initiate/record refund on settled order (Server Auth Required)
+router.post('/orders/:id/refund', requireApiKeyOrMerchantAuth, requireServerApiAuth('refunds:create'), async (req: Request, res: Response): Promise<void> => {
   try {
     const merchant = (req as any).merchant;
     const { amountInPaise, reason, providerReference, refundUtr } = req.body;

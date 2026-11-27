@@ -4,10 +4,12 @@ import Order from '../models/order.model.js';
 import Merchant from '../models/merchant.model.js';
 import Organization from '../models/organization.model.js';
 import UnmappedPayment from '../models/unmappedPayment.model.js';
+import Project from '../models/project.model.js';
+import { SystemSetting } from '../models/systemSetting.model.js';
+import SecurityEvent from '../models/securityEvent.model.js';
 import { allocateUniquePaise, buildUpiIntentUrl } from '../utils/paiseAllocator.js';
-import { dispatchMerchantWebhook } from '../utils/hmacSigner.js';
-import { recordUpiAccountCredit, selectUpiAndAdvanceRotation } from '../services/upiRouter.service.js';
-import { activatePlatformSubscriptionFromOrder } from '../services/subscriptionActivation.service.js';
+import { selectUpiAndAdvanceRotation } from '../services/upiRouter.service.js';
+import { finalizePaidOrderSideEffects } from '../services/paymentSettlement.service.js';
 import {
   buildCheckoutBranding,
   normalizeBillDetails,
@@ -19,11 +21,25 @@ import { escapeRegex, validateSafeWebhookUrl } from '../utils/securityGuards.js'
 import { ApiKeyRequest } from '../middleware/apiKey.middleware.js';
 import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { config } from '../config/index.js';
-import { EmailService } from '../services/email.service.js';
 
 export const createOrder = async (req: ApiKeyRequest, res: Response) => {
   try {
     const merchant = req.merchant!;
+
+    // Enforce global maintenance gate if SuperAdmin paused order initiation
+    const settings = await SystemSetting.findOne().select('maintenanceMode maintenanceMessage').lean();
+    if (settings?.maintenanceMode) {
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: 'MAINTENANCE_MODE',
+          message:
+            settings.maintenanceMessage ||
+            'SumioPay is currently in maintenance mode. Payment initiation is temporarily paused.',
+        },
+      });
+    }
+
     const {
       baseAmount,
       appName = 'APP',
@@ -35,12 +51,30 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       metadata = {},
     } = req.body;
 
-    const webhookCheck = validateSafeWebhookUrl(callbackWebhookUrl);
-    if (!webhookCheck.valid) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'INVALID_WEBHOOK_URL', message: webhookCheck.reason },
-      });
+    // Only authenticated server callers (JWT, API_KEY_SECRET, or SCOPED_KEY) may specify per-order webhook overrides.
+    // Bare publishable frontend keys (API_KEY_ONLY) fall back to the merchant/project dashboard webhookUrl to block hijacking.
+    const canOverrideWebhook = req.authMethod !== 'API_KEY_ONLY';
+    let resolvedWebhookUrl = merchant.webhookUrl || '';
+    if (req.apiKeyProjectId) {
+      const project = await Project.findOne({ _id: req.apiKeyProjectId, merchantId: merchant._id, isActive: true })
+        .select('webhookUrl')
+        .lean();
+      if (project?.webhookUrl) {
+        resolvedWebhookUrl = project.webhookUrl;
+      }
+    }
+
+    if (canOverrideWebhook && callbackWebhookUrl) {
+      const webhookCheck = validateSafeWebhookUrl(callbackWebhookUrl);
+      if (!webhookCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_WEBHOOK_URL', message: webhookCheck.reason },
+        });
+      }
+      if (webhookCheck.url) {
+        resolvedWebhookUrl = webhookCheck.url;
+      }
     }
 
     const billDetails = normalizeBillDetails(req.body);
@@ -110,7 +144,7 @@ export const createOrder = async (req: ApiKeyRequest, res: Response) => {
       status: 'PENDING',
       upiIntentUrl,
       expiresAt,
-      callbackWebhookUrl: webhookCheck.url || merchant.webhookUrl || '',
+      callbackWebhookUrl: resolvedWebhookUrl,
       metadata: safeMeta,
     });
 
@@ -297,72 +331,46 @@ export const simulatePayment = async (req: AuthenticatedRequest, res: Response) 
     const merchant = req.merchant!;
     const { orderId } = req.params;
 
-    const order = await Order.findOne({ orderId, merchantId: merchant._id });
-    if (!order) {
+    const existing = await Order.findOne({ orderId, merchantId: merchant._id });
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (!order.isTest) {
+    if (!existing.isTest) {
       return res.status(403).json({
         success: false,
         message: 'Live production orders cannot be simulated. Switch to Test Mode or use an sp_test_ API key.',
       });
     }
 
-    if (order.status === 'PAID') {
+    if (existing.status === 'PAID') {
       return res.status(400).json({ success: false, message: 'Order is already marked PAID' });
     }
 
     const fakeUtr = `SIM${Date.now().toString().slice(-9)}`;
-    order.status = 'PAID';
-    order.utrNumber = fakeUtr;
-    order.paidAt = new Date();
-    order.bankAppName = 'TEST_SANDBOX_SIMULATOR';
-    order.rawNotificationMessage = `[Sandbox Test] Received Rs.${order.exactAmount} on UPI ref ${fakeUtr}`;
-    await order.save();
-
-    // Sandbox test payments never increment real live GMV counters
-    // Send Payment Confirmation / Invoice Email
-    const recipientEmail = order.customerEmail || merchant.email;
-    if (recipientEmail) {
-      EmailService.sendPaymentReceipt(recipientEmail, order.customerPhone || merchant.businessName, {
-        orderId: order.orderId,
-        amount: order.baseAmount,
-        exactAmount: order.exactAmount,
-        paiseOffset: order.paiseOffset,
-        utr: order.utrNumber || fakeUtr,
-        merchantBusinessName: merchant.businessName,
-        appName: order.appName,
-        paymentDate: order.paidAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-      }).catch((emailErr) => {
-        console.error(`[EmailReceipt Simulation Error] Failed to send receipt for ${order.orderId}:`, emailErr.message);
-      });
-    }
-
-    // Dispatch webhook to merchant's callback URL
-    if (order.callbackWebhookUrl) {
-      dispatchMerchantWebhook(
-        merchant._id,
-        order.orderId,
-        order.callbackWebhookUrl,
-        merchant.webhookSecret,
-        {
-          orderId: order.orderId,
-          appName: order.appName,
-          userId: order.customerUserId,
-          customerUserId: order.customerUserId,
-          baseAmount: order.baseAmount,
-          exactAmount: order.exactAmount,
-          amount: order.exactAmount,
-          amountInPaise: Math.round(order.exactAmount * 100),
-          utr: order.utrNumber,
-          utrNumber: order.utrNumber,
+    const order = await Order.findOneAndUpdate(
+      { orderId, merchantId: merchant._id, isTest: true, status: { $ne: 'PAID' } },
+      {
+        $set: {
           status: 'PAID',
-          metadata: order.metadata || {},
-          paidAt: order.paidAt,
-        }
-      );
+          utrNumber: fakeUtr,
+          paidAt: new Date(),
+          bankAppName: 'TEST_SANDBOX_SIMULATOR',
+          rawNotificationMessage: `[Sandbox Test] Received Rs.${existing.exactAmount} on UPI ref ${fakeUtr}`,
+        },
+      },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(400).json({ success: false, message: 'Order could not be simulated or was already paid.' });
     }
+
+    await finalizePaidOrderSideEffects({
+      order,
+      merchant,
+      skipVolumeIncrement: true,
+    });
 
     res.json({
       success: true,
@@ -427,6 +435,16 @@ export const submitCustomerUtr = async (req: Request, res: Response) => {
       orderId: { $ne: order.orderId },
     });
     if (replayOrder) {
+      SecurityEvent.create({
+        merchantId: order.merchantId,
+        eventType: 'DUPLICATE_UTR_ATTEMPT',
+        severity: 'HIGH',
+        description: `Customer checkout UTR replay attempt (${cleanUtr}) already used on order ${replayOrder.orderId}.`,
+        ipAddress: req.ip || '',
+        userAgent: req.get('user-agent') || '',
+        metadata: { orderId: order.orderId, utr: cleanUtr, existingOrderId: replayOrder.orderId },
+      }).catch(() => {});
+
       return res.status(409).json({
         success: false,
         message: `UTR ${cleanUtr} is already used on order ${replayOrder.orderId}.`,
@@ -440,87 +458,44 @@ export const submitCustomerUtr = async (req: Request, res: Response) => {
     }).sort({ createdAt: -1 });
 
     if (unmapped && Math.abs(Number(unmapped.amount || 0) - Number(order.exactAmount || 0)) <= 0.02) {
-      order.status = 'PAID';
-      order.utrNumber = cleanUtr;
-      order.paidAt = new Date();
-      order.senderName = order.senderName || unmapped.senderName || '';
-      order.bankAppName = order.bankAppName || unmapped.bankAppName || 'UTR_MATCHED';
-      order.rawNotificationMessage = order.rawNotificationMessage || unmapped.rawMessage;
-      await order.save();
-
-      unmapped.status = 'RESOLVED';
-      unmapped.resolvedOrderId = order.orderId;
-      unmapped.notes = `Matched via customer checkout UTR submission at ${new Date().toISOString()}`;
-      await unmapped.save();
-
-      const merchant = await Merchant.findById(order.merchantId);
-      if (merchant && !order.isTest) {
-        await Merchant.findByIdAndUpdate(merchant._id, {
-          $inc: { totalVolume: order.exactAmount, totalTransactions: 1 },
-        });
-        await recordUpiAccountCredit(
-          merchant._id,
-          (order.metadata as any)?.assignedUpiId,
-          order.exactAmount
-        ).catch(() => {});
-      }
-
-      await activatePlatformSubscriptionFromOrder(order).catch(() => {});
-
-      const targetWebhook = order.callbackWebhookUrl || merchant?.webhookUrl;
-      if (targetWebhook && merchant) {
-        dispatchMerchantWebhook(
-          merchant._id,
-          order.orderId,
-          targetWebhook,
-          merchant.webhookSecret,
-          {
-            orderId: order.orderId,
-            appName: order.appName,
-            userId: order.customerUserId,
-            customerUserId: order.customerUserId,
-            baseAmount: order.baseAmount,
-            exactAmount: order.exactAmount,
-            amount: order.exactAmount,
-            amountInPaise: Math.round(order.exactAmount * 100),
-            utr: order.utrNumber,
-            utrNumber: order.utrNumber,
-            senderName: order.senderName || '',
-            bankAppName: order.bankAppName || '',
+      const updatedOrder = await Order.findOneAndUpdate(
+        { orderId: order.orderId, merchantId: order.merchantId, status: 'PENDING' },
+        {
+          $set: {
             status: 'PAID',
-            metadata: order.metadata || {},
-            paidAt: order.paidAt,
-          }
-        );
-      }
-
-      if (order.customerEmail && merchant) {
-        EmailService.sendPaymentReceipt(order.customerEmail, order.customerPhone || merchant.businessName, {
-          orderId: order.orderId,
-          amount: order.baseAmount,
-          exactAmount: order.exactAmount,
-          paiseOffset: order.paiseOffset,
-          utr: cleanUtr,
-          merchantBusinessName: merchant.businessName,
-          appName: order.appName,
-          paymentDate: order.paidAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-        }).catch(() => {});
-      }
-
-      return res.json({
-        success: true,
-        matchedImmediately: true,
-        message: 'UTR matched with bank credit! Payment confirmed.',
-        data: {
-          orderId: order.orderId,
-          status: order.status,
-          baseAmount: order.baseAmount,
-          exactAmount: order.exactAmount,
-          utr: order.utrNumber,
-          utrNumber: order.utrNumber,
-          paidAt: order.paidAt,
+            utrNumber: cleanUtr,
+            paidAt: new Date(),
+            senderName: order.senderName || unmapped.senderName || '',
+            bankAppName: order.bankAppName || unmapped.bankAppName || 'UTR_MATCHED',
+            rawNotificationMessage: order.rawNotificationMessage || unmapped.rawMessage,
+          },
         },
-      });
+        { new: true }
+      );
+
+      if (updatedOrder) {
+        unmapped.status = 'RESOLVED';
+        unmapped.resolvedOrderId = order.orderId;
+        unmapped.notes = `Matched via customer checkout UTR submission at ${new Date().toISOString()}`;
+        await unmapped.save();
+
+        await finalizePaidOrderSideEffects({ order: updatedOrder });
+
+        return res.json({
+          success: true,
+          matchedImmediately: true,
+          message: 'UTR matched with bank credit! Payment confirmed.',
+          data: {
+            orderId: updatedOrder.orderId,
+            status: updatedOrder.status,
+            baseAmount: updatedOrder.baseAmount,
+            exactAmount: updatedOrder.exactAmount,
+            utr: updatedOrder.utrNumber,
+            utrNumber: updatedOrder.utrNumber,
+            paidAt: updatedOrder.paidAt,
+          },
+        });
+      }
     }
 
     order.metadata = {

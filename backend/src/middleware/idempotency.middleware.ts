@@ -31,6 +31,16 @@ export const requireIdempotency = async (
     });
 
     if (existing) {
+      if (existing.requestHash !== requestHash) {
+        res.status(409).json({
+          success: false,
+          error: {
+            code: 'IDEMPOTENCY_KEY_CONFLICT',
+            message: 'Idempotency-Key was already used with different request parameters.',
+          },
+        });
+        return;
+      }
       res.setHeader('x-idempotent-replay', 'true');
       res.status(existing.responseStatus).json(existing.responseBody);
       return;

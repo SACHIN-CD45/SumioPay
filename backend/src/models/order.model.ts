@@ -92,7 +92,8 @@ const OrderSchema = new Schema<IOrder>(
 
 // Compound index for instant exactAmount match during Android Notification webhook lookup
 OrderSchema.index({ merchantId: 1, exactAmount: 1, status: 1 });
-OrderSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // optional TTL index
+// Regular non-TTL index for expiry/cleanup queries (NEVER TTL-delete PAID/ledger orders!)
+OrderSchema.index({ expiresAt: 1 });
 
 export const Order = mongoose.model<IOrder>('Order', OrderSchema);
 export default Order;

@@ -110,8 +110,18 @@ export function parseBankNotification(message: string, packageName?: string): Pa
   else if (lowerText.includes('union bank')) detectedApp = 'UNION_BANK';
 
   // Verification whether message is genuinely an incoming credit alert
+  // Reject debits, collect requests, declined/failed/reversed alerts (even if wording also mentions "credited" or "payment of")
   const creditKeywords = ['received', 'credited', 'paid you', 'payment of', 'deposited'];
-  const isCredit = creditKeywords.some((kw) => lowerText.includes(kw));
+  const negativeKeywordsRegex =
+    /\b(debited|withdrawn|spent|deducted|paid\s+to|sent\s+(?:rs\.?|inr|₹)|request(?:ed|ing)?|collect\s+request|declined|failed|reversed|refund\s+initiated)\b/i;
+
+  const isCreditPhrase = creditKeywords.some((kw) => lowerText.includes(kw));
+  const hasNegativeContext = negativeKeywordsRegex.test(lowerText);
+  const explicitIncomingCredit = /\b(?:you\s+received|paid\s+you|has\s+been\s+credited|is\s+credited|credited\s+(?:to|with)\s+(?:your\s+)?(?:a\/c|account|hdfc|icici|sbi|axis|kotak|bank)|received\s+(?:rs\.?|inr|₹))/i.test(
+    lowerText
+  );
+
+  const isCredit = isCreditPhrase && (!hasNegativeContext || explicitIncomingCredit);
 
   return {
     amount,

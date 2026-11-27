@@ -79,4 +79,19 @@ describe('Bank SMS & UPI Push Notification Parser Engine', () => {
     assert.strictEqual(parsedSbi.utr, '432109876543');
     assert.strictEqual(parsedSbi.senderName, 'Vikram Singh');
   });
+
+  it('rejects outgoing debits containing "credited to" and collect requests', () => {
+    const outgoingDebitWithCredited =
+      'Dear UPI user A/C X1234 debited by Rs.500.44 on 27Nov26 transfer to VPA merchant@okaxis credited. Ref 412345678902';
+    const parsedOut = parseBankNotification(outgoingDebitWithCredited, 'bank.sms.SBI');
+    assert.strictEqual(parsedOut.isPaymentAlert, false);
+
+    const paidToAlert = 'You paid Rs.399.12 to Merchant Store via PhonePe. Ref: 498765432111';
+    const parsedPaidTo = parseBankNotification(paidToAlert, 'com.phonepe.app');
+    assert.strictEqual(parsedPaidTo.isPaymentAlert, false);
+
+    const collectRequest = 'Ramesh sent a collect request for payment of Rs.399.44 on Google Pay.';
+    const parsedCollect = parseBankNotification(collectRequest, 'com.google.android.apps.nbu.paisa.user');
+    assert.strictEqual(parsedCollect.isPaymentAlert, false);
+  });
 });

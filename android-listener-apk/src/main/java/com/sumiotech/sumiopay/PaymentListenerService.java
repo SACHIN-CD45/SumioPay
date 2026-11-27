@@ -54,7 +54,7 @@ public class PaymentListenerService extends NotificationListenerService {
         if (sbn == null || sbn.getNotification() == null) return;
 
         String packageName = sbn.getPackageName();
-        if (packageName == null) return;
+        if (packageName == null || packageName.equals(getPackageName())) return;
 
         // Extract Notification Content
         Notification notification = sbn.getNotification();

@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: SumioPay UPI Gateway for WooCommerce
- * Plugin URI: https://sumiopay.com/integrations/woocommerce
- * Description: Zero-fee, instant non-custodial UPI payment orchestration for WooCommerce with automatic real-time bank UTR verification.
- * Version: 2.4.0
- * Author: SumioPay Engineering Team
- * Author URI: https://sumiopay.com
+ * Plugin URI: https://sumiopay.sumiotech.in/guide
+ * Description: Non-custodial direct UPI payment orchestration for WooCommerce with automatic real-time bank UTR verification and Enterprise Bills.
+ * Version: 2.9.0
+ * Author: SumioTech Engineering Team
+ * Author URI: https://sumiopay.sumiotech.in
  * License: MIT
  * Text Domain: sumiopay-woocommerce
  */
@@ -25,27 +25,24 @@ function sumiopay_woocommerce_gateway_init() {
 
         public function __construct() {
             $this->id                 = 'sumiopay';
-            $this->icon               = apply_filters('woocommerce_sumiopay_icon', 'https://sumiopay.com/assets/upi-badge.svg');
+            $this->icon               = apply_filters('woocommerce_sumiopay_icon', 'https://sumiopay.sumiotech.in/sumiopay-icon.png');
             $this->has_fields         = false;
             $this->method_title       = __('SumioPay UPI & Instant QR', 'sumiopay-woocommerce');
-            $this->method_description = __('Accept direct UPI payments (GPay, PhonePe, Paytm, CRED, BHIM) with 0% gateway commission and instant UTR reconciliation.', 'sumiopay-woocommerce');
+            $this->method_description = __('Accept direct UPI payments (GPay, PhonePe, Paytm, CRED, BHIM) settled 100% directly into your bank with instant automated verification.', 'sumiopay-woocommerce');
 
-            // Load settings
             $this->init_form_fields();
             $this->init_settings();
 
-            // Define user setting variables
-            $this->title          = $this->get_option('title', 'Direct UPI (GPay / PhonePe / Paytm / BHIM)');
+            $this->title          = $this->get_option('title', 'UPI (GPay / PhonePe / Paytm / BHIM)');
             $this->description    = $this->get_option('description', 'Scan dynamic QR or pay via any UPI app. Instant automated order confirmation.');
             $this->api_key        = $this->get_option('api_key');
-            $this->project_id     = $this->get_option('project_id');
+            $this->api_secret     = $this->get_option('api_secret');
+            $this->website_name   = $this->get_option('website_name', get_bloginfo('name'));
+            $this->brand_color    = $this->get_option('brand_color', '#4F3DF5');
             $this->webhook_secret = $this->get_option('webhook_secret');
             $this->api_endpoint   = rtrim($this->get_option('api_endpoint', 'https://apipay.sumiotech.in'), '/');
 
-            // Save admin options
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
-
-            // Webhook IPN Listener Hook
             add_action('woocommerce_api_sumiopay_webhook', array($this, 'handle_sumiopay_webhook'));
         }
 
@@ -61,14 +58,14 @@ function sumiopay_woocommerce_gateway_init() {
                     'title'       => __('Title', 'sumiopay-woocommerce'),
                     'type'        => 'text',
                     'description' => __('Payment method title that customer sees at checkout.', 'sumiopay-woocommerce'),
-                    'default'     => __('Direct UPI / Dynamic QR (0% Fee)', 'sumiopay-woocommerce'),
+                    'default'     => __('UPI / QR (GPay, PhonePe, Paytm, BHIM)', 'sumiopay-woocommerce'),
                     'desc_tip'    => true,
                 ),
                 'description' => array(
                     'title'       => __('Description', 'sumiopay-woocommerce'),
                     'type'        => 'textarea',
                     'description' => __('Payment method description that customer sees at checkout.', 'sumiopay-woocommerce'),
-                    'default'     => __('Pay instantly using Google Pay, PhonePe, Paytm, BHIM or any UPI app. Instant auto-verification.', 'sumiopay-woocommerce'),
+                    'default'     => __('Pay instantly using Google Pay, PhonePe, Paytm, BHIM or any UPI app.', 'sumiopay-woocommerce'),
                 ),
                 'api_endpoint' => array(
                     'title'       => __('SumioPay API URL', 'sumiopay-woocommerce'),
@@ -79,26 +76,38 @@ function sumiopay_woocommerce_gateway_init() {
                 'api_key' => array(
                     'title'       => __('SumioPay API Key', 'sumiopay-woocommerce'),
                     'type'        => 'password',
-                    'description' => __('Get this from SumioPay Dashboard > API Keys.', 'sumiopay-woocommerce'),
+                    'description' => __('sp_live_... or sp_test_... key from SumioPay Dashboard > Connect.', 'sumiopay-woocommerce'),
                     'default'     => '',
                 ),
-                'project_id' => array(
-                    'title'       => __('Project ID', 'sumiopay-woocommerce'),
-                    'type'        => 'text',
-                    'description' => __('Project UUID from your SumioPay Merchant Dashboard.', 'sumiopay-woocommerce'),
+                'api_secret' => array(
+                    'title'       => __('SumioPay API Secret', 'sumiopay-woocommerce'),
+                    'type'        => 'password',
+                    'description' => __('sp_sec_... secret from SumioPay Dashboard > Connect (required for webhook overrides & refunds).', 'sumiopay-woocommerce'),
                     'default'     => '',
+                ),
+                'website_name' => array(
+                    'title'       => __('Checkout Brand Name', 'sumiopay-woocommerce'),
+                    'type'        => 'text',
+                    'description' => __('Store name displayed on the hosted checkout page.', 'sumiopay-woocommerce'),
+                    'default'     => get_bloginfo('name'),
+                ),
+                'brand_color' => array(
+                    'title'       => __('Brand Accent Color (Hex)', 'sumiopay-woocommerce'),
+                    'type'        => 'text',
+                    'description' => __('e.g. #4F3DF5', 'sumiopay-woocommerce'),
+                    'default'     => '#4F3DF5',
                 ),
                 'webhook_secret' => array(
                     'title'       => __('Webhook Signing Secret', 'sumiopay-woocommerce'),
                     'type'        => 'password',
-                    'description' => __('Secret used to verify HMAC-SHA256 signature on payment notifications.', 'sumiopay-woocommerce'),
+                    'description' => __('Webhook secret from SumioPay Dashboard > Connect for HMAC-SHA256 verification.', 'sumiopay-woocommerce'),
                     'default'     => '',
                 ),
                 'webhook_url_display' => array(
-                    'title'       => __('Your Webhook URL', 'sumiopay-woocommerce'),
+                    'title'       => __('Your WooCommerce Webhook URL', 'sumiopay-woocommerce'),
                     'type'        => 'title',
                     'description' => sprintf(
-                        __('Copy this URL to your SumioPay Dashboard > Webhooks:<br><code>%s</code>', 'sumiopay-woocommerce'),
+                        __('Paste this URL in SumioPay Dashboard > Webhooks:<br><code>%s</code>', 'sumiopay-woocommerce'),
                         WC()->api_request_url('sumiopay_webhook')
                     ),
                 ),
@@ -107,31 +116,55 @@ function sumiopay_woocommerce_gateway_init() {
 
         public function process_payment($order_id) {
             $order = wc_get_order($order_id);
-
-            // Amount converted to integer minor units (paise)
             $amount_in_paise = (int) round($order->get_total() * 100);
+            $return_url = $this->get_return_url($order);
+
+            $items = array();
+            foreach ($order->get_items() as $item) {
+                $items[] = array(
+                    'label'    => $item->get_name(),
+                    'quantity' => (int) $item->get_quantity(),
+                    'amount'   => (float) $item->get_total(),
+                );
+            }
 
             $payload = array(
-                'amount'          => $amount_in_paise,
-                'projectId'       => $this->project_id,
-                'merchantOrderId' => (string) $order_id,
-                'customerName'    => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-                'customerPhone'   => $order->get_billing_phone(),
-                'customerEmail'   => $order->get_billing_email(),
-                'notes'           => array(
-                    'wc_order_id'    => $order_id,
-                    'customer_email' => $order->get_billing_email(),
+                'amountInPaise'      => $amount_in_paise,
+                'appName'            => 'WOOCOMMERCE',
+                'customerUserId'     => (string) ($order->get_customer_id() ?: ('wc_' . $order_id)),
+                'customerPhone'      => $order->get_billing_phone(),
+                'customerEmail'      => $order->get_billing_email(),
+                'websiteName'        => $this->website_name ?: get_bloginfo('name'),
+                'brandColor'         => $this->brand_color ?: '#4F3DF5',
+                'callbackWebhookUrl' => WC()->api_request_url('sumiopay_webhook'),
+                'billDetails'        => array(
+                    'items'          => $items,
+                    'subtotal'       => (float) $order->get_subtotal() + (float) $order->get_discount_total(),
+                    'discountAmount' => (float) $order->get_discount_total(),
+                    'taxAmount'      => (float) $order->get_total_tax(),
+                    'returnUrl'      => $return_url,
+                ),
+                'metadata'           => array(
+                    'wc_order_id'   => (string) $order_id,
+                    'customerName'  => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
+                    'returnUrl'     => $return_url,
                 ),
             );
 
+            $headers = array(
+                'Content-Type'    => 'application/json',
+                'x-api-key'       => $this->api_key,
+                'Idempotency-Key' => 'wc_' . $order_id . '_' . $amount_in_paise,
+            );
+            if (!empty($this->api_secret)) {
+                $headers['x-api-secret'] = $this->api_secret;
+            }
+
             $response = wp_remote_post($this->api_endpoint . '/api/v1/payments/orders', array(
-                'method'    => 'POST',
-                'timeout'   => 30,
-                'headers'   => array(
-                    'Content-Type'  => 'application/json',
-                    'x-api-key'     => $this->api_key,
-                ),
-                'body'      => json_encode($payload),
+                'method'  => 'POST',
+                'timeout' => 30,
+                'headers' => $headers,
+                'body'    => wp_json_encode($payload),
             ));
 
             if (is_wp_error($response)) {
@@ -142,7 +175,7 @@ function sumiopay_woocommerce_gateway_init() {
             $body = json_decode(wp_remote_retrieve_body($response), true);
 
             if (empty($body['success']) || empty($body['data'])) {
-                $err_msg = isset($body['message']) ? $body['message'] : 'Failed to create payment order.';
+                $err_msg = $body['error']['message'] ?? $body['message'] ?? 'Failed to create payment order.';
                 wc_add_notice(__('Payment Gateway Error: ', 'sumiopay-woocommerce') . $err_msg, 'error');
                 return array('result' => 'fail');
             }
@@ -150,16 +183,13 @@ function sumiopay_woocommerce_gateway_init() {
             $payment_data = $body['data'];
             $sumiopay_order_id = $payment_data['orderId'];
 
-            // Store SumioPay Order ID in WooCommerce order meta
             $order->update_meta_data('_sumiopay_order_id', $sumiopay_order_id);
-            $order->update_meta_data('_sumiopay_allocated_paise', $payment_data['allocatedAmountPaise'] ?? $amount_in_paise);
+            $order->update_meta_data('_sumiopay_exact_paise', $payment_data['exactAmountInPaise'] ?? $amount_in_paise);
             $order->save();
 
-            // Set order to on-hold / pending payment
             $order->update_status('pending', sprintf(__('Awaiting UPI payment confirmation via SumioPay (Order #%s).', 'sumiopay-woocommerce'), $sumiopay_order_id));
 
-            // Return checkout redirect URL
-            $checkout_url = isset($payment_data['paymentUrl']) ? $payment_data['paymentUrl'] : $this->api_endpoint . '/checkout/' . $sumiopay_order_id;
+            $checkout_url = $payment_data['hostedCheckoutUrl'] ?? $payment_data['checkoutUrl'] ?? ('https://sumiopay.sumiotech.in/pay/' . $sumiopay_order_id);
 
             return array(
                 'result'   => 'success',
@@ -170,6 +200,7 @@ function sumiopay_woocommerce_gateway_init() {
         public function handle_sumiopay_webhook() {
             $raw_payload = file_get_contents('php://input');
             $signature   = isset($_SERVER['HTTP_X_SUMIOPAY_SIGNATURE']) ? sanitize_text_field($_SERVER['HTTP_X_SUMIOPAY_SIGNATURE']) : '';
+            $timestamp   = isset($_SERVER['HTTP_X_SUMIOPAY_TIMESTAMP']) ? sanitize_text_field($_SERVER['HTTP_X_SUMIOPAY_TIMESTAMP']) : '';
 
             if (empty($raw_payload)) {
                 status_header(400);
@@ -177,9 +208,15 @@ function sumiopay_woocommerce_gateway_init() {
                 exit;
             }
 
-            // Cryptographic HMAC-SHA256 Verification
+            // Cryptographic HMAC-SHA256 Verification (${timestamp}.${rawBody} with 300s replay window)
             if (!empty($this->webhook_secret)) {
-                $computed = hash_hmac('sha256', $raw_payload, $this->webhook_secret);
+                if (empty($timestamp) || !ctype_digit((string) $timestamp) || abs(time() - (int) $timestamp) > 300) {
+                    status_header(401);
+                    wp_send_json_error(array('message' => 'Expired or missing webhook timestamp'));
+                    exit;
+                }
+                $signed_payload = $timestamp . '.' . $raw_payload;
+                $computed = hash_hmac('sha256', $signed_payload, $this->webhook_secret);
                 if (!hash_equals($computed, $signature)) {
                     status_header(401);
                     wp_send_json_error(array('message' => 'Invalid HMAC-SHA256 signature'));
@@ -188,19 +225,20 @@ function sumiopay_woocommerce_gateway_init() {
             }
 
             $event = json_decode($raw_payload, true);
-            if (empty($event['event']) || empty($event['data'])) {
+            $event_type = $event['type'] ?? $event['event'] ?? '';
+            if (empty($event_type) || empty($event['data'])) {
                 status_header(400);
                 wp_send_json_error(array('message' => 'Malformed webhook format'));
                 exit;
             }
 
-            $event_type = $event['event'];
             $order_info = $event['data'];
-            $wc_order_id = $order_info['merchantOrderId'] ?? null;
+            $meta = isset($order_info['metadata']) && is_array($order_info['metadata']) ? $order_info['metadata'] : array();
+            $wc_order_id = $meta['wc_order_id'] ?? $order_info['merchantOrderId'] ?? null;
 
             if (!$wc_order_id) {
                 status_header(200);
-                wp_send_json_success(array('message' => 'No matching merchantOrderId'));
+                wp_send_json_success(array('message' => 'No matching wc_order_id'));
                 exit;
             }
 
@@ -211,23 +249,19 @@ function sumiopay_woocommerce_gateway_init() {
                 exit;
             }
 
-            if ($event_type === 'payment.paid' || $event_type === 'payment.reconciled') {
-                $utr = $order_info['utr'] ?? 'N/A';
-                $payer_vpa = $order_info['payerVpa'] ?? 'UPI';
+            if ($event_type === 'payment.succeeded' || $event_type === 'payment.paid' || $event_type === 'payment.reconciled') {
+                $utr = $order_info['utrNumber'] ?? $order_info['utr'] ?? 'CONFIRMED';
 
                 if (!$order->is_paid()) {
-                    // Mark as payment complete with Bank UTR reference
                     $order->payment_complete($utr);
                     $order->add_order_note(sprintf(
-                        __('SumioPay Verified Payment: UTR #%s from %s. Order marked as paid automatically.', 'sumiopay-woocommerce'),
-                        $utr,
-                        $payer_vpa
+                        __('SumioPay Verified Payment: UTR #%s. Order marked paid automatically.', 'sumiopay-woocommerce'),
+                        $utr
                     ));
                     $order->update_meta_data('_sumiopay_utr', $utr);
-                    $order->update_meta_data('_sumiopay_payer_vpa', $payer_vpa);
                     $order->save();
                 }
-            } elseif ($event_type === 'payment.expired') {
+            } elseif ($event_type === 'payment.expired' || $event_type === 'payment.cancelled') {
                 if ($order->get_status() === 'pending') {
                     $order->update_status('cancelled', __('SumioPay UPI payment window expired.', 'sumiopay-woocommerce'));
                 }

@@ -1,6 +1,6 @@
 import type { IReconciliationRecord } from '../models/reconciliation.model';
 import { StateMachineService } from './stateMachine.service';
-import { activatePlatformSubscriptionFromOrder } from './subscriptionActivation.service';
+import { finalizePaidOrderSideEffects } from './paymentSettlement.service';
 import crypto from 'crypto';
 
 export interface StatementEntry {
@@ -120,7 +120,7 @@ export class ReconciliationService {
           metadata: { batchId, rawLine: entry.rawStatementLine },
         });
 
-        await activatePlatformSubscriptionFromOrder(pendingMatch).catch(() => {});
+        await finalizePaidOrderSideEffects({ order: pendingMatch }).catch(() => {});
 
         records.push({
           orderId: pendingMatch.orderId,
@@ -162,7 +162,7 @@ export class ReconciliationService {
           metadata: { batchId, settledDelayed: true },
         });
 
-        await activatePlatformSubscriptionFromOrder(expiredMatch).catch(() => {});
+        await finalizePaidOrderSideEffects({ order: expiredMatch }).catch(() => {});
 
         records.push({
           orderId: expiredMatch.orderId,
@@ -255,7 +255,7 @@ export class ReconciliationService {
       metadata: { unmappedPaymentId: unmappedId, resolvedBy: actorEmail },
     });
 
-    await activatePlatformSubscriptionFromOrder(order).catch(() => {});
+    await finalizePaidOrderSideEffects({ order }).catch(() => {});
 
     unmapped.status = 'RESOLVED';
     unmapped.resolvedOrderId = orderId;
