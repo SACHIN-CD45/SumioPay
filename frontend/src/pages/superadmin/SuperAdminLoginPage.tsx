@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../lib/api';
 import { ShieldCheck, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { SeoHead } from '../../components/SeoHead';
 
 export const SuperAdminLoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,6 +33,11 @@ export const SuperAdminLoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center px-4 py-12 relative">
+      <SeoHead
+        title="Restricted Admin Access — SumioPay"
+        description="Restricted administrative portal."
+        noIndex
+      />
       <div className="w-full max-w-sm bg-white border border-amber-200 rounded-3xl p-8 shadow-card relative z-10">
         <div className="text-center mb-6">
           <img src="/sumiopay-icon.png" alt="SumioPay" className="w-12 h-12 rounded-2xl mx-auto shadow-md mb-2 object-contain" />

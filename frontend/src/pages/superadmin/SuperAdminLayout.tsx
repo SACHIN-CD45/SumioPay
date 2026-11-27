@@ -17,6 +17,7 @@ import {
   X,
   ShieldCheck,
 } from 'lucide-react';
+import { SeoHead } from '../../components/SeoHead';
 
 const navItems = [
   { to: '/superadmin/overview', label: 'Overview', icon: LayoutDashboard },
@@ -123,6 +124,11 @@ export const SuperAdminLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+      <SeoHead
+        title="Restricted Admin Console — SumioPay"
+        description="Restricted administrative console."
+        noIndex
+      />
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:w-64 md:flex-col shrink-0 md:sticky md:top-0 md:h-screen">
         {SidebarContent}

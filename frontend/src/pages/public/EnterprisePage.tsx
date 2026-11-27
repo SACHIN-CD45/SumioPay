@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, ShieldCheck, Zap, Phone, Mail, CheckCircle2, ArrowRight } from 'lucide-react';
+import { SeoHead } from '../../components/SeoHead';
 
 export const EnterprisePage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,6 +22,24 @@ export const EnterprisePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+      <SeoHead
+        title="SumioPay Enterprise — High-Volume Self-Hosted Multi-UPI Infrastructure India"
+        description="Self-hosted and cloud Direct UPI payment orchestration for high-volume Indian businesses, ERPs, fintech apps, and multi-branch stores. Multi-UPI failover, unlimited orders, 0% commission."
+        keywords="enterprise UPI gateway India, self hosted multi UPI failover, high volume UPI API, 0% MDR enterprise payment gateway"
+        canonicalPath="/enterprise"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'Service',
+          name: 'SumioPay Enterprise Direct UPI Automation',
+          provider: {
+            '@type': 'Organization',
+            name: 'SumioTech',
+            url: 'https://sumiopay.sumiotech.in/',
+          },
+          areaServed: 'IN',
+          serviceType: 'Non-Custodial Direct UPI Payment Orchestration Software',
+        }}
+      />
       <header className="border-b border-slate-100 sticky top-0 z-40 bg-white/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div

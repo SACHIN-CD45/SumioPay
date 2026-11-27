@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { SeoHead } from './components/SeoHead';
 import { LandingPage } from './pages/public/LandingPage';
 import { PricingPage } from './pages/public/PricingPage';
 import { PrivacyPolicyPage } from './pages/public/PrivacyPolicyPage';
@@ -163,6 +164,11 @@ const MerchantLayout: React.FC = () => {
           isSubscriptionExpired={isSubscriptionExpired}
         />
         <main className="flex-1 overflow-y-auto bg-slate-50/60">
+          <SeoHead
+            title="Merchant Console — SumioPay"
+            description="Protected merchant workspace."
+            noIndex
+          />
           {mustRedirectToBilling ? <Navigate to="/billing?expired=true" replace /> : <Outlet />}
         </main>
       </div>
@@ -176,7 +182,16 @@ const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) 
   if (!token) {
     return <Navigate to="/superadmin/login" replace />;
   }
-  return <>{children}</>;
+  return (
+    <>
+      <SeoHead
+        title="Restricted Admin Console — SumioPay"
+        description="Restricted administrative console."
+        noIndex
+      />
+      {children}
+    </>
+  );
 };
 
 export const App: React.FC = () => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ArrowRight, Sparkles } from 'lucide-react';
 import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
+import { SeoHead } from '../../components/SeoHead';
 import { publicApi } from '../../lib/api';
 
 export const PricingPage: React.FC = () => {
@@ -117,6 +118,54 @@ export const PricingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+      <SeoHead
+        title="SumioPay Pricing — Self-Hosted 0% Fee Direct UPI Payment Software Plans"
+        description={`Transparent SaaS licensing for SumioPay self-hosted & cloud non-custodial UPI payment automation. Start with a ${trialDays}-day free trial, then ₹${monthlyPrice}/month or ₹${halfYearlyPrice}/6-months. Keep 100% of every customer payment directly in your bank account.`}
+        keywords="sumiopay pricing, self hosted upi gateway pricing, 0 percent transaction fee upi software, upi payment automation subscription, direct bank upi gateway cost"
+        canonicalPath="/pricing"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'OfferCatalog',
+          name: 'SumioPay Self-Hosted & Cloud Licensing Plans',
+          description:
+            'Zero-commission non-custodial direct UPI payment automation subscription tiers by SumioTech.',
+          url: 'https://sumiopay.sumiotech.in/pricing',
+          itemListElement: [
+            {
+              '@type': 'Offer',
+              name: `Free Evaluation Trial (${trialDays} Days)`,
+              price: '0',
+              priceCurrency: 'INR',
+              description: `${trialDays}-day unrestricted trial with Android Listener APK, WooCommerce plugin, and real-time HMAC webhooks.`,
+              url: 'https://sumiopay.sumiotech.in/pricing',
+            },
+            {
+              '@type': 'Offer',
+              name: `Pro Growth (${monthlyDurationDays} Days)`,
+              price: String(monthlyPrice),
+              priceCurrency: 'INR',
+              description: 'Production self-hosted & cloud UPI checkout, custom merchant branding, invoices, and WooCommerce sync.',
+              url: 'https://sumiopay.sumiotech.in/pricing',
+            },
+            {
+              '@type': 'Offer',
+              name: `Business Scale (${halfYearlyDurationDays} Days)`,
+              price: String(halfYearlyPrice),
+              priceCurrency: 'INR',
+              description: 'Long-term discounted 6-month merchant license for growing storefronts and SaaS platforms.',
+              url: 'https://sumiopay.sumiotech.in/pricing',
+            },
+            {
+              '@type': 'Offer',
+              name: 'Enterprise Dedicated & Self-Hosted',
+              price: String(customPrice),
+              priceCurrency: 'INR',
+              description: 'Dedicated self-hosted VPS node deployment, priority SLA, and white-label onboarding.',
+              url: 'https://sumiopay.sumiotech.in/enterprise',
+            },
+          ],
+        }}
+      />
       {/* Header */}
       <header className="border-b border-slate-100 sticky top-0 z-40 bg-white/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">

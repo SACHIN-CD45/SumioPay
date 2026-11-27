@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SeoHead } from '../../components/SeoHead';
 import {
   ArrowLeft,
   ArrowRight,
@@ -409,6 +410,46 @@ async def sumiopay_webhook(request: Request):
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      <SeoHead
+        title="SumioPay Developer Integration Guide — Self-Hosted UPI API, Drop-In JS, React & WooCommerce"
+        description="Step-by-step developer guide to integrate SumioPay self-hosted Direct UPI gateway in Node.js, Next.js, PHP/Laravel, Python, React checkout modal, or WooCommerce with HMAC-SHA256 webhooks."
+        keywords="UPI payment gateway integration Node.js, self hosted UPI API docs, WooCommerce UPI gateway plugin, HMAC SHA256 webhook verification UPI, SumioPay developer guide"
+        canonicalPath="/guide"
+        ogType="article"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'HowTo',
+          name: 'How to Integrate SumioPay Direct UPI Payment Automation into Your Website or SaaS',
+          description:
+            'Create server-locked UPI payment orders via REST API, launch the drop-in checkout modal or hosted payment link, and verify HMAC-SHA256 payment.succeeded webhooks.',
+          step: [
+            {
+              '@type': 'HowToStep',
+              position: 1,
+              name: 'Configure Bank UPI & Pair Android Listener',
+              text: 'Set your bank UPI VPA under Profile, install SumioPayListener APK, and pair via QR token.',
+            },
+            {
+              '@type': 'HowToStep',
+              position: 2,
+              name: 'Create Authoritative Payment Order on Backend',
+              text: 'POST to /api/v1/payments/orders with x-api-key, x-api-secret, Idempotency-Key, and amountInPaise.',
+            },
+            {
+              '@type': 'HowToStep',
+              position: 3,
+              name: 'Render Checkout Modal or Hosted Payment Page',
+              text: 'Load checkout.js and call SumioPay.checkout({ orderId }) or redirect buyers to hostedCheckoutUrl.',
+            },
+            {
+              '@type': 'HowToStep',
+              position: 4,
+              name: 'Verify Timestamped HMAC-SHA256 Webhook',
+              text: 'Validate x-sumiopay-signature over "${x-sumiopay-timestamp}.${rawBody}" with timingSafeEqual before fulfilling orders.',
+            },
+          ],
+        }}
+      />
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">

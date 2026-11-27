@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { publicApi, api } from '../../lib/api';
 import { SumioCheckoutCard, CheckoutOrderPayload } from '../../components/checkout/SumioCheckoutCard';
+import { SeoHead } from '../../components/SeoHead';
 
 export const HostedPaymentPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -99,50 +100,51 @@ export const HostedPaymentPage: React.FC = () => {
   const seconds = timeLeft % 60;
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" />
-          <p className="text-slate-600 text-xs font-semibold">Preparing Secure Checkout...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !order) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 shadow-xl text-center space-y-4">
-          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
-          <h2 className="text-xl font-bold text-slate-900">Payment Link Unavailable</h2>
-          <p className="text-xs text-slate-500">{error || 'This order could not be located.'}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition"
-          >
-            Go to SumioPay Home
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-indigo-50/40 to-slate-200/70 flex flex-col justify-center py-8 px-3 sm:px-6">
-      <SumioCheckoutCard
-        order={order}
-        planName={order.metadata?.planName || order.appName}
-        timeFormatted={formattedTime}
-        onSimulatePayment={handleSimulatePayment}
-        simulating={simulating}
+    <>
+      <SeoHead
+        title="Secure UPI Checkout — SumioPay"
+        description="Encrypted direct UPI checkout session."
+        noIndex
       />
+      {loading ? (
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+          <div className="text-center space-y-3">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" />
+            <p className="text-slate-600 text-xs font-semibold">Preparing Secure Checkout...</p>
+          </div>
+        </div>
+      ) : error || !order ? (
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 shadow-xl text-center space-y-4">
+            <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
+            <h2 className="text-xl font-bold text-slate-900">Payment Link Unavailable</h2>
+            <p className="text-xs text-slate-500">{error || 'This order could not be located.'}</p>
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition"
+            >
+              Go to SumioPay Home
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-screen bg-gradient-to-br from-slate-100 via-indigo-50/40 to-slate-200/70 flex flex-col justify-center py-8 px-3 sm:px-6">
+          <SumioCheckoutCard
+            order={order}
+            planName={order.metadata?.planName || order.appName}
+            timeFormatted={formattedTime}
+            onSimulatePayment={handleSimulatePayment}
+            simulating={simulating}
+          />
 
-      <div className="text-center text-[11px] text-slate-400 mt-5">
-        &copy; {new Date().getFullYear()} SumioTech &bull; Secured by SumioPay
-      </div>
-    </div>
+          <div className="text-center text-[11px] text-slate-400 mt-5">
+            &copy; {new Date().getFullYear()} SumioTech &bull; Secured by SumioPay
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

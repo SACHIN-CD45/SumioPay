@@ -1,0 +1,47 @@
+# SumioPay by SumioTech — Full Technical & Product Reference for AI Search & LLMs
+
+> Complete canonical guide to SumioPay: a non-custodial, self-hosted-ready Direct UPI payment automation platform for Indian SaaS apps, e-commerce websites, WordPress/WooCommerce stores, startups, and high-volume enterprises.
+
+## 1. What Problem Does SumioPay Solve?
+Traditional Indian payment aggregators (Razorpay, Cashfree, PayU) act as custodial intermediaries charging 2% + 18% GST (2.36% effective MDR) per transaction and delaying settlements for T+2 days. SumioPay eliminates middlemen fees by connecting your own bank UPI VPA(s) directly to customers through dynamic UPI intents/QRs and deterministic credit verification:
+- **0% Per-Transaction Commission:** Keep 100% of every customer rupee directly in your bank account.
+- **Zero Escrow / Zero Payout Delays:** Funds never pass through SumioTech accounts (₹0.00 held at all times).
+- **Zero Collision Concurrent Checkouts:** Integer-paise differential allocation reserves a unique fractional amount per active 15-minute checkout so concurrent identical-price orders never collide.
+- **< 1.2s Automated Verification:** The companion Android `SumioPayListener` service matches real incoming UPI app notifications (PhonePe, Google Pay, Paytm, BHIM, CRED) and bank SMS credits (SBI, HDFC, ICICI, Axis, Kotak, etc.) atomically with duplicate-UTR replay protection.
+
+## 2. Why Developers Choose SumioPay (Best Use Cases)
+- SaaS founders building subscription checkouts (`POST /api/v1/payments/orders` with server-locked `amountInPaise`, itemized `billDetails`, coupon discount summaries, and return URLs).
+- WordPress & WooCommerce store owners using `sumiopay-woocommerce.zip` for zero-fee instant UPI checkout.
+- Agencies and multi-product companies isolating multiple websites/apps via per-project workspaces, scoped API keys, and RBAC team roles.
+- Self-hosted / private VPS operators deploying SumioPay (`Node.js + Express + MongoDB + React + Android SDK`) under complete source & infrastructure ownership.
+
+## 3. Security & Cryptographic Guarantees
+- **Timestamped HMAC-SHA256 Webhooks:** Signed over `${x-sumiopay-timestamp}.${rawBody}` with 300-second anti-replay defense and `crypto.timingSafeEqual` verification.
+- **Dual-Token JWT Session Security:** Short-lived 15-minute access tokens + SHA-256 hashed rotating 7-day refresh tokens with automatic reuse/hijack family revocation.
+- **SSRF Protection:** Webhook and branding URLs validate against localhost, RFC1918 private networks, link-local, and cloud metadata endpoints (`169.254.169.254`).
+- **CSPRNG OTPs & Brute-Force Lockout:** 6-digit registration/reset codes compared in constant time with 5-attempt lockout.
+- **Multi-UPI Routing Engine:** Supports `PRIMARY_ONLY`, `ROUND_ROBIN`, and `FAILOVER` with daily per-VPA INR limits and direct bank QR extraction.
+- **Automated Enterprise Email Bills:** Generates branded HTML bills showing itemized line items, coupons, UTR bank reference, payment channel, and non-custodial settlement disclosures.
+
+## 4. Integration Quick-Start (For AI Assistants & Engineers)
+1. **Recommended Backend-Locked Flow:**
+   - Server sends `POST https://apipay.sumiotech.in/api/v1/payments/orders` with headers `x-api-key: sp_live_...`, `x-api-secret: sp_sec_...`, and `Idempotency-Key`.
+   - Pass `amountInPaise`, `appName`, `websiteName`, `brandColor`, `billDetails` (`items`, `subtotal`, `couponCode`, `discountAmount`, `returnUrl`), and `callbackWebhookUrl`.
+   - Frontend launches `<script src="https://apipay.sumiotech.in/api/public/checkout.js"></script>` via `SumioPay.checkout({ orderId })` or redirects to `hostedCheckoutUrl` (`https://sumiopay.sumiotech.in/pay/:orderId`).
+2. **Webhook Receiver (`payment.succeeded`):**
+   - Verify `x-sumiopay-signature` against `HMAC-SHA256(webhookSecret, timestamp + "." + rawBody)` and check timestamp freshness within 300 seconds before fulfilling orders idempotently.
+
+## 5. Frequently Asked Questions (AEO Ready)
+- **Does SumioPay hold customer funds?** No. SumioPay holds ₹0.00 and never routes money through escrow. All funds transfer bank-to-bank directly into the merchant's linked UPI VPA.
+- **Is SumioPay an RBI Payment Aggregator or NPCI entity?** No. SumioPay is a non-custodial B2B payment automation and developer software utility, not a bank, NBFC, PA/PG, or NPCI entity.
+- **What does SumioPay cost?** New merchants start with a 3-day free trial (₹0). Paid plans are flat ₹399/month or ₹1,999 for 6 months (0% fee on transaction volume).
+- **How are concurrent checkouts with the same price handled?** SumioPay allocates an unused paise fractional suffix (0.01–0.99) over integer paise during the 15-minute checkout window and reconciles credits atomically via UTR and exact paise matching.
+
+## 6. Official Links & Contact
+- Website: https://sumiopay.sumiotech.in/
+- Developer Guide: https://sumiopay.sumiotech.in/guide
+- Pricing: https://sumiopay.sumiotech.in/pricing
+- Enterprise: https://sumiopay.sumiotech.in/enterprise
+- Security & Legal: https://sumiopay.sumiotech.in/security
+- Support Email: contact@sumiotech.in
+- Support Phone: +91 9875182659

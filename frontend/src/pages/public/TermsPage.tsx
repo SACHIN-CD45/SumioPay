@@ -1,12 +1,18 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldAlert } from 'lucide-react';
+import { SeoHead } from '../../components/SeoHead';
 
 export const TermsPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+      <SeoHead
+        title="Terms of Service & Non-Custodial Software Agreement — SumioPay"
+        description="Official Terms of Service defining SumioPay's B2B non-custodial Direct UPI automation software role with ₹0.00 fund custody and direct merchant bank settlement."
+        canonicalPath="/terms"
+      />
       <header className="border-b border-slate-100 sticky top-0 z-40 bg-white/90 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <button

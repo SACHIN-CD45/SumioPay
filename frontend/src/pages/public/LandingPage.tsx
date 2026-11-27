@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { UpiCheckoutModal } from '../../sdk/UpiCheckoutModal';
 import { AuthModal } from '../../components/auth/AuthModal';
+import { SeoHead } from '../../components/SeoHead';
 import { publicApi } from '../../lib/api';
 
 export const LandingPage: React.FC = () => {
@@ -182,8 +183,59 @@ export const LandingPage: React.FC = () => {
     },
   ];
 
+  const homeStructuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'SoftwareApplication',
+        name: 'SumioPay Self-Hosted Direct UPI Payment Gateway',
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Web, Linux VPS, Android, Node.js, React, WordPress WooCommerce',
+        url: 'https://sumiopay.sumiotech.in/',
+        description:
+          'Non-custodial, self-hosted and cloud Direct UPI payment orchestration platform in India with 0% transaction fees, unique paise differential matching, Android notification listener verification, and HMAC-SHA256 webhooks.',
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'INR',
+          lowPrice: '0',
+          highPrice: String(halfYearlyPrice),
+          offerCount: '3',
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: 'SumioTech',
+          email: 'contact@sumiotech.in',
+          url: 'https://sumiopay.sumiotech.in/',
+        },
+      },
+      {
+        '@type': 'FAQPage',
+        mainEntity: faqs.map((item) => ({
+          '@type': 'Question',
+          name: item.q,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: item.a,
+          },
+        })),
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900 font-sans antialiased">
+      <SeoHead
+        title={
+          isLoginRoute
+            ? 'Merchant Sign In & Onboarding — SumioPay Self-Hosted UPI Gateway'
+            : 'SumioPay — Self-Hosted 0% Fee Direct UPI Payment Gateway SaaS India'
+        }
+        description="Accept direct bank-to-bank UPI QR and intent payments straight to your account with 0% commission, automated UTR verification, WooCommerce & SaaS REST APIs, and flat ₹399/mo plans."
+        keywords="self hosted UPI payment gateway India, 0 percent fee UPI gateway, SumioPay, direct UPI QR verification API, SaaS UPI payment automation, WooCommerce UPI gateway zero fee, non custodial UPI software"
+        canonicalPath={isLoginRoute ? undefined : '/'}
+        noIndex={isLoginRoute}
+        structuredData={isLoginRoute ? undefined : homeStructuredData}
+      />
       {/* Maintenance Notice Banner (Controlled by SuperAdmin) */}
       {platformConfig.maintenanceMode && (
         <div className="bg-amber-500 text-slate-950 text-xs py-2 px-4 text-center font-bold flex items-center justify-center gap-2">

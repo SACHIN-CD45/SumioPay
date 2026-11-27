@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SeoHead } from '../../components/SeoHead';
 import {
   ArrowLeft,
   ShieldAlert,
@@ -20,6 +21,12 @@ export const SecurityCompliancePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+      <SeoHead
+        title="Security Architecture & Non-Custodial Legal Disclaimer (₹0 Held) — SumioPay"
+        description="Verified security controls (HMAC-SHA256 webhooks, SSRF defense, dual-token JWT rotation, constant-time CSPRNG OTPs) and strict ₹0.00 non-custodial software disclosure for SumioPay by SumioTech."
+        keywords="non custodial UPI gateway security, zero escrow UPI software India, HMAC SHA256 payment webhook security, SumioPay legal disclaimer"
+        canonicalPath="/security"
+      />
       <header className="border-b border-slate-100 sticky top-0 z-40 bg-white/95 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <button

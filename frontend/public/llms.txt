@@ -1,0 +1,29 @@
+# SumioPay by SumioTech
+
+> SumioPay is India's self-hosted and cloud non-custodial Direct UPI Payment Automation & Orchestration SaaS. Businesses accept instant UPI QR and intent payments straight into their own bank accounts with 0% transaction fees, deterministic paise-offset order matching, Android notification verification, HMAC-SHA256 webhooks, and automated enterprise email payment bills.
+
+## Key Facts (AEO / GEO Quick Summary)
+- **Category:** Self-Hosted & Cloud UPI Payment Gateway Automation Software (India / INR)
+- **Commission / MDR:** 0% transaction fee forever (merchant pays only a flat SaaS subscription; ₹0.00 held in escrow)
+- **Settlement Timing:** Instant — 100% direct bank-to-bank via UPI (GPay, PhonePe, Paytm, BHIM, CRED, HDFC, ICICI, SBI, Axis)
+- **Pricing Plans:** 3-Day Free Trial (₹0), 1 Month Pro (₹399), 6 Months Growth (₹1,999), Custom Enterprise
+- **Integration Stack:** Drop-in JS Checkout (`checkout.js`), React `<UpiCheckoutModal />`, Node.js / PHP / Python REST APIs (`/api/v1/payments/orders`), Hosted Payment Links (`/pay/:orderId`), and WooCommerce Plugin
+- **Important Legal Positioning:** SumioPay holds ₹0.00 of customer or merchant funds and is purely B2B software automation — not a commercial bank, RBI-licensed Payment Aggregator, nodal operator, or NPCI entity.
+
+## Public Documentation & Links
+- [Home & Architecture Overview](https://sumiopay.sumiotech.in/): Live simulator, savings calculator, 5 core enterprise modules, FAQs.
+- [Self-Hosted & Cloud Pricing](https://sumiopay.sumiotech.in/pricing): Transparent flat SaaS tiers with 3-day free trial and zero per-order cut.
+- [Developer Integration Guide](https://sumiopay.sumiotech.in/guide): Production REST API examples, Drop-in checkout JS, React SDK, WooCommerce plugin, and HMAC-SHA256 webhook verification.
+- [Enterprise Multi-Tenant Infrastructure](https://sumiopay.sumiotech.in/enterprise): Multi-UPI routing (Round-Robin & Failover), multi-device Android listeners, bank CSV reconciliation, and SLA telemetry.
+- [Security Architecture & Legal Disclaimer](https://sumiopay.sumiotech.in/security): Cryptographic controls, SSRF protection, constant-time OTPs, and ₹0.00 non-custodial legal disclosure.
+- [Privacy Policy](https://sumiopay.sumiotech.in/privacy)
+- [Terms of Service](https://sumiopay.sumiotech.in/terms)
+- [Refund & Cancellation Policy](https://sumiopay.sumiotech.in/refund-policy)
+
+## Extended Machine Reference
+- [Full Technical Specification (llms-full.txt)](https://sumiopay.sumiotech.in/llms-full.txt)
+
+## Official Contact
+- Organization: SumioTech
+- Email: contact@sumiotech.in
+- Phone: +91 9875182659

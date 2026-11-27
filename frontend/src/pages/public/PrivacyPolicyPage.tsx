@@ -1,12 +1,18 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { SeoHead } from '../../components/SeoHead';
 
 export const PrivacyPolicyPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+      <SeoHead
+        title="Privacy Policy & Zero Card Storage Disclosure — SumioPay by SumioTech"
+        description="SumioPay collects zero debit/credit card numbers, CVVs, or UPI PINs and holds ₹0.00 of customer funds. Review our data minimization privacy disclosure."
+        canonicalPath="/privacy"
+      />
       <header className="border-b border-slate-100 sticky top-0 z-40 bg-white/90 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <button

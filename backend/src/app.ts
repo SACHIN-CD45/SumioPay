@@ -62,6 +62,40 @@ export const createApp = (): express.Application => {
     next();
   });
 
+  const NOINDEX_PREFIXES = [
+    '/api',
+    '/health',
+    '/superadmin',
+    '/pay',
+    '/login',
+    '/dashboard',
+    '/orders',
+    '/devices',
+    '/connect',
+    '/reconciliation',
+    '/projects',
+    '/team',
+    '/billing',
+    '/profile',
+    '/refunds',
+    '/reports',
+    '/webhooks',
+    '/simulator',
+    '/docs',
+    '/disclaimer',
+  ];
+
+  const isNoIndexPath = (reqPath: string): boolean =>
+    NOINDEX_PREFIXES.some((prefix) => reqPath === prefix || reqPath.startsWith(`${prefix}/`));
+
+  // Enforce X-Robots-Tag on private/admin/checkout/API paths before API, static & SPA routes
+  app.use((req, res, next) => {
+    if (isNoIndexPath(req.path)) {
+      res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
+    }
+    next();
+  });
+
   // API Rate Limiting to prevent DDoS and brute-force
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -169,6 +203,16 @@ export const createApp = (): express.Application => {
     app.get('*', (req, res, next) => {
       if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
         return next();
+      }
+      // Never serve SPA index.html for crawler/verification assets if missing on disk
+      if (
+        req.path === '/robots.txt' ||
+        req.path === '/sitemap.xml' ||
+        req.path === '/llms.txt' ||
+        req.path === '/llms-full.txt' ||
+        /^\/google[a-z0-9]+\.html$/i.test(req.path)
+      ) {
+        return res.status(404).type('text/plain').send('Not Found');
       }
       res.sendFile(path.join(distPath, 'index.html'));
     });
