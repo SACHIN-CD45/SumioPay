@@ -36,6 +36,20 @@ interface UpiAccount {
   totalTransactions: number;
 }
 
+interface BankAccount {
+  id: string;
+  accountHolderName: string;
+  bankName: string;
+  branchName?: string;
+  accountNumber: string;
+  maskedAccountNumber?: string;
+  accountNumberLast4: string;
+  ifscCode: string;
+  accountType: 'CURRENT' | 'SAVINGS';
+  upiBridgeVpa?: string;
+  isPrimary: boolean;
+}
+
 export const ProfilePage: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -76,6 +90,21 @@ export const ProfilePage: React.FC = () => {
 
   // QR Standee / Counter Preview Modal
   const [previewQrAccount, setPreviewQrAccount] = useState<UpiAccount | null>(null);
+
+  // Add Bank Settlement Account Modal State
+  const [bankModalOpen, setBankModalOpen] = useState(false);
+  const [bankHolderName, setBankHolderName] = useState('');
+  const [bankAccNumber, setBankAccNumber] = useState('');
+  const [bankAccConfirm, setBankAccConfirm] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
+  const [bankNameInput, setBankNameInput] = useState('');
+  const [bankBranchInput, setBankBranchInput] = useState('');
+  const [bankAccountType, setBankAccountType] = useState<'CURRENT' | 'SAVINGS'>('CURRENT');
+  const [bankMakePrimary, setBankMakePrimary] = useState(true);
+  const [bankAlsoIfscUpi, setBankAlsoIfscUpi] = useState(false);
+  const [savingBank, setSavingBank] = useState(false);
+  const [bankFormError, setBankFormError] = useState('');
+  const [revealedBankIds, setRevealedBankIds] = useState<Record<string, boolean>>({});
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -300,6 +329,83 @@ export const ProfilePage: React.FC = () => {
   };
 
   const upiAccounts: UpiAccount[] = profile?.upiAccounts || [];
+  const bankAccounts: BankAccount[] = profile?.bankAccounts || [];
+
+  const handleAddBankAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBankFormError('');
+    const cleanAcc = bankAccNumber.replace(/[\s-]+/g, '').trim();
+    const cleanConfirm = bankAccConfirm.replace(/[\s-]+/g, '').trim();
+    const cleanIfsc = bankIfsc.toUpperCase().replace(/\s+/g, '').trim();
+
+    if (!/^\d{8,20}$/.test(cleanAcc)) {
+      setBankFormError('Bank account number must be 8 to 20 digits.');
+      return;
+    }
+    if (cleanAcc !== cleanConfirm) {
+      setBankFormError('Account number and Confirm Account Number do not match.');
+      return;
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
+      setBankFormError('Invalid 11-character IFSC code (example: HDFC0001234).');
+      return;
+    }
+
+    try {
+      setSavingBank(true);
+      const res = await api.post('/merchant/bank-accounts', {
+        accountHolderName: bankHolderName.trim() || ownerName || businessName,
+        accountNumber: cleanAcc,
+        confirmAccountNumber: cleanConfirm,
+        ifscCode: cleanIfsc,
+        bankName: bankNameInput.trim(),
+        branchName: bankBranchInput.trim(),
+        accountType: bankAccountType,
+        makePrimary: bankMakePrimary,
+        alsoAddAsIfscUpi: bankAlsoIfscUpi,
+      });
+      if (res.data.success) {
+        setBankModalOpen(false);
+        setBankHolderName('');
+        setBankAccNumber('');
+        setBankAccConfirm('');
+        setBankIfsc('');
+        setBankNameInput('');
+        setBankBranchInput('');
+        setStatusBanner({ type: 'success', text: res.data.message || 'Bank account saved!' });
+        await fetchProfile();
+      }
+    } catch (err: any) {
+      setBankFormError(err?.response?.data?.message || 'Could not add bank account.');
+    } finally {
+      setSavingBank(false);
+    }
+  };
+
+  const handleSetPrimaryBank = async (bankId: string) => {
+    try {
+      const res = await api.patch(`/merchant/bank-accounts/${bankId}`, { isPrimary: true });
+      if (res.data.success) {
+        setStatusBanner({ type: 'success', text: res.data.message });
+        await fetchProfile();
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Could not update primary bank account');
+    }
+  };
+
+  const handleDeleteBank = async (b: BankAccount) => {
+    if (!confirm(`Remove bank account ${b.bankName} (••${b.accountNumberLast4})?`)) return;
+    try {
+      const res = await api.delete(`/merchant/bank-accounts/${b.id}`);
+      if (res.data.success) {
+        setStatusBanner({ type: 'success', text: `Removed ${b.bankName} ••${b.accountNumberLast4}` });
+        await fetchProfile();
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Could not delete bank account');
+    }
+  };
 
   if (loading && !profile) {
     return (
@@ -793,6 +899,122 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
+      {/* Settlement Bank Accounts (Account Number + IFSC) */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-indigo-600" />
+              <span>Bank Settlement Accounts (Account Number &amp; IFSC)</span>
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Store your official Business Current/Savings Account Number &amp; IFSC code, and optionally enable NPCI IFSC-UPI direct settlement bridge.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setBankFormError('');
+              setBankHolderName(businessName || ownerName || '');
+              setBankModalOpen(true);
+            }}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 self-start transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Bank Account</span>
+          </button>
+        </div>
+
+        {bankAccounts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            {bankAccounts.map((bank) => {
+              const showFullAcc = Boolean(revealedBankIds[bank.id]);
+              return (
+                <div
+                  key={bank.id}
+                  className={`p-4 rounded-2xl border space-y-3 ${
+                    bank.isPrimary
+                      ? 'border-indigo-500 bg-indigo-50/30 ring-2 ring-indigo-500/10'
+                      : 'border-slate-200 bg-slate-50/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-extrabold text-slate-900 text-sm">{bank.bankName}</div>
+                      <div className="text-[11px] text-slate-500">{bank.accountHolderName}</div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white border border-slate-200 text-slate-700">
+                      {bank.accountType}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 font-mono space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-400">ACCOUNT NO</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRevealedBankIds((prev) => ({ ...prev, [bank.id]: !prev[bank.id] }))
+                        }
+                        className="text-[10px] text-indigo-600 font-sans font-bold underline"
+                      >
+                        {showFullAcc ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                    <div className="font-bold text-slate-900 text-xs">
+                      {showFullAcc ? bank.accountNumber : bank.maskedAccountNumber || `••••••${bank.accountNumberLast4}`}
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
+                      <span className="text-slate-500">IFSC:</span>
+                      <span className="font-bold text-slate-800">{bank.ifscCode}</span>
+                    </div>
+                  </div>
+
+                  {bank.upiBridgeVpa && (
+                    <div className="text-[10px] text-slate-500 font-mono break-all">
+                      IFSC UPI Bridge: {bank.upiBridgeVpa}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1">
+                    {bank.isPrimary ? (
+                      <span className="text-[11px] font-bold text-indigo-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Primary Bank
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleSetPrimaryBank(bank.id)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-bold text-[10px] hover:bg-slate-800"
+                      >
+                        Set Primary
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteBank(bank)}
+                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
+                      title="Remove Bank Account"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 text-center space-y-2 text-xs">
+            <p className="font-semibold text-slate-700">No settlement Bank Account Number added yet.</p>
+            <p className="text-[11px] text-slate-500">
+              Add your Business Bank Account Number &amp; IFSC for reconciliation, KYC alignment, and optional IFSC-UPI routing.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Saved UPI Accounts Grid */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -1108,6 +1330,191 @@ export const ProfilePage: React.FC = () => {
               <span>Download Counter QR (.svg)</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Add Bank Account Modal (Account Number & IFSC) */}
+      {bankModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+          <form
+            onSubmit={handleAddBankAccount}
+            aria-labelledby="add-bank-heading"
+            className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 space-y-4 text-xs max-h-[92vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 id="add-bank-heading" className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-indigo-600" />
+                <span>Add Settlement Bank Account</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setBankModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                aria-label="Close bank modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {bankFormError && (
+              <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-semibold">
+                {bankFormError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="bk-holder" className="text-slate-700 font-bold block mb-1">
+                  Account Holder Name <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="bk-holder"
+                  type="text"
+                  required
+                  value={bankHolderName}
+                  onChange={(e) => setBankHolderName(e.target.value)}
+                  placeholder="Business / Proprietor Name"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="bk-type" className="text-slate-700 font-bold block mb-1">
+                  Account Type
+                </label>
+                <select
+                  id="bk-type"
+                  value={bankAccountType}
+                  onChange={(e) => setBankAccountType(e.target.value as 'CURRENT' | 'SAVINGS')}
+                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                >
+                  <option value="CURRENT">Current Account</option>
+                  <option value="SAVINGS">Savings Account</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="bk-num" className="text-slate-700 font-bold block mb-1">
+                  Bank Account Number <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="bk-num"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  required
+                  value={bankAccNumber}
+                  onChange={(e) => setBankAccNumber(e.target.value)}
+                  placeholder="8 to 20 digits"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="bk-confirm" className="text-slate-700 font-bold block mb-1">
+                  Confirm Account Number <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="bk-confirm"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  required
+                  value={bankAccConfirm}
+                  onChange={(e) => setBankAccConfirm(e.target.value)}
+                  placeholder="Re-enter account number"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="bk-ifsc" className="text-slate-700 font-bold block mb-1">
+                  IFSC Code (11 Chars) <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="bk-ifsc"
+                  type="text"
+                  required
+                  maxLength={11}
+                  value={bankIfsc}
+                  onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                  placeholder="HDFC0001234"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono uppercase text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="bk-bank" className="text-slate-700 font-bold block mb-1">
+                  Bank Name (Auto-detected if blank)
+                </label>
+                <input
+                  id="bk-bank"
+                  type="text"
+                  value={bankNameInput}
+                  onChange={(e) => setBankNameInput(e.target.value)}
+                  placeholder="e.g. HDFC Bank"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="bk-branch" className="text-slate-700 font-bold block mb-1">
+                Branch Name (Optional)
+              </label>
+              <input
+                id="bk-branch"
+                type="text"
+                value={bankBranchInput}
+                onChange={(e) => setBankBranchInput(e.target.value)}
+                placeholder="e.g. Connaught Place Branch"
+                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+              />
+            </div>
+
+            <fieldset className="space-y-2 pt-1">
+              <legend className="text-[11px] font-bold text-slate-700 mb-1">Settlement Options</legend>
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bankMakePrimary}
+                  onChange={(e) => setBankMakePrimary(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 accent-indigo-600"
+                />
+                <span className="font-semibold text-indigo-950">Set as Primary Settlement Bank Account</span>
+              </label>
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bankAlsoIfscUpi}
+                  onChange={(e) => setBankAlsoIfscUpi(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 accent-emerald-600"
+                />
+                <span className="font-semibold text-emerald-950">
+                  Also generate NPCI IFSC-UPI Bridge (<span className="font-mono">&lt;Acc&gt;@&lt;IFSC&gt;.ifsc.npci</span>) in Checkout UPI Pool
+                </span>
+              </label>
+            </fieldset>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setBankModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingBank}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold"
+              >
+                {savingBank ? 'Saving Bank...' : 'Save Bank Account'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

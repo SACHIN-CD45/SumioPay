@@ -23,6 +23,15 @@ import { Device } from '../src/models/device.model';
 import { PaymentLink } from '../src/models/paymentLink.model';
 import { SaasPlan } from '../src/models/saasPlan.model';
 import { CustomerEntitlement } from '../src/models/customerEntitlement.model';
+import {
+  buildIfscUpiBridgeVpa,
+  inferBankNameFromIfsc,
+  isValidBankAccountNumber,
+  isValidIfscCode,
+  maskBankAccountNumber,
+  validateAndNormalizeBankAccount,
+} from '../src/utils/bankAccountUtils';
+import { inferBankFromUpiHandle, isValidUpiVpa } from '../src/services/upiRouter.service';
 
 describe('Senior Differentiators: Zero-Drop Reliability, Payment Links, SaaS Engine & Security', () => {
   test('computes exponential webhook retry backoff delays safely within bounds', () => {
@@ -141,5 +150,41 @@ describe('Senior Differentiators: Zero-Drop Reliability, Payment Links, SaaS Eng
     assert.ok(PaymentLink.schema.path('slug'));
     assert.ok(SaasPlan.schema.path('planCode'));
     assert.ok(CustomerEntitlement.schema.path('customerUserId'));
+  });
+
+  test('validates Indian bank account numbers, IFSC codes, masking & NPCI IFSC-UPI bridge', () => {
+    assert.equal(isValidBankAccountNumber('123456789012'), true);
+    assert.equal(isValidBankAccountNumber('12345'), false);
+    assert.equal(isValidIfscCode('hdfc0001234'), true);
+    assert.equal(isValidIfscCode('HDFC1001234'), false); // 5th char must be 0
+    assert.equal(inferBankNameFromIfsc('SBIN0000300'), 'State Bank of India');
+    assert.equal(maskBankAccountNumber('123456789012'), '••••••••9012');
+
+    const bridge = buildIfscUpiBridgeVpa('123456789012', 'hdfc0001234');
+    assert.equal(bridge, '123456789012@HDFC0001234.ifsc.npci');
+    assert.equal(isValidUpiVpa(bridge), true);
+    assert.match(inferBankFromUpiHandle(bridge), /HDFC Bank/);
+
+    const mismatch = validateAndNormalizeBankAccount({
+      accountHolderName: 'City Lab',
+      accountNumber: '123456789012',
+      confirmAccountNumber: '123456789999',
+      ifscCode: 'HDFC0001234',
+    });
+    assert.equal(mismatch.ok, false);
+
+    const valid = validateAndNormalizeBankAccount({
+      accountHolderName: 'City Diagnostics Lab',
+      accountNumber: '1234 5678 9012',
+      confirmAccountNumber: '123456789012',
+      ifscCode: 'hdfc0001234',
+      accountType: 'CURRENT',
+    });
+    assert.equal(valid.ok, true);
+    if (valid.ok) {
+      assert.equal(valid.data.bankName, 'HDFC Bank');
+      assert.equal(valid.data.accountNumberLast4, '9012');
+      assert.equal(valid.data.ifscCode, 'HDFC0001234');
+    }
   });
 });

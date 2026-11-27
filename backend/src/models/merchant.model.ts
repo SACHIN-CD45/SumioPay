@@ -31,6 +31,20 @@ export interface IUpiAccount {
   createdAt: Date;
 }
 
+export interface IBankAccount {
+  id: string;
+  accountHolderName: string;
+  bankName: string;
+  branchName?: string;
+  accountNumber: string;
+  accountNumberLast4: string;
+  ifscCode: string;
+  accountType: 'CURRENT' | 'SAVINGS';
+  upiBridgeVpa?: string;
+  isPrimary: boolean;
+  createdAt: Date;
+}
+
 export interface IMerchant extends Document {
   name: string;
   email: string;
@@ -44,6 +58,7 @@ export interface IMerchant extends Document {
   upiId: string; // Active Primary UPI e.g. sumiotech@okaxis
   upiName: string; // Active Merchant Display Name in UPI
   upiAccounts: IUpiAccount[];
+  bankAccounts?: IBankAccount[];
   upiRoutingMode: UpiRoutingMode;
   upiRotationIndex: number;
   apiKey: string; // sp_live_xxxx
@@ -96,6 +111,21 @@ const MerchantSchema = new Schema<IMerchant>(
         todayVolumeDate: { type: String, default: '' },
         totalVolumeInr: { type: Number, default: 0 },
         totalTransactions: { type: Number, default: 0 },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    bankAccounts: [
+      {
+        id: { type: String, required: true },
+        accountHolderName: { type: String, required: true, trim: true },
+        bankName: { type: String, required: true, trim: true },
+        branchName: { type: String, default: '', trim: true },
+        accountNumber: { type: String, required: true, trim: true },
+        accountNumberLast4: { type: String, required: true, trim: true },
+        ifscCode: { type: String, required: true, uppercase: true, trim: true },
+        accountType: { type: String, enum: ['CURRENT', 'SAVINGS'], default: 'CURRENT' },
+        upiBridgeVpa: { type: String, default: '', trim: true },
+        isPrimary: { type: Boolean, default: false },
         createdAt: { type: Date, default: Date.now },
       },
     ],

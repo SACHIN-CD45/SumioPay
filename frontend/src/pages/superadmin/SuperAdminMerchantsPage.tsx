@@ -39,6 +39,16 @@ interface MerchantRow {
   upiId: string;
   upiName: string;
   upiAccounts?: UpiAccount[];
+  bankAccounts?: Array<{
+    id: string;
+    accountHolderName: string;
+    bankName: string;
+    maskedAccountNumber: string;
+    accountNumberLast4: string;
+    ifscCode: string;
+    accountType: string;
+    isPrimary: boolean;
+  }>;
   upiRoutingMode?: string;
   apiKey?: string;
   webhookUrl?: string;
@@ -517,6 +527,36 @@ export const SuperAdminMerchantsPage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {selectedMerchant.bankAccounts && selectedMerchant.bankAccounts.length > 0 && (
+              <div className="space-y-2 text-xs">
+                <div className="text-slate-300 font-bold">Settlement Bank Accounts (Masked)</div>
+                <div className="space-y-2">
+                  {selectedMerchant.bankAccounts.map((bank) => (
+                    <div
+                      key={bank.id}
+                      className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2"
+                    >
+                      <div>
+                        <p className="font-bold text-slate-200">
+                          {bank.bankName} ({bank.accountType})
+                          {bank.isPrimary && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">
+                              PRIMARY
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-slate-400">{bank.accountHolderName}</p>
+                      </div>
+                      <div className="text-right font-mono text-[11px]">
+                        <p className="text-emerald-400 font-bold">{bank.maskedAccountNumber}</p>
+                        <p className="text-slate-400">IFSC: {bank.ifscCode}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs">
               <span className="text-slate-500">

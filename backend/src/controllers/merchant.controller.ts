@@ -50,6 +50,10 @@ import {
   isValidTelegramChatId,
   sendTelegramMessage,
 } from '../services/reliability.service';
+import {
+  maskBankAccountNumber,
+  validateAndNormalizeBankAccount,
+} from '../utils/bankAccountUtils';
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -498,6 +502,12 @@ export const getMerchantProfile = async (req: AuthenticatedRequest, res: Respons
         upiId: merchant.upiId,
         upiName: merchant.upiName,
         upiAccounts: syncedAccounts,
+        bankAccounts: Array.isArray(merchant.bankAccounts)
+          ? merchant.bankAccounts.map((b: any) => ({
+              ...(b.toObject ? b.toObject() : b),
+              maskedAccountNumber: maskBankAccountNumber(b.accountNumber),
+            }))
+          : [],
         upiRoutingMode: merchant.upiRoutingMode || 'PRIMARY_ONLY',
         apiKey: entitlement.isExpired ? '' : merchant.apiKey,
         apiSecret: entitlement.isExpired ? '' : merchant.apiSecret,
@@ -892,6 +902,175 @@ export const deleteUpiAccount = async (req: AuthenticatedRequest, res: Response)
         upiId: merchant.upiId,
         upiName: merchant.upiName,
       },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const addBankAccount = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const {
+      accountHolderName,
+      accountNumber,
+      confirmAccountNumber,
+      ifscCode,
+      bankName,
+      branchName,
+      accountType,
+      makePrimary = false,
+      alsoAddAsIfscUpi = false,
+    } = req.body;
+
+    const validated = validateAndNormalizeBankAccount({
+      accountHolderName,
+      accountNumber,
+      confirmAccountNumber,
+      ifscCode,
+      bankName,
+      branchName,
+      accountType,
+    });
+
+    if (!validated.ok) {
+      return res.status(400).json({ success: false, message: validated.message });
+    }
+
+    const banks = Array.isArray(merchant.bankAccounts) ? [...merchant.bankAccounts] : [];
+    const duplicate = banks.find(
+      (b) => b.accountNumber === validated.data.accountNumber && b.ifscCode === validated.data.ifscCode
+    );
+    if (duplicate) {
+      return res.status(400).json({
+        success: false,
+        message: 'This bank account & IFSC is already added to your merchant profile.',
+      });
+    }
+
+    const shouldPrimary = Boolean(makePrimary) || banks.length === 0;
+    if (shouldPrimary) {
+      banks.forEach((b) => {
+        b.isPrimary = false;
+      });
+    }
+
+    const newBank = {
+      id: `bank_${crypto.randomBytes(6).toString('hex')}`,
+      ...validated.data,
+      isPrimary: shouldPrimary,
+      createdAt: new Date(),
+    };
+    banks.push(newBank as any);
+    merchant.bankAccounts = banks as any;
+    merchant.markModified('bankAccounts');
+
+    // Optional: also add <AccountNumber>@<IFSC>.ifsc.npci UPI Bridge VPA into Multi-UPI Pool
+    if (alsoAddAsIfscUpi && validated.data.upiBridgeVpa) {
+      const upiAccounts = syncMerchantUpiState(merchant);
+      const existsUpi = upiAccounts.some(
+        (u) => u.upiId.toLowerCase() === validated.data.upiBridgeVpa.toLowerCase()
+      );
+      if (!existsUpi) {
+        if (shouldPrimary) {
+          upiAccounts.forEach((u) => {
+            u.isPrimary = false;
+          });
+        }
+        upiAccounts.push({
+          id: `upi_${crypto.randomBytes(6).toString('hex')}`,
+          label: `${validated.data.bankName} (A/c ••${validated.data.accountNumberLast4})`,
+          upiId: validated.data.upiBridgeVpa,
+          upiName: validated.data.accountHolderName,
+          bankName: `${validated.data.bankName} (IFSC Direct)`,
+          isActive: true,
+          isPrimary: shouldPrimary,
+          dailyLimitInr: 0,
+          todayVolumeInr: 0,
+          todayVolumeDate: getIstDateKey(),
+          totalVolumeInr: 0,
+          totalTransactions: 0,
+          createdAt: new Date(),
+        });
+        if (shouldPrimary) {
+          merchant.upiId = validated.data.upiBridgeVpa;
+          merchant.upiName = validated.data.accountHolderName;
+        }
+        merchant.upiAccounts = upiAccounts as any;
+        merchant.markModified('upiAccounts');
+      }
+    }
+
+    await merchant.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Bank account (${validated.data.bankName} ••${validated.data.accountNumberLast4}) added cleanly!`,
+      data: {
+        bankAccounts: merchant.bankAccounts,
+        upiAccounts: merchant.upiAccounts,
+        upiId: merchant.upiId,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const updateBankAccount = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const { bankId } = req.params;
+    const banks = Array.isArray(merchant.bankAccounts) ? [...merchant.bankAccounts] : [];
+    const target = banks.find((b) => b.id === bankId);
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'Bank account not found' });
+    }
+
+    if (req.body?.isPrimary === true) {
+      banks.forEach((b) => {
+        b.isPrimary = b.id === bankId;
+      });
+    }
+
+    merchant.bankAccounts = banks as any;
+    merchant.markModified('bankAccounts');
+    await merchant.save();
+
+    res.json({
+      success: true,
+      message: `${target.bankName} (••${target.accountNumberLast4}) set as Primary Settlement Bank`,
+      data: { bankAccounts: merchant.bankAccounts },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const deleteBankAccount = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const merchant = req.merchant!;
+    const { bankId } = req.params;
+    const banks = Array.isArray(merchant.bankAccounts) ? [...merchant.bankAccounts] : [];
+    const idx = banks.findIndex((b) => b.id === bankId);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, message: 'Bank account not found' });
+    }
+
+    const wasPrimary = banks[idx].isPrimary;
+    banks.splice(idx, 1);
+    if (wasPrimary && banks.length > 0) {
+      banks[0].isPrimary = true;
+    }
+
+    merchant.bankAccounts = banks as any;
+    merchant.markModified('bankAccounts');
+    await merchant.save();
+
+    res.json({
+      success: true,
+      message: 'Bank account removed from merchant profile',
+      data: { bankAccounts: merchant.bankAccounts },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

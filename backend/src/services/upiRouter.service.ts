@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import Merchant, { IMerchant, IUpiAccount, UpiRoutingMode } from '../models/merchant.model';
+import { inferBankNameFromIfsc } from '../utils/bankAccountUtils';
 
 export interface SelectedUpiTarget {
   accountId: string;
@@ -39,6 +40,9 @@ export function inferBankFromUpiHandle(upiId: string): string {
   const atIndex = clean.lastIndexOf('@');
   if (atIndex === -1 || atIndex === clean.length - 1) return 'UPI Bank Account';
   const handle = clean.slice(atIndex + 1);
+  if (handle.endsWith('.ifsc.npci')) {
+    return `${inferBankNameFromIfsc(handle.slice(0, 4))} (IFSC Direct)`;
+  }
   return HANDLE_BANK_MAP[handle] || `${handle.toUpperCase()} UPI`;
 }
 

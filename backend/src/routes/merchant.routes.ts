@@ -10,6 +10,9 @@ import {
   addUpiAccount,
   updateUpiAccount,
   deleteUpiAccount,
+  addBankAccount,
+  updateBankAccount,
+  deleteBankAccount,
   updateUpiRoutingMode,
   regenerateApiKeys,
   getDashboardStats,
@@ -58,6 +61,9 @@ router.put('/profile', requireMerchantAuth, requireActiveSubscription, updateMer
 router.post('/upi-accounts', requireMerchantAuth, requireActiveSubscription, addUpiAccount);
 router.patch('/upi-accounts/:accountId', requireMerchantAuth, requireActiveSubscription, updateUpiAccount);
 router.delete('/upi-accounts/:accountId', requireMerchantAuth, requireActiveSubscription, deleteUpiAccount);
+router.post('/bank-accounts', requireMerchantAuth, requireActiveSubscription, addBankAccount);
+router.patch('/bank-accounts/:bankId', requireMerchantAuth, requireActiveSubscription, updateBankAccount);
+router.delete('/bank-accounts/:bankId', requireMerchantAuth, requireActiveSubscription, deleteBankAccount);
 router.patch('/upi-routing', requireMerchantAuth, requireActiveSubscription, updateUpiRoutingMode);
 router.post('/regenerate-api-keys', requireMerchantAuth, requireActiveSubscription, regenerateApiKeys);
 router.get('/dashboard-stats', requireMerchantAuth, requireActiveSubscription, getDashboardStats);

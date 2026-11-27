@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { api, API_BASE } from '../../lib/api';
 import {
   TrendingUp,
@@ -177,7 +178,7 @@ export const DashboardPage: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition"
           >
             <Smartphone className="w-4 h-4 text-emerald-400" />
-            <span>Install Companion App (v2.5)</span>
+            <span>Install Companion App (v2.6)</span>
           </button>
           <button
             onClick={() => setIsTestModalOpen(true)}
@@ -222,7 +223,7 @@ export const DashboardPage: React.FC = () => {
             </button>
             <a
               href={`${API_BASE}/public/download-apk`}
-              download="SumioPayListener-v2.5.apk"
+              download="SumioPayListener-v2.6.apk"
               className="px-4 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-subtle transition"
             >
               <Download className="w-3.5 h-3.5" />
@@ -231,6 +232,85 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Go-Live Merchant Onboarding Checklist */}
+      {(() => {
+        const steps = [
+          {
+            title: 'Bank / UPI Added',
+            done: Boolean(merchant?.upiId) || (merchant?.bankAccounts?.length || 0) > 0,
+            to: '/profile',
+            cta: 'Add Bank / UPI',
+          },
+          {
+            title: 'Android Listener Online',
+            done: (stats?.onlineDevicesCount || 0) > 0,
+            to: '/devices',
+            cta: 'Pair Phone',
+          },
+          {
+            title: 'API Keys / Webhook Ready',
+            done: Boolean(merchant?.webhookUrl) || (stats?.allTimeTransactions || 0) > 0,
+            to: '/connect',
+            cta: 'Download .env & SDK',
+          },
+          {
+            title: 'Checkout Branding Set',
+            done: Boolean(merchant?.websiteName && merchant?.brandColor),
+            to: '/profile',
+            cta: 'Brand Checkout',
+          },
+        ];
+        const doneCount = steps.filter((s) => s.done).length;
+        const pct = Math.round((doneCount / steps.length) * 100);
+        if (pct === 100) return null;
+
+        return (
+          <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-900">Go-Live Readiness Checklist</h2>
+                <p className="text-[11px] text-slate-500">
+                  Complete these steps to start accepting 0% fee UPI payments seamlessly.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
+                <span>{doneCount}/{steps.length} Ready ({pct}%)</span>
+              </div>
+            </div>
+            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-600 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {steps.map((step) => (
+                <div
+                  key={step.title}
+                  className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
+                    step.done ? 'bg-emerald-50/70 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2
+                      className={`w-4 h-4 shrink-0 ${step.done ? 'text-emerald-600' : 'text-slate-300'}`}
+                    />
+                    <span className={`font-bold truncate ${step.done ? 'text-emerald-900' : 'text-slate-800'}`}>
+                      {step.title}
+                    </span>
+                  </div>
+                  {!step.done && (
+                    <Link
+                      to={step.to}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 shrink-0 underline"
+                    >
+                      {step.cta}
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -837,7 +917,7 @@ Body:
               {/* Right: Direct Download Button & Details */}
               <div className="space-y-3 text-center sm:text-left">
                 <div>
-                  <h4 className="text-sm font-bold text-white">SumioPayListener-v2.5.apk</h4>
+                  <h4 className="text-sm font-bold text-white">SumioPayListener-v2.6.apk</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Lightweight (624 KB) • 24x7 Battery Friendly • Notification Interceptor (UPI + Bank Alerts)
                   </p>
@@ -845,7 +925,7 @@ Body:
 
                 <a
                   href={`${API_BASE}/public/download-apk`}
-                  download="SumioPayListener-v2.5.apk"
+                  download="SumioPayListener-v2.6.apk"
                   className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition"
                 >
                   <Download className="w-4 h-4" />

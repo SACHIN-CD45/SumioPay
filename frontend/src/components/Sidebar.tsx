@@ -192,7 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, isSub
           <span>Public Portal</span>
         </NavLink>
         <div className="mt-2 px-3 text-[10px] text-slate-400 text-center font-mono">
-          SumioPay Engine v2.5 &bull; SumioTech
+          SumioPay Engine v2.6 &bull; SumioTech
         </div>
       </div>
     </>

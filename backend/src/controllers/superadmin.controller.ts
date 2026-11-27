@@ -204,8 +204,24 @@ export const listAllMerchants = async (req: Request, res: Response): Promise<voi
     const enrichedMerchants = merchants.map((m: any) => {
       const devCount = deviceMap.get(m._id.toString()) || 0;
       const orderData = orderMap.get(m._id.toString()) || { gmv: 0, count: 0 };
+      const plain = m.toObject();
+      const maskedBanks = Array.isArray(plain.bankAccounts)
+        ? plain.bankAccounts.map((b: any) => ({
+            id: b.id,
+            accountHolderName: b.accountHolderName,
+            bankName: b.bankName,
+            branchName: b.branchName || '',
+            maskedAccountNumber: b.accountNumberLast4 ? `••••••${b.accountNumberLast4}` : '••••',
+            accountNumberLast4: b.accountNumberLast4,
+            ifscCode: b.ifscCode,
+            accountType: b.accountType || 'CURRENT',
+            upiBridgeVpa: b.upiBridgeVpa || '',
+            isPrimary: Boolean(b.isPrimary),
+          }))
+        : [];
       return {
-        ...m.toObject(),
+        ...plain,
+        bankAccounts: maskedBanks,
         deviceCount: devCount,
         totalGmv: Math.round(orderData.gmv * 100) / 100,
         paidOrders: orderData.count,

@@ -55,6 +55,9 @@ export const ConnectPage: React.FC = () => {
   // Key Rotation
   const [regeneratingKeys, setRegeneratingKeys] = useState(false);
 
+  // Instant .env File Exporter Mode
+  const [envTargetMode, setEnvTargetMode] = useState<'LIVE' | 'TEST'>('LIVE');
+
   // Instant Payment Link Generator State
   const [linkAmount, setLinkAmount] = useState<number>(299);
   const [linkAppName, setLinkAppName] = useState<string>('SumioLab');
@@ -861,6 +864,129 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
             </a>
           </div>
         </div>
+      </div>
+
+      {/* 1-Click Developer .env Generator & Single-File SDK Downloads */}
+      <div className="p-6 rounded-3xl bg-slate-950 text-white border border-slate-800 shadow-lg space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2.5">
+            <Terminal className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h2 className="text-sm font-extrabold text-white">
+                Instant Developer Setup: Ready-to-Paste .env &amp; 1-File Zero-Dependency SDKs
+              </h2>
+              <p className="text-[11px] text-slate-400">
+                Paste these credentials into your project&apos;s <code className="text-emerald-300">.env</code> file and drop in our single-file client helper — zero npm build setup required.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold self-start">
+            <button
+              type="button"
+              onClick={() => setEnvTargetMode('LIVE')}
+              className={`px-3 py-1 rounded-lg transition ${
+                envTargetMode === 'LIVE' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Production .env
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnvTargetMode('TEST')}
+              className={`px-3 py-1 rounded-lg transition ${
+                envTargetMode === 'TEST' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Sandbox .env
+            </button>
+          </div>
+        </div>
+
+        {(() => {
+          const selectedPubKey = envTargetMode === 'LIVE' ? liveApiKey : testApiKey;
+          const envContent = [
+            '# SumioPay Payment Gateway Configuration (Keep API_SECRET & WEBHOOK_SECRET on backend only)',
+            'SUMIOPAY_API_BASE=https://apipay.sumiotech.in/api/v1',
+            `SUMIOPAY_PUBLIC_KEY=${selectedPubKey}`,
+            `SUMIOPAY_API_SECRET=${liveSecret}`,
+            `SUMIOPAY_WEBHOOK_SECRET=${webhookSecret}`,
+            '',
+            '# Frontend Public Key (React / Next.js / Vite)',
+            `VITE_SUMIOPAY_KEY=${selectedPubKey}`,
+            `NEXT_PUBLIC_SUMIOPAY_KEY=${selectedPubKey}`,
+          ].join('\n');
+
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              <div className="lg:col-span-7 space-y-3">
+                <pre className="p-4 rounded-2xl bg-slate-900 border border-slate-800 font-mono text-[11px] text-emerald-300 overflow-x-auto leading-relaxed">
+                  <code>{envContent}</code>
+                </pre>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(envContent, 'envBlock')}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition"
+                  >
+                    {copiedItem === 'envBlock' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedItem === 'envBlock' ? 'Copied .env Block!' : 'Copy .env Block'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const blob = new Blob([envContent + '\n'], { type: 'text/plain;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = envTargetMode === 'LIVE' ? 'sumiopay.env' : 'sumiopay.sandbox.env';
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs flex items-center gap-1.5 transition"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Download {envTargetMode === 'LIVE' ? 'sumiopay.env' : 'sumiopay.sandbox.env'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 text-xs">
+                <div className="font-extrabold text-white flex items-center gap-1.5">
+                  <FileCode className="w-4 h-4 text-blue-400" />
+                  <span>1-File Zero-Dependency SDK Helpers</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Automatically reads <code className="text-slate-200">SUMIOPAY_*</code> from your <code className="text-slate-200">.env</code> file. Supports Orders, SaaS Subscription Checks, and HMAC Webhook verification out of the box.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <a
+                    href={`${API_BASE}/public/sdk/sumiopay.js`}
+                    download="sumiopay.js"
+                    className="px-3.5 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center justify-between transition"
+                  >
+                    <span>Download sumiopay.js (Node.js / MERN)</span>
+                    <Download className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={`${API_BASE}/public/sdk/SumioPayClient.php`}
+                    download="SumioPayClient.php"
+                    className="px-3.5 py-2.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center justify-between transition"
+                  >
+                    <span>Download SumioPayClient.php (PHP / Laravel)</span>
+                    <Download className="w-4 h-4" />
+                  </a>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-[10px] text-slate-300">
+                  const sumiopay = require(&apos;./sumiopay&apos;);{'\n'}
+                  const &#123; hostedCheckoutUrl &#125; = await sumiopay.createOrder(&#123; amountInr: 499, customerUserId: &apos;u1&apos; &#125;);
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 4 Steps Architecture Flow */}

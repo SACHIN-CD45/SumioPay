@@ -1257,7 +1257,7 @@ curl -X POST https://apipay.sumiotech.in/api/v1/payments/orders \\
               <div>
                 <div className="font-extrabold text-lg text-white flex items-center gap-2">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 uppercase tracking-wider">
-                    v2.5 Enterprise
+                    v2.6 Enterprise
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
